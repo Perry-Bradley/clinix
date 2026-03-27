@@ -1,0 +1,62 @@
+name: clinix_mobile
+description: Clinix - Healthcare platform for Cameroon
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+
+  # Navigation
+  go_router: ^13.2.1
+
+  # HTTP Client
+  dio: ^5.4.3+1
+
+  # Local Storage
+  hive_flutter: ^1.1.0
+  flutter_secure_storage: ^9.0.0
+
+  # Firebase
+  firebase_core: ^3.1.0
+  firebase_messaging: ^15.0.1
+
+  # Images
+  cached_network_image: ^3.3.1
+  image_picker: ^1.1.2
+
+  # UI
+  shimmer: ^3.0.0
+
+  # Localizations
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.0
+
+  # Utils
+  uuid: ^4.3.3
+  equatable: ^2.0.5
+  logger: ^2.3.0
+  url_launcher: ^6.3.0
+  permission_handler: ^11.3.1
+  connectivity_plus: ^6.0.3
+  http: ^1.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/animations/
+    - assets/icons/
