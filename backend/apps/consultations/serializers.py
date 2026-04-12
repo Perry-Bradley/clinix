@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Consultation, Prescription, MedicalRecord
+from .models import Consultation, Prescription, MedicalRecord, ChatMessage
 from apps.providers.models import HealthcareProvider
 
 class PrescriptionSerializer(serializers.ModelSerializer):
@@ -29,3 +29,19 @@ class ConsultationEndSerializer(serializers.Serializer):
 class WebRTCSignalSerializer(serializers.Serializer):
     consultation_id = serializers.UUIDField()
     signal_data = serializers.JSONField()
+
+class ChatMessageSerializer(serializers.ModelSerializer):
+    sender_name = serializers.SerializerMethodField()
+    sender_id = serializers.CharField(source='sender.user_id', read_only=True)
+
+    def get_sender_name(self, obj):
+        u = obj.sender
+        return (u.full_name or u.email or u.phone_number or str(u.user_id)).strip()
+
+    class Meta:
+        model = ChatMessage
+        fields = [
+            'message_id', 'consultation', 'sender_id', 'sender_name',
+            'message_type', 'content', 'file_url', 'file_name',
+            'is_read', 'created_at'
+        ]

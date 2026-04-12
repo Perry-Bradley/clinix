@@ -51,5 +51,53 @@ class ProviderSubscription(models.Model):
     expires_at = models.DateTimeField()
     is_active = models.BooleanField(default=True)
 
+class PlatformSetting(models.Model):
+    consultation_fee = models.IntegerField(default=15000)
+    service_charge = models.IntegerField(default=500)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
-        db_table = 'provider_subscriptions'
+        db_table = 'platform_settings'
+        verbose_name_plural = 'Platform Settings'
+
+    def __str__(self):
+        return f"Global Fee: {self.consultation_fee} XAF"
+
+class ProviderWallet(models.Model):
+    provider = models.OneToOneField(HealthcareProvider, on_delete=models.CASCADE, related_name='wallet')
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Wallet: {self.provider} - Balance: {self.balance} XAF"
+
+class WalletTransaction(models.Model):
+    TX_TYPES = (
+        ('credit', 'Credit (Consultation)'),
+        ('debit', 'Debit (Withdrawal)'),
+        ('refund', 'Refund'),
+    )
+    wallet = models.ForeignKey(ProviderWallet, on_delete=models.CASCADE, related_name='transactions')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    transaction_type = models.CharField(max_length=20, choices=TX_TYPES)
+    reference = models.CharField(max_length=100, blank=True, null=True) 
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class WithdrawalRequest(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending Authentication'),
+        ('approved', 'Approved'),
+        ('completed', 'Completed'),
+        ('rejected', 'Rejected'),
+    )
+    provider = models.ForeignKey(HealthcareProvider, on_delete=models.CASCADE, related_name='payout_requests')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payout_method = models.CharField(max_length=50, default='mtn_momo')
+    payout_details = models.CharField(max_length=255) 
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    admin_notes = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-requested_at']

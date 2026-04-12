@@ -1,7 +1,14 @@
 from django.urls import path
-from .views import SymptomCheckView, AISessionDetailView
+from .views import (
+    AIChatStartView,
+    AIChatMessageView,
+    AIChatDetailView,
+    AIChatCompleteView
+)
 
 urlpatterns = [
-    path('symptom-check/', SymptomCheckView.as_view(), name='symptom_check'),
-    path('session/<uuid:pk>/', AISessionDetailView.as_view(), name='ai_session_detail'),
+    path('chat/start/', AIChatStartView.as_view(), name='ai_chat_start'),
+    path('chat/<uuid:session_id>/message/', AIChatMessageView.as_view(), name='ai_chat_message'),
+    path('chat/<uuid:session_id>/', AIChatDetailView.as_view(), name='ai_chat_detail'),
+    path('chat/<uuid:session_id>/complete/', AIChatCompleteView.as_view(), name='ai_chat_complete'),
 ]

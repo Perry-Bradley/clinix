@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/services/appointment_service.dart';
 
 class BookAppointmentPage extends StatefulWidget {
   final String providerId;
@@ -16,24 +17,64 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
   String? _selectedTime;
   String _appointmentType = 'video';
   bool _isLoading = false;
+  bool _isFetchingSlots = false;
+  String _consultationFee = '15,000';
 
-  final List<String> _timeSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '14:00', '14:30', '15:00', '15:30'];
+  List<String> _timeSlots = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSlots();
+  }
+
+  Future<void> _loadSlots() async {
+    setState(() => _isFetchingSlots = true);
+    try {
+      final slots = await AppointmentService.getAvailableSlots(widget.providerId, _selectedDate);
+      setState(() {
+        _timeSlots = slots.map((s) => s.split('T')[1].substring(0, 5)).toList();
+        _isFetchingSlots = false;
+      });
+    } catch (e) {
+      setState(() => _isFetchingSlots = false);
+    }
+  }
 
   void _confirm() async {
     if (_selectedTime == null) return;
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Appointment booked successfully!'),
-          backgroundColor: AppColors.accentGreen,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+    try {
+      // Construct the full DateTime for the appointment
+      final timeParts = _selectedTime!.split(':');
+      final scheduledAt = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        int.parse(timeParts[0]),
+        int.parse(timeParts[1]),
       );
-      context.go('/patient/home');
+
+      await AppointmentService.createAppointment(
+        providerId: widget.providerId,
+        scheduledAt: scheduledAt,
+        appointmentType: _appointmentType,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Appointment booked! Pay to confirm.'), backgroundColor: AppColors.accentGreen),
+        );
+        context.go('/patient/home');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Booking failed. Please try again.'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -112,7 +153,10 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
                       final date = DateTime.now().add(Duration(days: i + 1));
                       final isSelected = _selectedDate.day == date.day && _selectedDate.month == date.month;
                       return GestureDetector(
-                        onTap: () => setState(() { _selectedDate = date; _selectedTime = null; }),
+                        onTap: () {
+                          setState(() { _selectedDate = date; _selectedTime = null; });
+                          _loadSlots();
+                        },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           margin: const EdgeInsets.only(right: 10),
@@ -148,28 +192,32 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
                 // Time Slots
                 Text('Available Times', style: AppTextStyles.headlineMedium),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: _timeSlots.map((t) {
-                    final isSelected = _selectedTime == t;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedTime = t),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                        decoration: BoxDecoration(
-                          gradient: isSelected ? const LinearGradient(colors: [AppColors.sky600, AppColors.sky400]) : null,
-                          color: isSelected ? null : AppColors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: isSelected ? AppColors.sky500 : AppColors.grey200),
-                          boxShadow: isSelected ? [BoxShadow(color: AppColors.sky500.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 3))] : [],
-                        ),
-                        child: Text(t, style: AppTextStyles.headlineSmall.copyWith(fontSize: 13, color: isSelected ? AppColors.white : AppColors.grey700)),
+                _isFetchingSlots 
+                  ? const Center(child: CircularProgressIndicator())
+                  : _timeSlots.isEmpty
+                    ? const Center(child: Text("No slots available for this day"))
+                    : Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: _timeSlots.map((t) {
+                          final isSelected = _selectedTime == t;
+                          return GestureDetector(
+                            onTap: () => setState(() => _selectedTime = t),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                              decoration: BoxDecoration(
+                                gradient: isSelected ? const LinearGradient(colors: [AppColors.sky600, AppColors.sky400]) : null,
+                                color: isSelected ? null : AppColors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: isSelected ? AppColors.sky500 : AppColors.grey200),
+                                boxShadow: isSelected ? [BoxShadow(color: AppColors.sky500.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 3))] : [],
+                              ),
+                              child: Text(t, style: AppTextStyles.headlineSmall.copyWith(fontSize: 13, color: isSelected ? AppColors.white : AppColors.grey700)),
+                            ),
+                          );
+                        }).toList(),
                       ),
-                    );
-                  }).toList(),
-                ),
                 const SizedBox(height: 32),
 
                 // Confirm Button
@@ -187,7 +235,7 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
                     ),
                     child: _isLoading
                       ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation(AppColors.white)))
-                      : Text('Confirm Booking • XAF 15,000', style: AppTextStyles.labelLarge.copyWith(fontSize: 15)),
+                      : Text('Confirm Booking • XAF $_consultationFee', style: AppTextStyles.labelLarge.copyWith(fontSize: 15)),
                   ),
                 ),
                 const SizedBox(height: 16),

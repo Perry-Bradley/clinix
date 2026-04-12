@@ -33,18 +33,27 @@ class ProviderMapView(APIView):
 class ProviderLocationUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request):
+        return self._upsert(request)
+
     def put(self, request):
+        return self._upsert(request)
+
+    def _upsert(self, request):
         try:
             provider = HealthcareProvider.objects.get(provider_id=request.user)
-            location, _ = Location.objects.get_or_create(provider=provider)
-            
-            serializer = LocationUpdateSerializer(location, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except HealthcareProvider.DoesNotExist:
             return Response({'error': 'Only providers can update provider locations'}, status=status.HTTP_403_FORBIDDEN)
+
+        location_type = request.data.get('location_type') or 'residence'
+        instance = Location.objects.filter(provider=provider, location_type=location_type).first()
+
+        serializer = LocationUpdateSerializer(instance, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        obj = serializer.save(provider=provider)
+        return Response(LocationUpdateSerializer(obj).data)
 
 class FacilitiesListView(APIView):
     permission_classes = [permissions.AllowAny]

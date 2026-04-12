@@ -1,15 +1,18 @@
 from rest_framework import serializers
-from .models import AISymptomSession
+from .models import AISymptomSession, AIChatMessage
+
+class AIChatMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AIChatMessage
+        fields = ['id', 'sender', 'message', 'timestamp']
 
 class AISymptomSessionSerializer(serializers.ModelSerializer):
+    messages = AIChatMessageSerializer(many=True, read_only=True)
+    
     class Meta:
         model = AISymptomSession
-        fields = '__all__'
-        read_only_fields = ('session_id', 'patient', 'created_at')
+        fields = ['session_id', 'is_active', 'messages', 'recommendation', 'suggested_specialization', 'created_at']
+        read_only_fields = ('session_id', 'created_at')
 
-class SymptomCheckRequestSerializer(serializers.Serializer):
-    symptoms = serializers.CharField()
-    duration = serializers.CharField()
-    severity = serializers.IntegerField(min_value=1, max_value=10)
-    patient_age = serializers.IntegerField()
-    gender = serializers.CharField()
+class SymptomChatMessageRequestSerializer(serializers.Serializer):
+    message = serializers.CharField()

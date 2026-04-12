@@ -54,3 +54,15 @@ android/settings.gradle
 # OS
 .DS_Store
 Thumbs.db
+
+# Project Specific
+backend/firebase_key.json
+backend/gcp-key.json
+backend/celerybeat-schedule
+clinix_mobile/android/app/google-services.json
+*.txt
+*.log
+build_error.txt
+build_log.txt
+final_output.txt
+analysis.txt

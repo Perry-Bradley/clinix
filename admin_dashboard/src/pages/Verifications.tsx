@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Check, X, Eye } from 'lucide-react';
+import DocumentReviewModal from '../components/DocumentReviewModal';
 
 interface VerificationRequest {
   id: string;
@@ -7,21 +9,82 @@ interface VerificationRequest {
   spec: string;
   submitted: string;
   license: string;
+  documents?: { type: 'image' | 'video'; url: string; label: string }[];
 }
 
-const mockFetchVerifications = async (): Promise<VerificationRequest[]> => {
-  return [
-    { id: 'prov-123', name: 'Dr. John Doe', spec: 'Cardiologist', submitted: '2025-01-20', license: 'CM-MED-001' },
-    { id: 'prov-456', name: 'Dr. Mary Jane', spec: 'Pediatrician', submitted: '2025-01-21', license: 'CM-MED-002' },
-    { id: 'prov-789', name: 'Dr. Paul Biya', spec: 'Neurologist', submitted: '2025-01-25', license: 'CM-MED-003' },
-  ];
+const fetchVerifications = async (): Promise<VerificationRequest[]> => {
+  const token = localStorage.getItem('clinix_admin_token');
+  try {
+    const res = await fetch('http://127.0.0.1:8000/api/v1/admin/verifications/', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if (res.status === 401) {
+      localStorage.removeItem('clinix_admin_token');
+      window.location.href = '/login';
+      return [];
+    }
+    if (!res.ok) throw new Error('Failed to fetch');
+    const data = await res.json();
+    return data.map((item: any) => ({
+      id: item.provider_id,
+      name: item.name,
+      spec: item.specialization,
+      submitted: new Date(item.submitted_at).toLocaleDateString(),
+      license: item.license_number,
+      // Will fetch documents on review if needed, but for now we put empty or placeholder
+      documents: []
+    }));
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
 };
 
 const Verifications = () => {
-  const { data: requests, isLoading } = useQuery<VerificationRequest[]>({
+  const [selectedRequest, setSelectedRequest] = useState<VerificationRequest | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const { data: requests, isLoading, refetch } = useQuery<VerificationRequest[]>({
     queryKey: ['verifications'],
-    queryFn: mockFetchVerifications,
+    queryFn: fetchVerifications,
   });
+
+  const handleReview = async (req: VerificationRequest) => {
+    // Optionally fetch documents from backend: /api/v1/admin/verifications/<id>/
+    // For now we just use placeholders or what we have
+    setSelectedRequest(req);
+    setIsModalOpen(true);
+  };
+
+  const updateStatus = async (status: 'approved' | 'rejected') => {
+    if (!selectedRequest) return;
+    const token = localStorage.getItem('clinix_admin_token');
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/verifications/${selectedRequest.id}/`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        alert(`${selectedRequest.name} has been ${status}!`);
+        setIsModalOpen(false);
+        refetch();
+      } else {
+        alert('Failed to update status');
+      }
+    } catch(err) {
+      console.error(err);
+      alert('Error updating status');
+    }
+  };
+
+  const handleApprove = () => updateStatus('approved');
+  const handleReject = () => updateStatus('rejected');
 
   if (isLoading) return <div className="p-4 text-gray-500">Loading verifications...</div>;
 
@@ -53,30 +116,32 @@ const Verifications = () => {
               <tr key={req.id} className="hover:bg-gray-50 transition">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-sm font-semibold">
-                      {req.name.split(' ')[1]?.[0]}
+                    <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-sm font-semibold shadow-sm shadow-teal-600/20">
+                      {req.name.split(' ')[1]?.[0] || req.name[0]}
                     </div>
                     <span className="text-sm font-medium text-gray-900">{req.name}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{req.spec}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">{req.license}</span>
+                  <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded text-gray-600 border border-gray-200">{req.license}</span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{req.submitted}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center space-x-2">
-                    <button className="flex items-center space-x-1 px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg transition text-xs font-medium">
+                    <button 
+                      onClick={() => handleReview(req)}
+                      className="flex items-center space-x-1 px-3 py-1.5 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-dark-900 rounded-lg transition text-xs font-bold border border-gray-100"
+                    >
                       <Eye size={13} />
                       <span>Review</span>
                     </button>
-                    <button className="flex items-center space-x-1 px-3 py-1.5 bg-teal-50 text-teal-600 hover:bg-teal-100 rounded-lg transition text-xs font-medium">
+                    <button 
+                      onClick={() => { setSelectedRequest(req); handleApprove(); }}
+                      className="flex items-center space-x-1 px-3 py-1.5 bg-teal-50 text-teal-600 hover:bg-teal-600 hover:text-white rounded-lg transition text-xs font-bold border border-teal-100"
+                    >
                       <Check size={13} />
                       <span>Approve</span>
-                    </button>
-                    <button className="flex items-center space-x-1 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition text-xs font-medium">
-                      <X size={13} />
-                      <span>Reject</span>
                     </button>
                   </div>
                 </td>
@@ -92,6 +157,18 @@ const Verifications = () => {
           </div>
         )}
       </div>
+
+      <DocumentReviewModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        providerName={selectedRequest?.name || ''}
+        documents={selectedRequest?.documents || [
+          { type: 'image', label: 'License Preview', url: 'https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&q=80&w=800' },
+          { type: 'video', label: 'Identity Verification', url: 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4' }
+        ]}
+        onApprove={handleApprove}
+        onReject={handleReject}
+      />
     </div>
   );
 };

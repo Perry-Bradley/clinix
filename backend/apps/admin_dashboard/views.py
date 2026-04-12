@@ -13,6 +13,9 @@ from apps.payments.models import Payment
 from apps.accounts.serializers import UserSerializer
 from apps.providers.serializers import ProviderCredentialSerializer
 from apps.appointments.serializers import AppointmentDetailSerializer
+from .serializers import AdminPatientSerializer
+from apps.payments.models import WithdrawalRequest, ProviderWallet, WalletTransaction
+from django.db.models.functions import TruncDate
 import csv
 from django.http import HttpResponse
 
@@ -25,13 +28,17 @@ class PlatformDashboardView(APIView):
         pending_providers = HealthcareProvider.objects.filter(verification_status='pending').count()
         total_consultations = Consultation.objects.count()
         revenue = Payment.objects.filter(status='success').aggregate(Sum('platform_fee'))['platform_fee__sum'] or 0.00
+        pending_withdrawals = WithdrawalRequest.objects.filter(status='pending').count()
+        total_payouts = WithdrawalRequest.objects.filter(status='completed').aggregate(Sum('amount'))['amount__sum'] or 0.00
         
         return Response({
             'total_patients': total_patients,
             'total_providers': total_providers,
             'pending_verifications': pending_providers,
             'total_consultations': total_consultations,
-            'total_revenue': revenue
+            'total_revenue': revenue,
+            'pending_withdrawals': pending_withdrawals,
+            'total_payouts': total_payouts
         })
 
 class UserListView(generics.ListAPIView):
@@ -44,13 +51,21 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsSuperAdminUser]
     queryset = User.objects.all()
 
-class VerificationListView(generics.ListAPIView):
-    # Returning providers with pending status and their nested credentials
+class AdminPatientListView(generics.ListCreateAPIView):
+    serializer_class = AdminPatientSerializer
+    permission_classes = [IsSuperAdminUser]
+    queryset = Patient.objects.all().order_by('-patient_id__created_at')
+
+class AdminPatientDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = AdminPatientSerializer
+    permission_classes = [IsSuperAdminUser]
+    queryset = Patient.objects.all()
+
+class VerificationListView(APIView):
     permission_classes = [IsSuperAdminUser]
     
     def get(self, request):
         providers = HealthcareProvider.objects.filter(verification_status='pending')
-        # simple manual serialization for dashboard
         data = []
         for p in providers:
             data.append({
@@ -62,33 +77,47 @@ class VerificationListView(generics.ListAPIView):
             })
         return Response(data)
 
-class VerificationDetailView(generics.RetrieveUpdateAPIView):
+class VerificationDetailView(APIView):
     permission_classes = [IsSuperAdminUser]
-    
+
     def get(self, request, pk):
-        provider = HealthcareProvider.objects.get(provider_id=pk)
-        credentials = ProviderCredential.objects.filter(provider=provider)
-        cd_data = ProviderCredentialSerializer(credentials, many=True).data
-        return Response({
-            'provider_id': provider.provider_id.user_id,
-            'specialization': provider.specialization,
-            'license_number': provider.license_number,
-            'documents': cd_data
-        })
+        try:
+            provider = HealthcareProvider.objects.get(provider_id=pk)
+            credentials = ProviderCredential.objects.filter(provider=provider)
+            cd_data = []
+            for c in credentials:
+                cd_data.append({
+                    'type': 'image',
+                    'label': c.document_type.capitalize(),
+                    'url': c.document_url
+                })
+                
+            return Response({
+                'id': provider.provider_id.user_id,
+                'name': f"{provider.provider_id.first_name} {provider.provider_id.last_name}",
+                'spec': provider.specialization,
+                'license': provider.license_number,
+                'documents': cd_data
+            })
+        except HealthcareProvider.DoesNotExist:
+            return Response({'error': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
         
     def patch(self, request, pk):
-        provider = HealthcareProvider.objects.get(provider_id=pk)
-        status_val = request.data.get('status') # 'approved' or 'rejected'
-        notes = request.data.get('notes', '')
-        
-        if status_val in ['approved', 'rejected']:
-            provider.verification_status = status_val
-            provider.verification_notes = notes
-            provider.verified_at = timezone.now()
-            provider.verified_by = request.user
-            provider.save()
-            return Response({'status': f'Provider {status_val}'})
-        return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            provider = HealthcareProvider.objects.get(provider_id=pk)
+            status_val = request.data.get('status') # 'approved' or 'rejected'
+            notes = request.data.get('notes', '')
+            
+            if status_val in ['approved', 'rejected']:
+                provider.verification_status = status_val
+                provider.verification_notes = notes
+                provider.verified_at = timezone.now()
+                provider.verified_by = request.user
+                provider.save()
+                return Response({'status': f'Provider {status_val}'})
+            return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        except HealthcareProvider.DoesNotExist:
+            return Response({'error': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
 
 class PlatformAppointmentsView(generics.ListAPIView):
     serializer_class = AppointmentDetailSerializer
@@ -120,3 +149,69 @@ class ExportCSVReportView(APIView):
         writer.writerow(['ID', 'Status', 'Date'])
         writer.writerow(['1', 'Confirmed', '2025-01-01'])
         return response
+
+class AdminWithdrawalListView(APIView):
+    permission_classes = [IsSuperAdminUser]
+
+    def get(self, request):
+        withdrawals = WithdrawalRequest.objects.all().order_by('-requested_at')
+        data = []
+        for w in withdrawals:
+            data.append({
+                'id': w.id,
+                'provider_name': f"{w.provider.provider_id.first_name} {w.provider.provider_id.last_name}",
+                'amount': w.amount,
+                'method': w.payout_method,
+                'details': w.payout_details,
+                'status': w.status,
+                'date': w.requested_at
+            })
+        return Response(data)
+
+class AdminWithdrawalActionView(APIView):
+    permission_classes = [IsSuperAdminUser]
+
+    def post(self, request, pk):
+        withdrawal = WithdrawalRequest.objects.get(pk=pk)
+        action = request.data.get('action') # 'approve' or 'complete' or 'reject'
+        notes = request.data.get('notes', '')
+
+        if action == 'approve':
+            withdrawal.status = 'approved'
+        elif action == 'complete':
+            withdrawal.status = 'completed'
+            withdrawal.processed_at = timezone.now()
+            # Deduct from wallet if not already done (business logic decide when to deduct)
+            # Usually we deduct when COMPLETED.
+            wallet = withdrawal.provider.wallet
+            wallet.balance -= withdrawal.amount
+            wallet.save()
+            WalletTransaction.objects.create(
+                wallet=wallet,
+                amount=withdrawal.amount,
+                transaction_type='debit',
+                reference=f"WD-{withdrawal.id}"
+            )
+        elif action == 'reject':
+            withdrawal.status = 'rejected'
+        
+        withdrawal.admin_notes = notes
+        withdrawal.save()
+        return Response({'status': f'Withdrawal {withdrawal.status}'})
+
+class AdminRevenueStatsView(APIView):
+    permission_classes = [IsSuperAdminUser]
+
+    def get(self, request):
+        # Daily revenue for the last 30 days
+        thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
+        daily_revenue = Payment.objects.filter(
+            status='success', 
+            initiated_at__gte=thirty_days_ago
+        ).annotate(
+            date=TruncDate('initiated_at')
+        ).values('date').annotate(
+            revenue=Sum('platform_fee')
+        ).order_by('date')
+
+        return Response(list(daily_revenue))

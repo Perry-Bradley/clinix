@@ -4,7 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
 class _OnboardingData {
-  final String icon;
+  final IconData icon;
   final String title;
   final String subtitle;
   const _OnboardingData({required this.icon, required this.title, required this.subtitle});
@@ -23,19 +23,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   final List<_OnboardingData> _pages = const [
     _OnboardingData(
-      icon: '🩺',
-      title: 'Find Top Doctors',
+      icon: Icons.medical_services_rounded,
+      title: 'Find top doctors',
       subtitle: 'Connect with verified healthcare providers across Cameroon in seconds.',
     ),
     _OnboardingData(
-      icon: '💊',
-      title: 'AI Symptom Checker',
-      subtitle: 'Describe your symptoms and get an instant AI-powered triage and recommendations.',
+      icon: Icons.psychology_rounded,
+      title: 'Clinix AI triage',
+      subtitle: 'Describe symptoms and get structured guidance — with clear emergency reminders when needed.',
     ),
     _OnboardingData(
-      icon: '📹',
-      title: 'Video Consultations',
-      subtitle: 'Consult with doctors from the comfort of your home via secure video calls.',
+      icon: Icons.videocam_rounded,
+      title: 'Video consultations',
+      subtitle: 'Book and consult securely from home when you need a real clinician.',
     ),
   ];
 
@@ -48,72 +48,89 @@ class _OnboardingPageState extends State<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.darkBlue900,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: TextButton(
-                onPressed: () => context.go('/login'),
-                child: Text('Skip', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky300)),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(gradient: AppColors.splashBackgroundGradient),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: TextButton(
+                  onPressed: () => context.go('/login'),
+                  child: Text(
+                    'Skip',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            Expanded(
-              child: PageView.builder(
-                controller: _controller,
-                onPageChanged: (i) => setState(() => _currentPage = i),
-                itemCount: _pages.length,
-                itemBuilder: (ctx, i) => _OnboardingCard(data: _pages[i]),
+              Expanded(
+                child: PageView.builder(
+                  controller: _controller,
+                  onPageChanged: (i) => setState(() => _currentPage = i),
+                  itemCount: _pages.length,
+                  itemBuilder: (ctx, i) => _OnboardingCard(data: _pages[i]),
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      _pages.length,
-                      (i) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: _currentPage == i ? 28 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: _currentPage == i ? AppColors.sky400 : AppColors.grey500,
-                          borderRadius: BorderRadius.circular(4),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _pages.length,
+                        (i) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: _currentPage == i ? 28 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: _currentPage == i ? AppColors.sky400 : Colors.white.withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (_currentPage < _pages.length - 1) {
-                          _controller.nextPage(duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
-                        } else {
-                          context.go('/login');
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.sky500,
-                        foregroundColor: AppColors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      child: Text(
-                        _currentPage == _pages.length - 1 ? 'Get Started' : 'Continue',
-                        style: AppTextStyles.labelLarge,
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () {
+                          if (_currentPage < _pages.length - 1) {
+                            _controller.nextPage(
+                              duration: const Duration(milliseconds: 350),
+                              curve: Curves.easeOutCubic,
+                            );
+                          } else {
+                            context.go('/login');
+                          }
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppColors.splashSlate900,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 0,
+                        ),
+                        child: Text(
+                          _currentPage == _pages.length - 1 ? 'Get started' : 'Continue',
+                          style: AppTextStyles.labelLarge.copyWith(
+                            color: AppColors.splashSlate900,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -127,33 +144,46 @@ class _OnboardingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 28),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 140,
-            height: 140,
+            padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.darkBlue700, AppColors.sky600],
-              ),
-              borderRadius: BorderRadius.circular(40),
-              boxShadow: [BoxShadow(color: AppColors.sky500.withOpacity(0.35), blurRadius: 30, offset: const Offset(0, 12))],
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(36),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 32,
+                  offset: const Offset(0, 18),
+                ),
+              ],
             ),
-            child: Center(child: Text(data.icon, style: const TextStyle(fontSize: 64))),
+            child: Icon(data.icon, size: 72, color: Colors.white),
           ),
-          const SizedBox(height: 48),
+          const SizedBox(height: 40),
           Text(
             data.title,
             textAlign: TextAlign.center,
-            style: AppTextStyles.displayLarge.copyWith(fontSize: 28),
+            style: AppTextStyles.displayLarge.copyWith(
+              fontSize: 28,
+              letterSpacing: -0.5,
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 16),
           Text(
             data.subtitle,
             textAlign: TextAlign.center,
-            style: AppTextStyles.bodyLarge.copyWith(color: AppColors.sky200, fontSize: 16, height: 1.7),
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: Colors.white.withValues(alpha: 0.82),
+              fontSize: 16,
+              height: 1.55,
+            ),
           ),
         ],
       ),

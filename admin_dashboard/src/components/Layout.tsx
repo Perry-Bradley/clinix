@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCheck, LogOut, Bell, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, UserCheck, LogOut, Bell, Settings, HeartPulse, TrendingUp } from 'lucide-react';
 
 const Layout = () => {
   const navigate = useNavigate();
@@ -12,8 +12,10 @@ const Layout = () => {
 
   const menuItems = [
     { path: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+    { path: '/patients', icon: <HeartPulse size={18} />, label: 'Patients' },
     { path: '/users', icon: <Users size={18} />, label: 'Users' },
     { path: '/verifications', icon: <UserCheck size={18} />, label: 'Verifications' },
+    { path: '/revenue', icon: <TrendingUp size={18} />, label: 'Finance' },
   ];
 
   return (

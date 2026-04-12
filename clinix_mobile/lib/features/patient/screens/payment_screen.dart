@@ -1,0 +1,220 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/services/payment_service.dart';
+
+class PaymentScreen extends StatefulWidget {
+  final String appointmentId;
+  final int consultationFee;
+  final int serviceCharge;
+
+  const PaymentScreen({
+    super.key,
+    required this.appointmentId,
+    this.consultationFee = 15000,
+    this.serviceCharge = 500,
+  });
+
+  @override
+  State<PaymentScreen> createState() => _PaymentScreenState();
+}
+
+class _PaymentScreenState extends State<PaymentScreen> {
+  String _paymentMethod = 'mtn_momo';
+  bool _isProcessing = false;
+  String? _errorMessage;
+
+  Future<void> _processPayment() async {
+    if (widget.appointmentId.isEmpty) {
+      setState(() => _errorMessage = 'Missing appointment. Go back and try booking again.');
+      return;
+    }
+    setState(() {
+      _isProcessing = true;
+      _errorMessage = null;
+    });
+    try {
+      final total = widget.consultationFee + widget.serviceCharge;
+      await PaymentService.initiate(
+        appointmentId: widget.appointmentId,
+        paymentMethod: _paymentMethod,
+        amount: total.toDouble(),
+      );
+      if (mounted) context.pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _errorMessage = 'Payment could not be started. Check your connection and try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.consultationFee + widget.serviceCharge;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F7F8),
+      appBar: AppBar(
+        title: const Text('Pay with Mobile Money', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.darkBlue900,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          onPressed: () => context.pop(false),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Summary', style: AppTextStyles.headlineMedium),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.grey200),
+              ),
+              child: Column(
+                children: [
+                  _buildSummaryRow('Consultation', '${widget.consultationFee} XAF'),
+                  _buildSummaryRow('Platform fee', '${widget.serviceCharge} XAF'),
+                  const Divider(height: 32),
+                  _buildSummaryRow('Total', '$total XAF', isTotal: true),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+            Text('Choose provider', style: AppTextStyles.headlineSmall.copyWith(fontSize: 16)),
+            const SizedBox(height: 8),
+            Text(
+              'Clinix checkout uses MTN MoMo and Orange Money for Cameroon.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            _buildPaymentOption(
+              id: 'mtn_momo',
+              title: 'MTN MoMo',
+              subtitle: 'Pay with your MTN Mobile Money wallet',
+              icon: Icons.phone_android_rounded,
+              accent: const Color(0xFFFFCC00),
+            ),
+            const SizedBox(height: 12),
+            _buildPaymentOption(
+              id: 'orange_money',
+              title: 'Orange Money',
+              subtitle: 'Pay with Orange Money',
+              icon: Icons.account_balance_wallet_rounded,
+              accent: Colors.orange,
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 20),
+              Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600)),
+            ],
+            const SizedBox(height: 40),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _isProcessing ? null : _processPayment,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.darkBlue900,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+                child: _isProcessing
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : Text('Pay $total XAF', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(String label, String value, {bool isTotal = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: isTotal ? 16 : 14,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
+              color: isTotal ? AppColors.darkBlue900 : AppColors.grey500,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: isTotal ? 18 : 14,
+              fontWeight: FontWeight.bold,
+              color: AppColors.darkBlue900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentOption({
+    required String id,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color accent,
+  }) {
+    final isSelected = _paymentMethod == id;
+    return GestureDetector(
+      onTap: () => setState(() => _paymentMethod = id),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: isSelected ? AppColors.sky500 : AppColors.grey200, width: isSelected ? 2 : 1),
+          boxShadow: isSelected ? [BoxShadow(color: AppColors.sky500.withValues(alpha: 0.12), blurRadius: 10, offset: const Offset(0, 4))] : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: accent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: const Color(0xFF1A1A1A)),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  Text(subtitle, style: TextStyle(color: AppColors.grey500, fontSize: 12)),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check_circle_rounded, color: AppColors.sky500)
+            else
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppColors.grey200, width: 2)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

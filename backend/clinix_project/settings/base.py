@@ -3,20 +3,27 @@ from pathlib import Path
 from datetime import timedelta
 import environ
 
-env = environ.Env()
-environ.Env.read_env()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+env = environ.Env()
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-replace-this-in-production')
 
 DEBUG = env.bool('DEBUG', default=False)
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 
-INSTALLED_APPS = [
-    'daphne', # ASGI server, must be before django.contrib.staticfiles
+# Daphne is required for production ASGI; optional for local migrate/shell if not installed.
+try:
+    import daphne  # noqa: F401
+    _ASGI_INSTALLED = ['daphne']
+except ImportError:
+    _ASGI_INSTALLED = []
+
+INSTALLED_APPS = _ASGI_INSTALLED + [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -24,7 +31,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.postgres',
-    
+
     # Third party
     'rest_framework',
     'rest_framework_simplejwt',
@@ -32,7 +39,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_filters',
     'drf_spectacular',
-    
+
     # Local apps
     'apps.accounts',
     'apps.patients',
@@ -45,6 +52,7 @@ INSTALLED_APPS = [
     'apps.notifications',
     'apps.locations',
     'apps.admin_dashboard',
+    'apps.health_metrics',
 ]
 
 MIDDLEWARE = [
@@ -136,6 +144,8 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
+    'USER_ID_FIELD': 'user_id',
+    'USER_ID_CLAIM': 'user_id',
 }
 
 CHANNEL_LAYERS = {
@@ -155,3 +165,17 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }
+
+# ─── Email Configuration (for OTP sending) ─────────────────────────────────
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='Clinix <noreply@clinix.app>')
+
+# In development without email configured, use console backend
+if not EMAIL_HOST_USER:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+

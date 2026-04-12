@@ -1,11 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// Working mock credentials
-const VALID_USERS = [
-  { email: 'admin@clinix.cm', password: 'Admin@2026' },
-  { email: 'superadmin@clinix.cm', password: 'Clinix#Admin' },
-];
+// Database-backed authentication active
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -18,16 +14,34 @@ const Login = () => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800)); // simulate network
 
-    const valid = VALID_USERS.find((u) => u.email === email && u.password === password);
-    if (valid) {
-      localStorage.setItem('clinix_admin_token', 'mock_admin_token_2026');
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/v1/auth/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Invalid credentials');
+      }
+
+      const data = await res.json();
+      
+      // Ensure only admins can access the dashboard
+      if (data.user_type !== 'superadmin' && data.user_type !== 'admin') {
+        throw new Error('Access denied. Administrator privileges required.');
+      }
+
+      localStorage.setItem('clinix_admin_token', data.access);
+      localStorage.setItem('clinix_admin_user', JSON.stringify(data));
       navigate('/');
-    } else {
-      setError('Invalid email or password. Check the credentials below.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to connect to authentication server');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

@@ -71,4 +71,18 @@ class AppTextStyles {
     fontWeight: FontWeight.w400,
     color: AppColors.grey400,
   );
+
+  static const TextStyle titleLarge = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 22,
+    fontWeight: FontWeight.w700,
+    color: AppColors.darkBlue900,
+  );
+
+  static const TextStyle bodySmall = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 12,
+    fontWeight: FontWeight.w400,
+    color: AppColors.grey500,
+  );
 }

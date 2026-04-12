@@ -4,6 +4,8 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Users from './pages/Users';
 import Verifications from './pages/Verifications';
+import Patients from './pages/Patients';
+import Revenue from './pages/Revenue';
 
 // Mock authentication check
 const isAuthenticated = () => {
@@ -28,7 +30,9 @@ function App() {
       }>
         <Route index element={<Dashboard />} />
         <Route path="users" element={<Users />} />
+        <Route path="patients" element={<Patients />} />
         <Route path="verifications" element={<Verifications />} />
+        <Route path="revenue" element={<Revenue />} />
       </Route>
     </Routes>
   );

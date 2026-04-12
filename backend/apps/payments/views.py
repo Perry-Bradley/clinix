@@ -2,12 +2,41 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
-from .models import Payment, ProviderSubscription
-from .serializers import PaymentSerializer
+from .models import Payment, ProviderSubscription, PlatformSetting, ProviderWallet, WalletTransaction
+from .serializers import PaymentSerializer, PlatformSettingSerializer
 from apps.appointments.models import Appointment
 from apps.patients.models import Patient
 import uuid
 import decimal
+from django.db import transaction
+
+class SystemSettingsView(APIView):
+    """
+    Handles retrieval and updating of global platform settings (fees).
+    GET: Available to all authenticated users (Patients for checkout, Admins for viewing).
+    PATCH: Available to Admins only.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        setting, created = PlatformSetting.objects.get_or_create(id=1)
+        return setting
+
+    def get(self, request):
+        setting = self.get_object()
+        serializer = PlatformSettingSerializer(setting)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        if request.user.user_type != 'admin' and not request.user.is_staff:
+            return Response({'error': 'Only administrators can update system settings.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        setting = self.get_object()
+        serializer = PlatformSettingSerializer(setting, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PaymentInitiateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -16,6 +45,8 @@ class PaymentInitiateView(APIView):
         serializer = PaymentSerializer(data=request.data)
         if serializer.is_valid():
             appointment = serializer.validated_data.get('appointment')
+            if not appointment:
+                return Response({'error': 'appointment is required'}, status=status.HTTP_400_BAD_REQUEST)
             amount = serializer.validated_data['amount']
             payment_method = serializer.validated_data['payment_method']
             
@@ -28,20 +59,25 @@ class PaymentInitiateView(APIView):
             except Patient.DoesNotExist:
                 return Response({'error': 'Only patients can initiate appointment payments'}, status=status.HTTP_403_FORBIDDEN)
                 
-            payment = Payment.objects.create(
-                appointment=appointment,
-                patient=patient,
-                provider=appointment.provider if appointment else None,
-                amount=amount,
-                payment_method=payment_method,
-                transaction_ref=f"TXN-{uuid.uuid4().hex[:8].upper()}",
-                platform_fee=platform_fee,
-                provider_payout=provider_payout
-            )
-            
-            # Here we would call external MTN/Orange payment APIs
-            # For now, we mock success and return the Payment info
-            
+            with transaction.atomic():
+                payment = Payment.objects.create(
+                    appointment=appointment,
+                    patient=patient,
+                    provider=appointment.provider if appointment else None,
+                    amount=amount,
+                    payment_method=payment_method,
+                    transaction_ref=f"TXN-{uuid.uuid4().hex[:8].upper()}",
+                    platform_fee=platform_fee,
+                    provider_payout=provider_payout,
+                    status='success',
+                    completed_at=timezone.now(),
+                )
+                if appointment:
+                    appointment.status = 'confirmed'
+                    appointment.save(update_fields=['status'])
+
+            # TODO: replace mock completion with MTN MoMo / Orange Money API + webhooks in production
+
             return Response(PaymentSerializer(payment).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -54,12 +90,25 @@ class MTNMoMoWebhookView(APIView):
         status_val = request.data.get('status')
         try:
             payment = Payment.objects.get(transaction_ref=tx_ref)
-            payment.status = status_val.lower()
-            if status_val.lower() == 'success':
+            if status_val.lower() == 'success' and payment.status != 'success':
                 payment.completed_at = timezone.now()
                 if payment.appointment:
                     payment.appointment.status = 'confirmed'
                     payment.appointment.save()
+                
+                # Credit provider wallet
+                if payment.provider:
+                    with transaction.atomic():
+                        wallet, _ = ProviderWallet.objects.get_or_create(provider=payment.provider)
+                        wallet.balance += payment.provider_payout
+                        wallet.save()
+                        WalletTransaction.objects.create(
+                            wallet=wallet,
+                            amount=payment.provider_payout,
+                            transaction_type='credit',
+                            reference=f"PAY-{payment.payment_id}"
+                        )
+            payment.status = status_val.lower()
             payment.save()
             return Response({'status': 'ok'})
         except Payment.DoesNotExist:
@@ -74,12 +123,25 @@ class OrangeMoneyWebhookView(APIView):
         status_val = request.data.get('status')
         try:
             payment = Payment.objects.get(transaction_ref=tx_ref)
-            payment.status = status_val.lower()
-            if status_val.lower() == 'success':
+            if status_val.lower() == 'success' and payment.status != 'success':
                 payment.completed_at = timezone.now()
                 if payment.appointment:
                     payment.appointment.status = 'confirmed'
                     payment.appointment.save()
+                
+                # Credit provider wallet
+                if payment.provider:
+                    with transaction.atomic():
+                        wallet, _ = ProviderWallet.objects.get_or_create(provider=payment.provider)
+                        wallet.balance += payment.provider_payout
+                        wallet.save()
+                        WalletTransaction.objects.create(
+                            wallet=wallet,
+                            amount=payment.provider_payout,
+                            transaction_type='credit',
+                            reference=f"PAY-{payment.payment_id}"
+                        )
+            payment.status = status_val.lower()
             payment.save()
             return Response({'status': 'ok'})
         except Payment.DoesNotExist:

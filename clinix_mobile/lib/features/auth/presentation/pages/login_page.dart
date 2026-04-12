@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/services/auth_service.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/gradient_button.dart';
 
@@ -14,25 +16,61 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _phoneCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+  final _idCtrl = TextEditingController();
   bool _obscurePass = true;
   bool _isLoading = false;
+  String? _errorMessage;
 
   void _login() async {
     if (_formKey.currentState?.validate() != true) return;
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      setState(() => _isLoading = false);
-      // Navigate based on user type (patient for now)
-      context.go('/patient/home');
+    setState(() { _isLoading = true; _errorMessage = null; });
+    try {
+      final data = await AuthService.login(
+        identifier: _idCtrl.text.trim(),
+        password: _passCtrl.text,
+      );
+      if (mounted) {
+        final userType = data['user_type'] ?? 'unassigned';
+        if (userType == 'unassigned') {
+          context.go('/role-selection');
+        } else {
+          context.go(userType == 'provider' ? '/provider/home' : '/patient/home');
+        }
+      }
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      String? msg;
+      if (data is Map) msg = data['error']?.toString();
+      if (data is String) msg = data.length > 100 ? 'Server error. Please try again later.' : data;
+      setState(() => _errorMessage = msg ?? 'Invalid credentials. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _googleLogin() async {
+    setState(() { _isLoading = true; _errorMessage = null; });
+    try {
+      final data = await AuthService.signInWithGoogle();
+      if (mounted && data != null) {
+        final userType = data['user_type'] ?? 'unassigned';
+        if (userType == 'unassigned') {
+          context.go('/role-selection');
+        } else {
+          context.go(userType == 'provider' ? '/provider/home' : '/patient/home');
+        }
+      }
+    } catch (e) {
+      setState(() => _errorMessage = 'Google Sign-In failed. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   void dispose() {
-    _phoneCtrl.dispose();
+    _idCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
@@ -66,7 +104,7 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ),
                     const SizedBox(height: 40),
-                    Text('Welcome back 👋', style: AppTextStyles.displayLarge.copyWith(fontSize: 30)),
+                    Text('Welcome back', style: AppTextStyles.displayLarge.copyWith(fontSize: 30)),
                     const SizedBox(height: 8),
                     Text('Sign in to continue your health journey', style: AppTextStyles.bodyLarge.copyWith(color: AppColors.sky200)),
                   ],
@@ -88,14 +126,14 @@ class _LoginPageState extends State<LoginPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Phone Number', style: AppTextStyles.headlineSmall.copyWith(fontSize: 14)),
+                          Text('Email or Phone Number', style: AppTextStyles.headlineSmall.copyWith(fontSize: 14)),
                           const SizedBox(height: 8),
                           AuthTextField(
-                            controller: _phoneCtrl,
-                            hint: '+237 6XX XXX XXX',
-                            keyboardType: TextInputType.phone,
-                            prefixIcon: Icons.phone_outlined,
-                            validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                            controller: _idCtrl,
+                            hint: 'Email or phone number',
+                            keyboardType: TextInputType.text,
+                            prefixIcon: Icons.account_circle_outlined,
+                            validator: (v) => v == null || v.isEmpty ? 'Enter email or phone number' : null,
                           ),
                           const SizedBox(height: 20),
                           Text('Password', style: AppTextStyles.headlineSmall.copyWith(fontSize: 14)),
@@ -119,6 +157,16 @@ class _LoginPageState extends State<LoginPage> {
                               child: Text('Forgot Password?', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky500)),
                             ),
                           ),
+                          if (_errorMessage != null) ...[
+                            const SizedBox(height: 16),
+                            Center(
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 24),
                           GradientButton(text: 'Sign In', isLoading: _isLoading, onPressed: _login),
                           const SizedBox(height: 24),
@@ -131,6 +179,31 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                               const Expanded(child: Divider(color: AppColors.grey200)),
                             ],
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _isLoading ? null : _googleLogin,
+                              icon: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                child: SizedBox(
+                                  width: 18, height: 18,
+                                  child: Image.network(
+                                    "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/24px-Google_%22G%22_logo.svg.png",
+                                    height: 18,
+                                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.account_circle_outlined, size: 18, color: AppColors.sky600),
+                                  ),
+                                ),
+                              ),
+                              label: Text('Continue with Google', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600, color: AppColors.darkBlue900)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppColors.grey200),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 24),
                           Row(

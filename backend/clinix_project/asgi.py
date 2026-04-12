@@ -13,11 +13,11 @@ from django.core.asgi import get_asgi_application
 
 from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
-import apps.consultations.routing
-import apps.notifications.routing
-
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'clinix_project.settings.development')
 django_asgi_app = get_asgi_application()
+
+import apps.consultations.routing
+import apps.notifications.routing
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,

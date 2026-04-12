@@ -3,8 +3,14 @@ from apps.providers.models import HealthcareProvider
 import uuid
 
 class Location(models.Model):
+    LOCATION_TYPES = (
+        ('residence', 'Residence'),
+        ('clinic', 'Clinic'),
+    )
+
     location_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    provider = models.OneToOneField(HealthcareProvider, on_delete=models.CASCADE, related_name='location')
+    provider = models.ForeignKey(HealthcareProvider, on_delete=models.CASCADE, related_name='locations')
+    location_type = models.CharField(max_length=20, choices=LOCATION_TYPES, default='residence')
     facility_name = models.CharField(max_length=300, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)

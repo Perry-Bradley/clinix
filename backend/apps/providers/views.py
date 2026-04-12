@@ -5,9 +5,7 @@ from django.db.models import Sum, Count
 from django.utils import timezone
 from .models import HealthcareProvider, ProviderCredential
 from .serializers import ProviderProfileSerializer, ProviderCredentialSerializer, ProviderPublicSerializer
-from apps.appointments.models import Appointment
-from apps.payments.models import Payment
-from apps.locations.models import Location
+from apps.payments.models import ProviderWallet, WalletTransaction, WithdrawalRequest
 import math
 
 class ProviderProfileView(generics.RetrieveUpdateAPIView):
@@ -48,13 +46,53 @@ class ProviderEarningsView(APIView):
     
     def get(self, request):
         provider = HealthcareProvider.objects.get(provider_id=request.user)
-        total_payout = Payment.objects.filter(
-            provider=provider, status='success'
-        ).aggregate(Sum('provider_payout'))['provider_payout__sum'] or 0.00
+        wallet, _ = ProviderWallet.objects.get_or_create(provider=provider)
+        
+        # Get recent transactions
+        transactions = WalletTransaction.objects.filter(wallet=wallet).order_by('-created_at')[:10]
+        tx_data = []
+        for tx in transactions:
+            tx_data.append({
+                'id': tx.id,
+                'amount': tx.amount,
+                'type': tx.transaction_type,
+                'reference': tx.reference,
+                'date': tx.created_at
+            })
+            
+        return Response({
+            'balance': wallet.balance,
+            'currency': 'XAF',
+            'recent_transactions': tx_data
+        })
+
+class ProviderWithdrawalView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        provider = HealthcareProvider.objects.get(provider_id=request.user)
+        wallet, _ = ProviderWallet.objects.get_or_create(provider=provider)
+        
+        amount = float(request.data.get('amount', 0))
+        method = request.data.get('method')
+        details = request.data.get('details')
+
+        if amount <= 0:
+            return Response({'error': 'Invalid amount'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if amount > wallet.balance:
+            return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
+
+        withdrawal = WithdrawalRequest.objects.create(
+            provider=provider,
+            amount=amount,
+            payout_method=method,
+            payout_details=details
+        )
         
         return Response({
-            'total_earnings': total_payout,
-            'currency': 'XAF'
+            'message': 'Withdrawal request submitted',
+            'request_id': withdrawal.id
         })
 
 class ProviderDashboardView(APIView):
@@ -92,7 +130,7 @@ class ProviderNearbyView(generics.ListAPIView):
         is_available = self.request.query_params.get('available')
         
         if specialization:
-            queryset = queryset.filter(specialization__icontains=specialization)
+            queryset = queryset.filter(specialty__icontains=specialization)
         if is_available == 'true':
             queryset = queryset.filter(is_available=True)
             
@@ -111,6 +149,7 @@ class ProviderNearbyView(generics.ListAPIView):
                 lng_diff = radius / (111.0 * math.cos(math.radians(lat)))
                 
                 locations = Location.objects.filter(
+                    location_type='residence', # Recommendation based on residence
                     latitude__range=(lat - lat_diff, lat + lat_diff),
                     longitude__range=(lng - lng_diff, lng + lng_diff)
                 )

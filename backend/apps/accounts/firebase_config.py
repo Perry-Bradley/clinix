@@ -1,0 +1,29 @@
+import firebase_admin
+from firebase_admin import credentials, auth
+import os
+from django.conf import settings
+
+def initialize_firebase():
+    """
+    Initializes the Firebase Admin SDK using the service account key.
+    """
+    if not firebase_admin._apps:
+        key_path = os.path.join(settings.BASE_DIR, 'firebase_key.json')
+        if os.path.exists(key_path):
+            cred = credentials.Certificate(key_path)
+            firebase_admin.initialize_app(cred)
+            print("Firebase Admin initialized successfully.")
+        else:
+            print(f"Firebase key not found at {key_path}. Authentication may fail.")
+
+def verify_google_token(id_token):
+    """
+    Verifies a Google ID token received from the mobile app.
+    Returns the decoded token (which includes email, name, etc.) if valid.
+    """
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        return decoded_token
+    except Exception as e:
+        print(f"Error verifying Firebase token: {e}")
+        return None

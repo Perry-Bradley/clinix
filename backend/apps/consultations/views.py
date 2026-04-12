@@ -2,13 +2,17 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
-from .models import Consultation, Prescription
+from .models import Consultation, Prescription, ChatMessage
 from apps.appointments.models import Appointment
 from .serializers import (
     ConsultationSerializer, ConsultationStartSerializer, 
-    ConsultationEndSerializer, PrescriptionSerializer, WebRTCSignalSerializer
+    ConsultationEndSerializer, PrescriptionSerializer, WebRTCSignalSerializer,
+    ChatMessageSerializer
 )
 import uuid
+import os
+from django.conf import settings
+from django.core.files.storage import default_storage
 
 class ConsultationStartView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -101,3 +105,73 @@ class WebRTCSignalEndpointView(APIView):
         if serializer.is_valid():
             return Response({'status': 'Signal relayed', 'data': serializer.validated_data['signal_data']})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+import time
+from agora_token_builder.RtcTokenBuilder import RtcTokenBuilder, Role_Publisher
+
+class AgoraTokenView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        channel_name = request.query_params.get('channel', 'clinix_general')
+        uid = 0
+        expiration_time_in_seconds = 3600
+        current_timestamp = int(time.time())
+        privilege_expired_ts = current_timestamp + expiration_time_in_seconds
+
+        app_id = os.environ.get("AGORA_APP_ID", "")
+        app_certificate = os.environ.get("AGORA_APP_CERT", "")
+
+        if not app_id or not app_certificate:
+            return Response({'error': 'Agora API keys not configured on server'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        token = RtcTokenBuilder.buildTokenWithUid(
+            app_id,
+            app_certificate,
+            channel_name,
+            uid,
+            Role_Publisher,
+            privilege_expired_ts,
+        )
+        return Response({'app_id': app_id, 'token': token, 'channel': channel_name})
+
+
+class ChatFileUploadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            consultation = Consultation.objects.get(pk=pk)
+            file_obj = request.FILES.get('file')
+            if not file_obj:
+                return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            message_type = request.data.get('message_type', 'file')
+            caption = request.data.get('content', '')
+
+            # Store file in media/chat_attachments/<consultation_id>/
+            path = os.path.join('chat_attachments', str(pk), file_obj.name)
+            filename = default_storage.save(path, file_obj)
+            file_url = request.build_absolute_uri(settings.MEDIA_URL + filename)
+
+            # Create the message object
+            message = ChatMessage.objects.create(
+                consultation=consultation,
+                sender=request.user,
+                message_type=message_type,
+                content=caption,
+                file_url=file_url,
+                file_name=file_obj.name
+            )
+
+            return Response(ChatMessageSerializer(message).data, status=status.HTTP_201_CREATED)
+        except Consultation.DoesNotExist:
+            return Response({'error': 'Consultation not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class ChatMessageListView(generics.ListAPIView):
+    serializer_class = ChatMessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        consultation_id = self.kwargs.get('pk')
+        return ChatMessage.objects.filter(consultation_id=consultation_id).order_by('created_at')

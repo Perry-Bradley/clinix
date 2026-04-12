@@ -58,3 +58,30 @@ class MedicalRecord(models.Model):
 
     class Meta:
         db_table = 'medical_records'
+
+
+class ChatMessage(models.Model):
+    MESSAGE_TYPES = (
+        ('text', 'Text'),
+        ('image', 'Image'),
+        ('file', 'File'),
+    )
+
+    message_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    consultation = models.ForeignKey(Consultation, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='chat_messages')
+    
+    message_type = models.CharField(max_length=10, choices=MESSAGE_TYPES, default='text')
+    content = models.TextField(blank=True, null=True) # Text content or caption
+    file_url = models.URLField(max_length=1000, blank=True, null=True)
+    file_name = models.CharField(max_length=255, blank=True, null=True)
+    
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'chat_messages'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Message from {self.sender} in {self.consultation}"

@@ -1,5 +1,10 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
+from .models import Consultation, ChatMessage
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class ConsultationChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -22,8 +27,24 @@ class ConsultationChatConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         text_data_json = json.loads(text_data)
-        message = text_data_json['message']
-        sender = self.scope['user'].phone_number if self.scope['user'].is_authenticated else 'unknown'
+        message = text_data_json.get('message', '')
+        message_type = text_data_json.get('message_type', 'text')
+        file_url = text_data_json.get('file_url', None)
+        file_name = text_data_json.get('file_name', None)
+        
+        user = self.scope['user']
+        if not user.is_authenticated:
+            return
+
+        # Save message to DB
+        await self.save_message(
+            consultation_id=self.consultation_id,
+            user=user,
+            content=message,
+            message_type=message_type,
+            file_url=file_url,
+            file_name=file_name
+        )
 
         # Send message to room group
         await self.channel_layer.group_send(
@@ -31,19 +52,36 @@ class ConsultationChatConsumer(AsyncWebsocketConsumer):
             {
                 'type': 'chat_message',
                 'message': message,
-                'sender': sender
+                'message_type': message_type,
+                'file_url': file_url,
+                'file_name': file_name,
+                'sender_id': str(user.id),
+                'sender_name': (user.full_name or user.email or user.phone_number or str(user.user_id)).strip()
             }
         )
 
     async def chat_message(self, event):
-        message = event['message']
-        sender = event['sender']
-
         # Send message to WebSocket
         await self.send(text_data=json.dumps({
-            'message': message,
-            'sender': sender
+            'message': event['message'],
+            'message_type': event['message_type'],
+            'file_url': event['file_url'],
+            'file_name': event['file_name'],
+            'sender_id': event['sender_id'],
+            'sender_name': event['sender_name']
         }))
+
+    @database_sync_to_async
+    def save_message(self, consultation_id, user, content, message_type, file_url, file_name):
+        consultation = Consultation.objects.get(pk=consultation_id)
+        return ChatMessage.objects.create(
+            consultation=consultation,
+            sender=user,
+            content=content,
+            message_type=message_type,
+            file_url=file_url,
+            file_name=file_name
+        )
 
 class WebRTCSignalingConsumer(AsyncWebsocketConsumer):
     async def connect(self):

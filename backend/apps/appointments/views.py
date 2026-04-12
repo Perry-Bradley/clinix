@@ -18,10 +18,17 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        qs = Appointment.objects.select_related(
+            'patient',
+            'patient__patient_id',
+            'provider',
+            'provider__provider_id',
+            'consultation',
+        )
         if user.user_type == 'patient':
-            return Appointment.objects.filter(patient__patient_id=user).order_by('-scheduled_at')
-        elif user.user_type == 'provider':
-            return Appointment.objects.filter(provider__provider_id=user).order_by('-scheduled_at')
+            return qs.filter(patient__patient_id=user).order_by('-scheduled_at')
+        if user.user_type == 'provider':
+            return qs.filter(provider__provider_id=user).order_by('-scheduled_at')
         return Appointment.objects.none()
 
     def perform_create(self, serializer):
@@ -34,10 +41,17 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        qs = Appointment.objects.select_related(
+            'patient',
+            'patient__patient_id',
+            'provider',
+            'provider__provider_id',
+            'consultation',
+        )
         if user.user_type == 'patient':
-            return Appointment.objects.filter(patient__patient_id=user)
-        elif user.user_type == 'provider':
-            return Appointment.objects.filter(provider__provider_id=user)
+            return qs.filter(patient__patient_id=user)
+        if user.user_type == 'provider':
+            return qs.filter(provider__provider_id=user)
         return Appointment.objects.none()
 
     def perform_destroy(self, instance):

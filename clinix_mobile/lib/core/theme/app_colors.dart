@@ -1,6 +1,20 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
+  /// Matches the first Clinix splash gradient (slate).
+  static const Color splashSlate900 = Color(0xFF0F172A);
+  static const Color splashSlate800 = Color(0xFF1E293B);
+
+  static const LinearGradient splashBackgroundGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      splashSlate900,
+      splashSlate800,
+      splashSlate900,
+    ],
+  );
+
   // Primary Dark Blue Palette
   static const Color darkBlue900 = Color(0xFF0A1628);
   static const Color darkBlue800 = Color(0xFF0D1F3C);
@@ -32,6 +46,7 @@ class AppColors {
   static const Color grey500 = Color(0xFF64748B);
   static const Color grey700 = Color(0xFF334155);
   static const Color grey900 = Color(0xFF0F172A);
+  static const Color slate = Color(0xFF0F172A);
 
   // Semantic
   static const Color success = Color(0xFF10B981);
