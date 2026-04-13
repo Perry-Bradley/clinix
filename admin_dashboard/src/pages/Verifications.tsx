@@ -52,10 +52,26 @@ const Verifications = () => {
   });
 
   const handleReview = async (req: VerificationRequest) => {
-    // Optionally fetch documents from backend: /api/v1/admin/verifications/<id>/
-    // For now we just use placeholders or what we have
-    setSelectedRequest(req);
-    setIsModalOpen(true);
+    const token = localStorage.getItem('clinix_admin_token');
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/verifications/${req.id}/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) throw new Error('Failed to fetch verification details');
+      const detail = await res.json();
+      setSelectedRequest({
+        ...req,
+        spec: detail.spec || req.spec,
+        license: detail.license || req.license,
+        documents: detail.documents || [],
+      });
+      setIsModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      alert('Could not load verification documents');
+    }
   };
 
   const updateStatus = async (status: 'approved' | 'rejected') => {
@@ -162,10 +178,7 @@ const Verifications = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         providerName={selectedRequest?.name || ''}
-        documents={selectedRequest?.documents || [
-          { type: 'image', label: 'License Preview', url: 'https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&q=80&w=800' },
-          { type: 'video', label: 'Identity Verification', url: 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4' }
-        ]}
+        documents={selectedRequest?.documents || []}
         onApprove={handleApprove}
         onReject={handleReject}
       />

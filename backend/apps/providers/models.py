@@ -1,5 +1,7 @@
 from django.db import models
 from apps.accounts.models import User
+from apps.patients.models import Patient
+from apps.appointments.models import Appointment
 import uuid
 
 class HealthcareProvider(models.Model):
@@ -67,10 +69,9 @@ class ProviderSchedule(models.Model):
 
 class ProviderCredential(models.Model):
     DOC_TYPE_CHOICES = (
-        ('license', 'License'),
-        ('degree', 'Degree'),
-        ('certificate', 'Certificate'),
-        ('id', 'ID'),
+        ('national_id_front', 'National ID Front'),
+        ('national_id_back', 'National ID Back'),
+        ('medical_license', 'Medical License'),
     )
 
     credential_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -85,3 +86,20 @@ class ProviderCredential(models.Model):
 
     def __str__(self):
         return f"{self.provider} - {self.document_type}"
+
+class ProviderReview(models.Model):
+    review_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    provider = models.ForeignKey(HealthcareProvider, on_delete=models.CASCADE, related_name='reviews')
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='provider_reviews')
+    appointment = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True, blank=True, related_name='provider_reviews')
+    rating = models.PositiveSmallIntegerField()
+    comment = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'provider_reviews'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.provider} - {self.rating}/5"

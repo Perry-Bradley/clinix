@@ -1,11 +1,12 @@
 from django.urls import path
 from .views import (
     PaymentInitiateView, MTNMoMoWebhookView, OrangeMoneyWebhookView,
-    PaymentHistoryView, PaymentDetailView, SubscriptionPaymentView
+    PaymentHistoryView, PaymentDetailView, SubscriptionPaymentView, PaymentStatusView
 )
 
 urlpatterns = [
     path('initiate/', PaymentInitiateView.as_view(), name='payment_initiate'),
+    path('status/<uuid:pk>/', PaymentStatusView.as_view(), name='payment_status'),
     path('mtn/callback/', MTNMoMoWebhookView.as_view(), name='mtn_callback'),
     path('orange/callback/', OrangeMoneyWebhookView.as_view(), name='orange_callback'),
     path('history/', PaymentHistoryView.as_view(), name='payment_history'),

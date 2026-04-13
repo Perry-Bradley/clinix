@@ -1,3 +1,4 @@
+import base64
 from django.db import transaction
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -61,27 +62,67 @@ class AIChatMessageView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         user_message = serializer.validated_data['message']
+        image_b64 = serializer.validated_data.get('image', None)
 
-        db_messages = list(session.messages.all().order_by('timestamp'))
-        history = []
-        for msg in db_messages:
-            history.append({
-                'role': 'user' if msg.sender == 'user' else 'model',
-                'parts': [msg.message],
-            })
+        # Decode the image if provided
+        image_bytes = None
+        mime_type = 'image/jpeg'
+        if image_b64:
+            try:
+                # Strip data URI prefix if present (e.g. "data:image/png;base64,...")
+                if ',' in image_b64:
+                    header, image_b64 = image_b64.split(',', 1)
+                    if 'png' in header:
+                        mime_type = 'image/png'
+                    elif 'webp' in header:
+                        mime_type = 'image/webp'
+                image_bytes = base64.b64decode(image_b64)
+            except Exception:
+                return Response({'error': 'Invalid image data.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             with transaction.atomic():
-                AIChatMessage.objects.create(session=session, sender='user', message=user_message)
+                # Save user message + optional image to DB
+                AIChatMessage.objects.create(
+                    session=session,
+                    sender='user',
+                    message=user_message,
+                    image=image_b64 if image_b64 else None,
+                )
+
+                # Build full multimodal history (excluding the just-saved message)
                 db_messages = list(session.messages.all().order_by('timestamp'))
                 prior = []
                 for msg in db_messages[:-1]:
+                    parts = [msg.message]
+                    if msg.image:
+                        try:
+                            img_data = msg.image
+                            img_mime = 'image/jpeg'
+                            if ',' in img_data:
+                                hdr, img_data = img_data.split(',', 1)
+                                if 'png' in hdr:
+                                    img_mime = 'image/png'
+                                elif 'webp' in hdr:
+                                    img_mime = 'image/webp'
+                            parts.append({
+                                'data': base64.b64decode(img_data),
+                                'mime_type': img_mime,
+                            })
+                        except Exception:
+                            pass  # Skip corrupted image data silently
                     prior.append({
                         'role': 'user' if msg.sender == 'user' else 'model',
-                        'parts': [msg.message],
+                        'parts': parts,
                     })
-                ai_reply = medlm_client.get_chat_response(prior, user_message)
+
+                ai_reply = medlm_client.get_chat_response(
+                    prior, user_message,
+                    image_data=image_bytes,
+                    mime_type=mime_type,
+                )
                 AIChatMessage.objects.create(session=session, sender='ai', message=ai_reply)
+
         except MedLMNotConfigured as e:
             return Response(
                 {'error': 'medlm_not_configured', 'detail': str(e)},

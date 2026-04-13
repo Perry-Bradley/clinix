@@ -21,6 +21,7 @@ class AIChatMessage(models.Model):
     session = models.ForeignKey(AISymptomSession, on_delete=models.CASCADE, related_name='messages')
     sender = models.CharField(max_length=10, choices=[('user', 'User'), ('ai', 'AI')])
     message = models.TextField()
+    image = models.TextField(blank=True, null=True, help_text="Base64 encoded image or image URL")
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:

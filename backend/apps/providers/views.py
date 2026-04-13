@@ -1,11 +1,15 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Avg
 from django.utils import timezone
-from .models import HealthcareProvider, ProviderCredential
-from .serializers import ProviderProfileSerializer, ProviderCredentialSerializer, ProviderPublicSerializer
+from django.conf import settings
+from django.core.files.storage import default_storage
+import os
+from .models import HealthcareProvider, ProviderCredential, ProviderReview
+from .serializers import ProviderProfileSerializer, ProviderCredentialSerializer, ProviderPublicSerializer, ProviderReviewSerializer, ProviderReviewCreateSerializer
 from apps.payments.models import ProviderWallet, WalletTransaction, WithdrawalRequest
+from apps.patients.models import Patient
 import math
 
 class ProviderProfileView(generics.RetrieveUpdateAPIView):
@@ -22,10 +26,42 @@ class ProviderCredentialsView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         return ProviderCredential.objects.filter(provider__provider_id=self.request.user)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
         
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
         provider = HealthcareProvider.objects.get(provider_id=self.request.user)
-        serializer.save(provider=provider)
+        document_type = request.data.get('document_type')
+        upload = request.FILES.get('document')
+
+        if not document_type:
+            return Response({'document_type': 'This field is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not upload:
+            return Response({'document': 'Please attach a file.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        ext = os.path.splitext(upload.name)[1] or '.jpg'
+        relative_path = default_storage.save(
+            f'provider_kyc/{provider.provider_id_id}/{document_type}_{timezone.now().strftime("%Y%m%d%H%M%S")}{ext}',
+            upload,
+        )
+        file_url = settings.MEDIA_URL + relative_path.replace('\\', '/')
+
+        credential, _ = ProviderCredential.objects.update_or_create(
+            provider=provider,
+            document_type=document_type,
+            defaults={'document_url': file_url, 'is_verified': False},
+        )
+        provider.verification_status = 'pending'
+        provider.verification_notes = ''
+        provider.verified_at = None
+        provider.verified_by = None
+        provider.save(update_fields=['verification_status', 'verification_notes', 'verified_at', 'verified_by'])
+
+        serializer = self.get_serializer(credential)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class ProviderScheduleView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -63,6 +99,9 @@ class ProviderEarningsView(APIView):
         return Response({
             'balance': wallet.balance,
             'currency': 'XAF',
+            'pending_withdrawals': WithdrawalRequest.objects.filter(provider=provider, status__in=['pending', 'approved']).aggregate(total=Sum('amount'))['total'] or 0,
+            'verification_status': provider.verification_status,
+            'consultation_fee': provider.consultation_fee,
             'recent_transactions': tx_data
         })
 
@@ -76,6 +115,9 @@ class ProviderWithdrawalView(APIView):
         amount = float(request.data.get('amount', 0))
         method = request.data.get('method')
         details = request.data.get('details')
+
+        if provider.verification_status != 'approved':
+            return Response({'error': 'Your profile must be verified before withdrawals are allowed.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if amount <= 0:
             return Response({'error': 'Invalid amount'}, status=status.HTTP_400_BAD_REQUEST)
@@ -165,3 +207,46 @@ class ProviderPublicDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.AllowAny]
     queryset = HealthcareProvider.objects.filter(verification_status='approved')
     lookup_field = 'provider_id'
+
+class ProviderReviewListCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_provider(self, provider_id):
+        return HealthcareProvider.objects.get(provider_id=provider_id, verification_status='approved')
+
+    def get(self, request, provider_id):
+        provider = self.get_provider(provider_id)
+        reviews = ProviderReview.objects.filter(provider=provider)
+        serializer = ProviderReviewSerializer(reviews, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, provider_id):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        provider = self.get_provider(provider_id)
+        try:
+            patient = Patient.objects.get(patient_id=request.user)
+        except Patient.DoesNotExist:
+            return Response({'error': 'Only patients can leave reviews.'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = ProviderReviewCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        appointment = serializer.validated_data.get('appointment')
+
+        review, _ = ProviderReview.objects.update_or_create(
+            provider=provider,
+            patient=patient,
+            appointment=appointment,
+            defaults={
+                'rating': serializer.validated_data['rating'],
+                'comment': serializer.validated_data.get('comment'),
+            }
+        )
+
+        aggregates = ProviderReview.objects.filter(provider=provider).aggregate(avg=Avg('rating'), count=Count('review_id'))
+        provider.rating = round(float(aggregates['avg'] or 0), 2)
+        provider.total_consultations = max(provider.total_consultations, aggregates['count'] or 0)
+        provider.save(update_fields=['rating', 'total_consultations'])
+
+        return Response(ProviderReviewSerializer(review).data, status=status.HTTP_201_CREATED)

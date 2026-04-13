@@ -50,16 +50,21 @@ class RoleSelectionView(APIView):
             user_type = serializer.validated_data['user_type']
             user = request.user
             
-            if user.user_type != 'unassigned':
-                return Response({'error': 'Role already assigned'}, status=status.HTTP_400_BAD_REQUEST)
+            # Allow setting the same role again (idempotent)
+            if user.user_type != 'unassigned' and user.user_type != user_type:
+                return Response({'error': f'Role already assigned as {user.user_type}'}, status=status.HTTP_400_BAD_REQUEST)
             
-            user.user_type = user_type
-            user.save()
+            if user.user_type == 'unassigned':
+                user.user_type = user_type
+                user.save()
             
             if user_type == 'patient':
                 Patient.objects.get_or_create(patient_id=user)
             elif user_type == 'provider':
-                HealthcareProvider.objects.get_or_create(provider_id=user)
+                HealthcareProvider.objects.get_or_create(
+                    provider_id=user,
+                    defaults={'license_number': f'pending_{user.user_id}'}
+                )
                 
             return Response({'message': f'Role set to {user_type}', 'user_type': user_type})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

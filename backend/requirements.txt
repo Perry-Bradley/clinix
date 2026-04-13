@@ -19,4 +19,4 @@ pandas==2.2.2
 transformers==4.44.2
 agora-token-builder==1.0.0
 firebase-admin==6.5.0
-google-cloud-aiplatform==1.147.0
+google-generativeai==0.7.2

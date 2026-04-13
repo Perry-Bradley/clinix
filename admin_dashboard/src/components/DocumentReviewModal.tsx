@@ -65,9 +65,9 @@ const DocumentReviewModal: React.FC<DocumentReviewModalProps> = ({
           <div>
             <h4 className="text-sm font-bold text-sky-800">Verification Checklist</h4>
             <ul className="text-xs text-sky-700 mt-1 space-y-1 list-disc list-inside">
-              <li>License number matches the official registry.</li>
-              <li>ID card photo matches the facial verification video.</li>
-              <li>Documents are current and not expired.</li>
+              <li>National ID front image is readable and valid.</li>
+              <li>National ID back image matches the same applicant.</li>
+              <li>Medical license is current and matches provider identity.</li>
             </ul>
           </div>
         </div>

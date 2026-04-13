@@ -18,7 +18,9 @@ def send_appointment_reminders():
     
     for appointment in upcoming_appointments:
         title = "Upcoming Appointment Reminder"
-        message = f"You have an upcoming appointment with {appointment.provider.provider_id.first_name} on {appointment.scheduled_at.strftime('%b %d, %H:%M')}."
+        provider_name = appointment.provider.provider_id.full_name or 'your provider'
+        appointment_type = appointment.appointment_type.replace('-', ' ')
+        message = f"You have an upcoming {appointment_type} appointment with {provider_name} on {appointment.scheduled_at.strftime('%b %d, %H:%M')}."
         # Send to patient
         send_notification.delay(
             appointment.patient.patient_id.user_id,
@@ -26,3 +28,5 @@ def send_appointment_reminders():
             message,
             'appointment'
         )
+        appointment.reminder_sent = True
+        appointment.save(update_fields=['reminder_sent'])

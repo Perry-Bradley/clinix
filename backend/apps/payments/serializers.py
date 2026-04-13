@@ -14,6 +14,11 @@ class PaymentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Only MTN MoMo and Orange Money are supported.')
         return value
 
+    def validate_payer_phone(self, value):
+        if value and not str(value).startswith('+237'):
+            raise serializers.ValidationError('Phone number must start with +237.')
+        return value
+
 class ProviderSubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProviderSubscription

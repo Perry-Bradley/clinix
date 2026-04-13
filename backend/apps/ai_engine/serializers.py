@@ -16,3 +16,4 @@ class AISymptomSessionSerializer(serializers.ModelSerializer):
 
 class SymptomChatMessageRequestSerializer(serializers.Serializer):
     message = serializers.CharField()
+    image = serializers.CharField(required=False, allow_blank=True, help_text="Base64 encoded image string")

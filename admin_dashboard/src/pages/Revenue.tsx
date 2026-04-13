@@ -7,10 +7,12 @@ import {
   Wallet
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 
 const Revenue = () => {
   const queryClient = useQueryClient();
   const token = localStorage.getItem('clinix_admin_token');
+  const [actionNotes, setActionNotes] = useState<Record<number, string>>({});
 
   // Fetch Summary Stats
   const { data: stats } = useQuery({
@@ -36,14 +38,14 @@ const Revenue = () => {
 
   // Withdrawal Action Mutation
   const actionMutation = useMutation({
-    mutationFn: async ({ id, action }: { id: number, action: string }) => {
+    mutationFn: async ({ id, action, notes }: { id: number, action: string, notes?: string }) => {
       const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/withdrawals/${id}/action/`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
         },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ action, notes })
       });
       return res.json();
     },
@@ -121,6 +123,7 @@ const Revenue = () => {
                     <td className="px-6 py-4">
                       <div className="font-medium text-slate-900">{req.provider_name}</div>
                       <div className="text-xs text-slate-500">{req.details}</div>
+                      {req.admin_notes && <div className="text-xs text-slate-400 mt-1">Admin note: {req.admin_notes}</div>}
                     </td>
                     <td className="px-6 py-4 font-semibold text-slate-900">
                       XAF {req.amount?.toLocaleString()}
@@ -137,35 +140,49 @@ const Revenue = () => {
                       {new Date(req.date).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
-                      {req.status === 'pending' && (
+                      <div className="space-y-2">
+                        {(req.status === 'pending' || req.status === 'approved') && (
+                          <textarea
+                            value={actionNotes[req.id] || ''}
+                            onChange={(e) => setActionNotes((prev) => ({ ...prev, [req.id]: e.target.value }))}
+                            placeholder="Optional admin note"
+                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                            rows={2}
+                          />
+                        )}
+                        {req.status === 'pending' && (
                         <div className="flex gap-2">
                           <button 
-                            onClick={() => actionMutation.mutate({ id: req.id, action: 'approve' })}
+                            onClick={() => actionMutation.mutate({ id: req.id, action: 'approve', notes: actionNotes[req.id] })}
                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Approve"
                           >
                             <CheckCircle className="w-5 h-5" />
                           </button>
                           <button 
-                            onClick={() => actionMutation.mutate({ id: req.id, action: 'reject' })}
+                            onClick={() => actionMutation.mutate({ id: req.id, action: 'reject', notes: actionNotes[req.id] })}
                             className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Reject"
                           >
                             <XCircle className="w-5 h-5" />
                           </button>
                         </div>
-                      )}
-                      {req.status === 'approved' && (
+                        )}
+                        {req.status === 'approved' && (
                         <button 
-                          onClick={() => actionMutation.mutate({ id: req.id, action: 'complete' })}
+                          onClick={() => actionMutation.mutate({ id: req.id, action: 'complete', notes: actionNotes[req.id] })}
                           className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
                         >
                           Mark Paid
                         </button>
-                      )}
-                      {req.status === 'completed' && (
+                        )}
+                        {req.status === 'completed' && (
                         <span className="text-xs font-medium text-slate-400">Completed</span>
-                      )}
+                        )}
+                        {req.status === 'rejected' && (
+                          <span className="text-xs font-medium text-red-400">Rejected</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

@@ -70,10 +70,11 @@ class VerificationListView(APIView):
         for p in providers:
             data.append({
                 'provider_id': p.provider_id.user_id,
-                'name': f"{p.provider_id.first_name} {p.provider_id.last_name}",
-                'specialization': p.specialization,
+                'name': p.provider_id.full_name or str(p.provider_id.user_id),
+                'specialization': p.other_specialty or p.specialty,
                 'license_number': p.license_number,
-                'submitted_at': p.provider_id.created_at
+                'submitted_at': p.provider_id.created_at,
+                'verification_notes': p.verification_notes,
             })
         return Response(data)
 
@@ -94,9 +95,11 @@ class VerificationDetailView(APIView):
                 
             return Response({
                 'id': provider.provider_id.user_id,
-                'name': f"{provider.provider_id.first_name} {provider.provider_id.last_name}",
-                'spec': provider.specialization,
+                'name': provider.provider_id.full_name or str(provider.provider_id.user_id),
+                'spec': provider.other_specialty or provider.specialty,
                 'license': provider.license_number,
+                'verification_status': provider.verification_status,
+                'verification_notes': provider.verification_notes,
                 'documents': cd_data
             })
         except HealthcareProvider.DoesNotExist:
@@ -159,12 +162,13 @@ class AdminWithdrawalListView(APIView):
         for w in withdrawals:
             data.append({
                 'id': w.id,
-                'provider_name': f"{w.provider.provider_id.first_name} {w.provider.provider_id.last_name}",
+                'provider_name': w.provider.provider_id.full_name or str(w.provider.provider_id.user_id),
                 'amount': w.amount,
                 'method': w.payout_method,
                 'details': w.payout_details,
                 'status': w.status,
-                'date': w.requested_at
+                'date': w.requested_at,
+                'admin_notes': w.admin_notes,
             })
         return Response(data)
 

@@ -123,6 +123,20 @@ class Command(BaseCommand):
                 'address': 'Boulevard de la Liberté',
                 'city': 'Yaoundé',
             },
+            {
+                'full_name': 'Dr. Linda Tchameni',
+                'email': 'linda@demo.clinix.cm',
+                'phone': '+237670010005',
+                'specialty': 'generalist',
+                'other_specialty': 'Dermatology',
+                'bio': 'Skin consultations, chronic rash follow-up, and outpatient dermatology care.',
+                'fee': 14000,
+                'lat': '3.8791',
+                'lng': '11.5102',
+                'facility': 'Clinix Skin Care — Melen',
+                'address': 'Avenue Melen',
+                'city': 'Yaoundé',
+            },
         ]
 
         providers = []

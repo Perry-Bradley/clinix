@@ -26,6 +26,8 @@ class Payment(models.Model):
     currency = models.CharField(max_length=3, default='XAF')
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
     transaction_ref = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    external_transaction_id = models.CharField(max_length=255, null=True, blank=True)
+    payer_phone = models.CharField(max_length=20, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     initiated_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
