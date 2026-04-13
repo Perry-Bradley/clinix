@@ -32,6 +32,8 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   bool _localUserJoined = false;
   bool _muted = false;
   bool _videoDisabled = false;
+  bool _speakerOn = true;
+  bool _onHold = false;
 
   @override
   void initState() {
@@ -154,6 +156,32 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
     setState(() {});
   }
 
+  Future<void> _toggleSpeaker() async {
+    final e = _engine;
+    if (e == null) return;
+    _speakerOn = !_speakerOn;
+    await e.setEnableSpeakerphone(_speakerOn);
+    setState(() {});
+  }
+
+  Future<void> _switchCamera() async {
+    if (widget.audioOnly) return;
+    final e = _engine;
+    if (e == null) return;
+    await e.switchCamera();
+  }
+
+  Future<void> _toggleHold() async {
+    final e = _engine;
+    if (e == null) return;
+    _onHold = !_onHold;
+    await e.muteLocalAudioStream(_onHold || _muted);
+    if (!widget.audioOnly) {
+      await e.muteLocalVideoStream(_onHold || _videoDisabled);
+    }
+    setState(() {});
+  }
+
   @override
   void dispose() {
     final e = _engine;
@@ -188,6 +216,15 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
               : Stack(
                   fit: StackFit.expand,
                   children: [
+                    Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xFF111827), Colors.black],
+                        ),
+                      ),
+                    ),
                     ColoredBox(
                       color: Colors.black,
                       child: widget.audioOnly || _remoteUid == null
@@ -199,9 +236,11 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
                                       size: 72, color: Colors.white24),
                                   const SizedBox(height: 16),
                                   Text(
-                                    widget.audioOnly
-                                        ? 'Connected — audio only'
-                                        : 'Waiting for the other party to join…',
+                                    _onHold
+                                        ? 'Call on hold'
+                                        : widget.audioOnly
+                                            ? 'Connected — audio only'
+                                            : 'Waiting for the other party to join…',
                                     style: const TextStyle(color: Colors.white54),
                                   ),
                                 ],
@@ -232,31 +271,110 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
                         ),
                       ),
                     Positioned(
+                      top: 18,
+                      left: 18,
+                      right: 18,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: Colors.white.withOpacity(0.08)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.doctorName ?? (widget.audioOnly ? 'Audio consultation' : 'Video consultation'),
+                                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _onHold
+                                        ? 'On hold'
+                                        : _remoteUid != null
+                                            ? 'Connected'
+                                            : 'Connecting…',
+                                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Positioned(
                       left: 0,
                       right: 0,
-                      bottom: 32,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      bottom: 24,
+                      child: Column(
                         children: [
-                          _CallButton(
-                            icon: _muted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                            color: Colors.white24,
-                            onPressed: _toggleMute,
-                          ),
-                          const SizedBox(width: 20),
-                          _CallButton(
-                            icon: Icons.call_end_rounded,
-                            color: Colors.redAccent,
-                            onPressed: _leave,
-                          ),
-                          if (!widget.audioOnly) ...[
-                            const SizedBox(width: 20),
-                            _CallButton(
-                              icon: _videoDisabled ? Icons.videocam_off_rounded : Icons.videocam_rounded,
-                              color: Colors.white24,
-                              onPressed: _toggleVideo,
+                          if (_onHold)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 14),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF59E0B),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text('Call on hold', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                             ),
-                          ],
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _CallButton(
+                                  icon: _muted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                                  color: Colors.white24,
+                                  onPressed: _toggleMute,
+                                  label: _muted ? 'Unmute' : 'Mute',
+                                ),
+                                const SizedBox(width: 14),
+                                _CallButton(
+                                  icon: _speakerOn ? Icons.volume_up_rounded : Icons.hearing_disabled_rounded,
+                                  color: Colors.white24,
+                                  onPressed: _toggleSpeaker,
+                                  label: 'Speaker',
+                                ),
+                                const SizedBox(width: 14),
+                                _CallButton(
+                                  icon: _onHold ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                                  color: const Color(0x33F59E0B),
+                                  onPressed: _toggleHold,
+                                  label: _onHold ? 'Resume' : 'Hold',
+                                ),
+                                if (!widget.audioOnly) ...[
+                                  const SizedBox(width: 14),
+                                  _CallButton(
+                                    icon: _videoDisabled ? Icons.videocam_off_rounded : Icons.videocam_rounded,
+                                    color: Colors.white24,
+                                    onPressed: _toggleVideo,
+                                    label: _videoDisabled ? 'Video Off' : 'Video',
+                                  ),
+                                  const SizedBox(width: 14),
+                                  _CallButton(
+                                    icon: Icons.cameraswitch_rounded,
+                                    color: Colors.white24,
+                                    onPressed: _switchCamera,
+                                    label: 'Switch',
+                                  ),
+                                ],
+                                const SizedBox(width: 14),
+                                _CallButton(
+                                  icon: Icons.call_end_rounded,
+                                  color: Colors.redAccent,
+                                  onPressed: _leave,
+                                  label: 'End',
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -270,23 +388,31 @@ class _CallButton extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onPressed;
+  final String label;
 
-  const _CallButton({required this.icon, required this.color, required this.onPressed});
+  const _CallButton({required this.icon, required this.color, required this.onPressed, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: color,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onPressed,
-        child: SizedBox(
-          width: 56,
-          height: 56,
-          child: Icon(icon, color: Colors.white),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: color,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onPressed,
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: Icon(icon, color: Colors.white),
+            ),
+          ),
         ),
-      ),
+        const SizedBox(height: 6),
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+      ],
     );
   }
 }

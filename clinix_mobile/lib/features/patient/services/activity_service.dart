@@ -20,7 +20,7 @@ class ActivityService {
             _todayBaseSteps = event.steps;
           }
           _currentSteps = event.steps - _todayBaseSteps;
-          if (_currentSteps % 100 == 0) {
+          if (_currentSteps % 50 == 0) {
             _syncWithBackend();
           }
           sink.add(_currentSteps);
@@ -43,7 +43,9 @@ class ActivityService {
       _ref.read(healthMetricServiceProvider).syncActivity(
         steps: _currentSteps,
         distanceKm: _currentSteps * 0.0008,
-      ).catchError((_) {}),
+      ).then((_) {
+        _ref.invalidate(healthSummaryProvider);
+      }).catchError((_) {}),
     );
   }
 

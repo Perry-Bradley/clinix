@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
+import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/services/ai_chat_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -22,6 +24,9 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
   String? _sessionId;
   bool _isSessionActive = true;
   Map<String, dynamic>? _finalAssessment;
+
+  String? _pendingImageBase64;
+  String? _pendingImageMime;
 
   @override
   void initState() {
@@ -67,18 +72,27 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty || _sessionId == null || !_isSessionActive) return;
+    final hasImage = _pendingImageBase64 != null && (_pendingImageBase64 ?? '').trim().isNotEmpty;
+    if ((text.isEmpty && !hasImage) || _sessionId == null || !_isSessionActive) return;
+
+    final imageDataUri = hasImage ? 'data:${_pendingImageMime ?? 'image/jpeg'};base64,${_pendingImageBase64!}' : null;
 
     setState(() {
-      _messages.add(ChatMessage(text: text, isUser: true));
+      _messages.add(ChatMessage(text: text, isUser: true, imageDataUri: imageDataUri));
       _messageController.clear();
+      _pendingImageBase64 = null;
+      _pendingImageMime = null;
       _isLoading = true;
     });
 
     _scrollToBottom();
 
     try {
-      final reply = await AiChatService.sendMessage(_sessionId!, text);
+      final reply = await AiChatService.sendMessage(
+        _sessionId!,
+        text,
+        imageBase64: imageDataUri,
+      );
       setState(() {
         _messages.add(ChatMessage(text: reply, isUser: false));
       });
@@ -237,55 +251,157 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
     if (!_isSessionActive) return _buildCompletedArea();
 
     final bottom = MediaQuery.of(context).padding.bottom;
-    return Material(
-      color: Colors.white,
-      elevation: 8,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(14, 12, 14, bottom + 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 120),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.grey50,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppColors.grey200),
-                ),
-                child: TextField(
-                  controller: _messageController,
-                  style: AppTextStyles.bodyLarge.copyWith(color: AppColors.splashSlate900),
-                  decoration: InputDecoration(
-                    hintText: 'Describe how you feel…',
-                    hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
-                    border: InputBorder.none,
+    return Container(
+      padding: EdgeInsets.fromLTRB(12, 8, 12, bottom + 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          IconButton(
+            onPressed: _openAttachSheet,
+            icon: const Icon(Icons.add_circle_outline, color: AppColors.grey500, size: 28),
+          ),
+          Expanded(
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 140),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: AppColors.grey200),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_pendingImageBase64 != null && (_pendingImageBase64 ?? '').trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 8),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.memory(
+                              base64Decode(_pendingImageBase64!),
+                              width: 54,
+                              height: 54,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Image attached',
+                              style: AppTextStyles.caption.copyWith(color: AppColors.grey500),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => setState(() {
+                              _pendingImageBase64 = null;
+                              _pendingImageMime = null;
+                            }),
+                            icon: const Icon(Icons.close_rounded, color: AppColors.grey500, size: 18),
+                          ),
+                        ],
+                      ),
+                    ),
+                  TextField(
+                    controller: _messageController,
+                    maxLines: null,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _sendMessage(),
+                    style: AppTextStyles.bodyLarge.copyWith(color: AppColors.splashSlate900),
+                    cursorColor: AppColors.splashSlate900,
+                    decoration: InputDecoration(
+                      hintText: 'Describe how you feel…',
+                      hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isDense: true,
+                    ),
                   ),
-                  maxLines: null,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _sendMessage(),
-                ),
+                ],
               ),
             ),
-            const SizedBox(width: 10),
-            Material(
-              color: AppColors.splashSlate900,
-              borderRadius: BorderRadius.circular(22),
-              child: InkWell(
-                onTap: _sendMessage,
-                borderRadius: BorderRadius.circular(22),
-                child: const Padding(
-                  padding: EdgeInsets.all(14),
-                  child: Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
-                ),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: AppColors.splashSlate900,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _sendMessage,
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openAttachSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _AttachChip(
+              icon: Icons.image_rounded,
+              label: 'Photo',
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage();
+              },
+            ),
+            _AttachChip(
+              icon: Icons.photo_camera_rounded,
+              label: 'Camera',
+              onTap: () {
+                Navigator.pop(context);
+                _pickCamera();
+              },
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (image == null) return;
+    final bytes = await image.readAsBytes();
+    setState(() {
+      _pendingImageBase64 = base64Encode(bytes);
+      _pendingImageMime = image.mimeType ?? 'image/jpeg';
+    });
+  }
+
+  Future<void> _pickCamera() async {
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+    if (image == null) return;
+    final bytes = await image.readAsBytes();
+    setState(() {
+      _pendingImageBase64 = base64Encode(bytes);
+      _pendingImageMime = image.mimeType ?? 'image/jpeg';
+    });
   }
 
   Widget _buildCompletedArea() {
@@ -330,6 +446,7 @@ class ChatMessage extends StatelessWidget {
   final bool isUser;
   final bool isFinal;
   final Map<String, dynamic>? assessment;
+  final String? imageDataUri;
 
   const ChatMessage({
     super.key,
@@ -337,10 +454,15 @@ class ChatMessage extends StatelessWidget {
     required this.isUser,
     this.isFinal = false,
     this.assessment,
+    this.imageDataUri,
   });
 
   @override
   Widget build(BuildContext context) {
+    final String? img = imageDataUri;
+    final bool hasImage = img != null && img.trim().isNotEmpty;
+    final String? b64 = hasImage && img.contains('base64,') ? img.split('base64,')[1] : null;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -375,13 +497,31 @@ class ChatMessage extends StatelessWidget {
                         ),
                     ],
                   ),
-                  child: Text(
-                    text,
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      color: isUser ? Colors.white : AppColors.splashSlate900,
-                      fontSize: 15,
-                      height: 1.45,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (b64 != null)
+                        Padding(
+                          padding: EdgeInsets.only(bottom: text.trim().isEmpty ? 0 : 10),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Image.memory(
+                              base64Decode(b64),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      if (text.trim().isNotEmpty)
+                        Text(
+                          text,
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            color: isUser ? Colors.white : AppColors.splashSlate900,
+                            fontSize: 15,
+                            height: 1.45,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -469,6 +609,45 @@ class ChatMessage extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AttachChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _AttachChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.grey50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.grey200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppColors.splashSlate900, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
       ),
     );
   }

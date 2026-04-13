@@ -1,9 +1,94 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/constants/api_constants.dart';
 import '../../../shared/widgets/custom_sidebar_drawer.dart';
 import '../../../shared/widgets/bubble_bottom_bar.dart';
+
+class _ProviderApi {
+  static final Dio _dio = Dio(BaseOptions(
+    baseUrl: ApiConstants.baseUrl,
+    connectTimeout: const Duration(seconds: 20),
+    receiveTimeout: const Duration(seconds: 20),
+  ));
+
+  static Future<Options> _authOptions() async {
+    final token = await AuthService.getAccessToken();
+    return Options(headers: {'Authorization': 'Bearer $token'});
+  }
+
+  static Future<Map<String, dynamic>> fetchProfile() async {
+    final response = await _dio.get(
+      '${ApiConstants.providers}profile/',
+      options: await _authOptions(),
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  static Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
+    final response = await _dio.patch(
+      '${ApiConstants.providers}profile/',
+      data: data,
+      options: await _authOptions(),
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  static Future<Map<String, dynamic>> fetchEarnings() async {
+    final response = await _dio.get(
+      '${ApiConstants.providers}earnings/',
+      options: await _authOptions(),
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  static Future<void> requestWithdrawal({
+    required String amount,
+    required String method,
+    required String details,
+  }) async {
+    await _dio.post(
+      '${ApiConstants.providers}withdraw/',
+      data: {
+        'amount': amount,
+        'method': method,
+        'details': details,
+      },
+      options: await _authOptions(),
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchCredentials() async {
+    final response = await _dio.get(
+      '${ApiConstants.providers}credentials/',
+      options: await _authOptions(),
+    );
+    final data = response.data;
+    if (data is List) {
+      return List<Map<String, dynamic>>.from(data);
+    }
+    return [];
+  }
+
+  static Future<void> uploadCredential({
+    required String documentType,
+    required XFile file,
+  }) async {
+    final formData = FormData.fromMap({
+      'document_type': documentType,
+      'document': await MultipartFile.fromFile(file.path, filename: file.name),
+    });
+    await _dio.post(
+      '${ApiConstants.providers}credentials/',
+      data: formData,
+      options: (await _authOptions()).copyWith(contentType: 'multipart/form-data'),
+    );
+  }
+}
 
 class ProviderHomePage extends StatefulWidget {
   const ProviderHomePage({super.key});
@@ -116,8 +201,29 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _ProviderDashboard extends StatelessWidget {
+class _ProviderDashboard extends StatefulWidget {
   const _ProviderDashboard();
+
+  @override
+  State<_ProviderDashboard> createState() => _ProviderDashboardState();
+}
+
+class _ProviderDashboardState extends State<_ProviderDashboard> {
+  String _providerName = 'Doctor';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProviderName();
+  }
+
+  Future<void> _loadProviderName() async {
+    final name = await AuthService.getUserName();
+    if (!mounted) return;
+    setState(() {
+      _providerName = (name != null && name.trim().isNotEmpty) ? name.trim() : 'Doctor';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -141,9 +247,9 @@ class _ProviderDashboard extends StatelessWidget {
                         children: [
                           Text('Doctor Portal 🩺', style: AppTextStyles.caption.copyWith(color: AppColors.sky300, fontSize: 13)),
                           const SizedBox(height: 4),
-                          Text('Dr. Marie Nkomo', style: AppTextStyles.displayLarge.copyWith(fontSize: 22)),
+                          Text(_providerName, style: AppTextStyles.displayLarge.copyWith(fontSize: 22)),
                           const SizedBox(height: 2),
-                          Text('Cardiologist', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
+                          Text('Healthcare Provider', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
                         ],
                       ),
                     ),
@@ -470,11 +576,56 @@ class _ProviderScheduleTab extends StatelessWidget {
   }
 }
 
-class _ProviderEarningsTab extends StatelessWidget {
+class _ProviderEarningsTab extends StatefulWidget {
   const _ProviderEarningsTab();
 
   @override
+  State<_ProviderEarningsTab> createState() => _ProviderEarningsTabState();
+}
+
+class _ProviderEarningsTabState extends State<_ProviderEarningsTab> {
+  Map<String, dynamic>? _earnings;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEarnings();
+  }
+
+  Future<void> _loadEarnings() async {
+    try {
+      final data = await _ProviderApi.fetchEarnings();
+      if (!mounted) return;
+      setState(() {
+        _earnings = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not load wallet data.';
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(child: Text(_error!, style: AppTextStyles.bodyMedium));
+    }
+
+    final balance = (_earnings?['balance'] ?? 0).toString();
+    final pendingWithdrawals = (_earnings?['pending_withdrawals'] ?? 0).toString();
+    final verificationStatus = (_earnings?['verification_status'] ?? 'pending').toString();
+    final transactions = (_earnings?['recent_transactions'] as List?) ?? const [];
+
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(24),
@@ -511,7 +662,7 @@ class _ProviderEarningsTab extends StatelessWidget {
                       children: [
                         Text("Available to Withdraw", style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky100, fontSize: 13)),
                         const SizedBox(height: 6),
-                        Text("125,000 XAF", style: AppTextStyles.displayLarge.copyWith(fontSize: 32, letterSpacing: -0.5)),
+                        Text("$balance XAF", style: AppTextStyles.displayLarge.copyWith(fontSize: 32, letterSpacing: -0.5)),
                       ],
                     ),
                     Container(
@@ -524,6 +675,13 @@ class _ProviderEarningsTab extends StatelessWidget {
                 const SizedBox(height: 32),
                 Row(
                   children: [
+                    _EarningStat(label: 'Pending', value: '$pendingWithdrawals XAF'),
+                    _EarningStat(label: 'KYC', value: verificationStatus.toUpperCase()),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
                     Expanded(
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -533,7 +691,7 @@ class _ProviderEarningsTab extends StatelessWidget {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                        onPressed: () => _showPayoutModal(context),
+                        onPressed: () => _showPayoutModal(context, onSubmitted: _loadEarnings),
                         child: const Text("Request Payout", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
                       ),
                     ),
@@ -552,9 +710,19 @@ class _ProviderEarningsTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          _buildTxItem("Consultation - John Doe", "Today, 10:30 AM", "+15,000", true),
-          _buildTxItem("Withdrawal Request", "Yesterday, 04:15 PM", "-50,000", false),
-          _buildTxItem("Consultation - Patient #122", "Oct 10, 2023", "+15,000", true),
+          if (transactions.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.grey200)),
+              child: Text('No transactions yet', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500)),
+            )
+          else
+            ...transactions.map((tx) => _buildTxItem(
+              (tx['type']?.toString() == 'credit') ? 'Consultation Payout' : 'Withdrawal',
+              tx['date']?.toString() ?? '',
+              tx['amount']?.toString() ?? '0',
+              tx['type']?.toString() == 'credit',
+            )),
           const SizedBox(height: 100), // Space for bottom bar
         ],
       ),
@@ -620,11 +788,62 @@ class _EarningStat extends StatelessWidget {
   }
 }
 
-class _ProviderProfileTab extends StatelessWidget {
+class _ProviderProfileTab extends StatefulWidget {
   const _ProviderProfileTab();
 
   @override
+  State<_ProviderProfileTab> createState() => _ProviderProfileTabState();
+}
+
+class _ProviderProfileTabState extends State<_ProviderProfileTab> {
+  Map<String, dynamic>? _profile;
+  List<Map<String, dynamic>> _credentials = const [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final profile = await _ProviderApi.fetchProfile();
+      final credentials = await _ProviderApi.fetchCredentials();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _credentials = credentials;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not load provider profile.';
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(child: Text(_error!, style: AppTextStyles.bodyMedium));
+    }
+
+    final user = (_profile?['user'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    final providerName = user['full_name']?.toString() ?? 'Provider';
+    final verificationStatus = (_profile?['verification_status'] ?? 'pending').toString();
+    final specialty = (_profile?['other_specialty']?.toString().trim().isNotEmpty ?? false)
+        ? _profile!['other_specialty'].toString()
+        : (_profile?['specialty']?.toString() ?? 'Healthcare Provider');
+    final feeText = (_profile?['consultation_fee'] ?? 0).toString();
+
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -652,8 +871,8 @@ class _ProviderProfileTab extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text('Dr. Marie Nkomo', style: AppTextStyles.headlineLarge.copyWith(color: AppColors.white)),
-                Text('Verified Specialist', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
+                Text(providerName, style: AppTextStyles.headlineLarge.copyWith(color: AppColors.white)),
+                Text('${verificationStatus[0].toUpperCase()}${verificationStatus.substring(1)} • $specialty', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
               ],
             ),
           ),
@@ -662,40 +881,98 @@ class _ProviderProfileTab extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           sliver: SliverList(
             delegate: SliverChildListDelegate([
-              // Documents Alert
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF7ED),
+                  color: AppColors.white,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFFFEDD5)),
+                  border: Border.all(color: AppColors.grey200),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Consultation Fee', style: AppTextStyles.headlineSmall.copyWith(fontSize: 15)),
+                          const SizedBox(height: 6),
+                          Text('$feeText XAF', style: AppTextStyles.displayLarge.copyWith(fontSize: 24, color: AppColors.darkBlue900)),
+                          const SizedBox(height: 4),
+                          Text('This is the amount patients pay for your consultation.', style: AppTextStyles.caption),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _showEditFeeModal(context, _profile!, onSaved: _loadProfile),
+                      child: const Text('Edit'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: verificationStatus == 'approved' ? const Color(0xFFF0FDF4) : const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: verificationStatus == 'approved' ? const Color(0xFFBBF7D0) : const Color(0xFFFFEDD5)),
                 ),
                 child: Column(
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.warning_amber_rounded, color: Color(0xFFF97316)),
+                        Icon(
+                          verificationStatus == 'approved' ? Icons.verified_rounded : Icons.warning_amber_rounded,
+                          color: verificationStatus == 'approved' ? const Color(0xFF16A34A) : const Color(0xFFF97316),
+                        ),
                         const SizedBox(width: 12),
-                        Text("Action Required", style: AppTextStyles.headlineSmall.copyWith(color: const Color(0xFFC2410C), fontSize: 15)),
+                        Text(
+                          verificationStatus == 'approved' ? 'Profile Verified' : 'Verify Profile',
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            color: verificationStatus == 'approved' ? const Color(0xFF166534) : const Color(0xFFC2410C),
+                            fontSize: 15,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text("Please upload your updated medical license for verification.", style: AppTextStyles.caption.copyWith(color: const Color(0xFF9A3412))),
+                    Text(
+                      verificationStatus == 'approved'
+                          ? 'Your KYC has been approved by admin and your provider profile can be listed in the system.'
+                          : 'Submit National ID front, National ID back, and your medical license for admin KYC approval.',
+                      style: AppTextStyles.caption.copyWith(color: verificationStatus == 'approved' ? const Color(0xFF166534) : const Color(0xFF9A3412)),
+                    ),
                     const SizedBox(height: 14),
-                    SizedBox(width: double.infinity, child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF97316), foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                      onPressed: () {}, 
-                      child: const Text("Upload Now", style: TextStyle(fontWeight: FontWeight.bold)),
-                    )),
+                    if (verificationStatus != 'approved')
+                      SizedBox(width: double.infinity, child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF97316), foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        onPressed: () => _showVerifyProfileModal(context, onUploaded: _loadProfile), 
+                        child: const Text("Verify Profile", style: TextStyle(fontWeight: FontWeight.bold)),
+                      )),
                   ],
                 ),
               ),
               const SizedBox(height: 25),
-              _ProfileMenuItem(icon: Icons.badge_outlined, label: 'Professional Credentials', onTap: () {}),
-              _ProfileMenuItem(icon: Icons.edit_note_rounded, label: 'Optimization & Bio', onTap: () => _showEditBioModal(context)),
+              _ProfileMenuItem(icon: Icons.verified_user_outlined, label: 'Verify Profile', onTap: () => _showVerifyProfileModal(context, onUploaded: _loadProfile)),
+              _ProfileMenuItem(icon: Icons.edit_note_rounded, label: 'Optimization & Bio', onTap: () => _showEditBioModal(context, _profile!, onSaved: _loadProfile)),
               _ProfileMenuItem(icon: Icons.notifications_none_rounded, label: 'Notification Settings', onTap: () {}),
               _ProfileMenuItem(icon: Icons.security_outlined, label: 'Account Integrity', onTap: () {}),
               _ProfileMenuItem(icon: Icons.logout_rounded, label: 'Log Out', color: AppColors.error, onTap: () => context.go('/login')),
+              const SizedBox(height: 12),
+              if (_credentials.isNotEmpty)
+                ..._credentials.map((cred) => Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.grey200)),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.description_outlined, color: AppColors.sky500),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(_credentialLabel((cred['document_type'] ?? 'document').toString()), style: AppTextStyles.bodyMedium)),
+                      Text((cred['is_verified'] == true) ? 'Verified' : 'Pending', style: AppTextStyles.caption.copyWith(color: (cred['is_verified'] == true) ? AppColors.accentGreen : AppColors.accentOrange)),
+                    ],
+                  ),
+                )),
               const SizedBox(height: 100),
             ]),
           ),
@@ -730,17 +1007,18 @@ class _ProfileMenuItem extends StatelessWidget {
   }
 }
 
-void _showPayoutModal(BuildContext context) {
+void _showPayoutModal(BuildContext context, {required Future<void> Function() onSubmitted}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => const _PayoutModal(),
+    builder: (context) => _PayoutModal(onSubmitted: onSubmitted),
   );
 }
 
 class _PayoutModal extends StatefulWidget {
-  const _PayoutModal();
+  final Future<void> Function() onSubmitted;
+  const _PayoutModal({required this.onSubmitted});
   @override
   State<_PayoutModal> createState() => _PayoutModalState();
 }
@@ -748,6 +1026,8 @@ class _PayoutModal extends StatefulWidget {
 class _PayoutModalState extends State<_PayoutModal> {
   String _payoutMethod = 'MoMo';
   final TextEditingController _numberController = TextEditingController();
+  final TextEditingController _amountController = TextEditingController();
+  bool _submitting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -779,6 +1059,17 @@ class _PayoutModalState extends State<_PayoutModal> {
           Text(_payoutMethod == 'MoMo' ? 'Phone Number' : 'Account Number', style: AppTextStyles.headlineSmall.copyWith(fontSize: 14)),
           const SizedBox(height: 10),
           TextField(
+            controller: _amountController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              hintText: 'Amount in XAF',
+              filled: true,
+              fillColor: AppColors.grey50,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
             controller: _numberController,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
@@ -791,9 +1082,24 @@ class _PayoutModalState extends State<_PayoutModal> {
           const SizedBox(height: 30),
           
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payout request submitted for approval!'), backgroundColor: AppColors.accentGreen));
+            onPressed: _submitting ? null : () async {
+              setState(() => _submitting = true);
+              try {
+                await _ProviderApi.requestWithdrawal(
+                  amount: _amountController.text.trim(),
+                  method: _payoutMethod == 'MoMo' ? 'mtn_momo' : 'bank',
+                  details: _numberController.text.trim(),
+                );
+                if (!mounted) return;
+                Navigator.pop(context);
+                await widget.onSubmitted();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payout request submitted for admin approval.'), backgroundColor: AppColors.accentGreen));
+              } on DioException catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.response?.data?.toString() ?? 'Could not submit payout request.')));
+              } finally {
+                if (mounted) setState(() => _submitting = false);
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.sky600,
@@ -802,7 +1108,9 @@ class _PayoutModalState extends State<_PayoutModal> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               elevation: 0,
             ),
-            child: const Text('Confirm Request', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            child: _submitting
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Confirm Request', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -835,26 +1143,265 @@ class _MethodChip extends StatelessWidget {
   }
 }
 
-void _showEditBioModal(BuildContext context) {
+void _showEditFeeModal(
+  BuildContext context,
+  Map<String, dynamic> profile, {
+  required Future<void> Function() onSaved,
+}) {
+  final controller = TextEditingController(text: (profile['consultation_fee'] ?? '').toString());
+  bool saving = false;
+
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => const _EditBioModal(),
+    builder: (modalContext) {
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Edit Consultation Fee', style: AppTextStyles.headlineMedium),
+                const SizedBox(height: 8),
+                Text('Set the amount patients pay for each consultation.', style: AppTextStyles.caption),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: 'Enter amount in XAF',
+                    filled: true,
+                    fillColor: AppColors.grey50,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            setModalState(() => saving = true);
+                            try {
+                              await _ProviderApi.updateProfile({
+                                'consultation_fee': controller.text.trim(),
+                              });
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                await onSaved();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Consultation fee updated successfully.')),
+                                );
+                              }
+                            } on DioException catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.response?.data?.toString() ?? 'Could not update consultation fee.')),
+                                );
+                              }
+                            } finally {
+                              if (context.mounted) {
+                                setModalState(() => saving = false);
+                              }
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.sky600,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 54),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: saving
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Save Fee'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+void _showVerifyProfileModal(
+  BuildContext context, {
+  required Future<void> Function() onUploaded,
+}) {
+  final picker = ImagePicker();
+  XFile? idFront;
+  XFile? idBack;
+  XFile? license;
+  bool saving = false;
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (modalContext) {
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          Future<void> pickFile(String type) async {
+            final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+            if (file == null) return;
+            setModalState(() {
+              if (type == 'front') idFront = file;
+              if (type == 'back') idBack = file;
+              if (type == 'license') license = file;
+            });
+          }
+
+          Widget fileTile(String title, XFile? file, VoidCallback onTap) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.grey50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.grey200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.file_present_rounded, color: AppColors.sky500),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
+                        Text(file?.name ?? 'No file selected', style: AppTextStyles.caption),
+                      ],
+                    ),
+                  ),
+                  TextButton(onPressed: onTap, child: const Text('Choose')),
+                ],
+              ),
+            );
+          }
+
+          return Container(
+            padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Verify Profile', style: AppTextStyles.headlineMedium),
+                const SizedBox(height: 8),
+                Text('Upload the required KYC files for admin approval before you are listed.', style: AppTextStyles.caption),
+                const SizedBox(height: 16),
+                fileTile('National ID Front', idFront, () => pickFile('front')),
+                fileTile('National ID Back', idBack, () => pickFile('back')),
+                fileTile('Medical License', license, () => pickFile('license')),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: saving || idFront == null || idBack == null || license == null
+                        ? null
+                        : () async {
+                            setModalState(() => saving = true);
+                            try {
+                              await _ProviderApi.uploadCredential(documentType: 'national_id_front', file: idFront!);
+                              await _ProviderApi.uploadCredential(documentType: 'national_id_back', file: idBack!);
+                              await _ProviderApi.uploadCredential(documentType: 'medical_license', file: license!);
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                await onUploaded();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('KYC submitted. Awaiting admin verification.')),
+                                );
+                              }
+                            } on DioException catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.response?.data?.toString() ?? 'Could not upload KYC documents.')),
+                                );
+                              }
+                            } finally {
+                              if (context.mounted) {
+                                setModalState(() => saving = false);
+                              }
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.sky600,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 54),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: saving
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Submit for Verification'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+String _credentialLabel(String type) {
+  switch (type) {
+    case 'national_id_front':
+      return 'National ID Front';
+    case 'national_id_back':
+      return 'National ID Back';
+    case 'medical_license':
+      return 'Medical License';
+    default:
+      return type.replaceAll('_', ' ');
+  }
+}
+
+void _showEditBioModal(
+  BuildContext context,
+  Map<String, dynamic> profile, {
+  required Future<void> Function() onSaved,
+}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => _EditBioModal(profile: profile, onSaved: onSaved),
   );
 }
 
 class _EditBioModal extends StatefulWidget {
-  const _EditBioModal({super.key});
+  final Map<String, dynamic> profile;
+  final Future<void> Function() onSaved;
+
+  const _EditBioModal({required this.profile, required this.onSaved});
   @override
   State<_EditBioModal> createState() => _EditBioModalState();
 }
 
 class _EditBioModalState extends State<_EditBioModal> {
-  final TextEditingController _bioController = TextEditingController(
-    text: "Dedicated healthcare professional focusing on patient-centered care."
-  );
-  final TextEditingController _feeController = TextEditingController(text: "15000");
+  late final TextEditingController _bioController;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bioController = TextEditingController(
+      text: (widget.profile['bio'] ?? '').toString(),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -872,23 +1419,8 @@ class _EditBioModalState extends State<_EditBioModal> {
           const SizedBox(height: 30),
           Text('Profile Optimization 🚀', style: AppTextStyles.headlineLarge.copyWith(fontSize: 22)),
           const SizedBox(height: 8),
-          Text('Control your professional presence and pricing.', style: AppTextStyles.caption),
+          Text('Update the professional information patients see on your profile.', style: AppTextStyles.caption),
           const SizedBox(height: 25),
-          
-          Text('Consultation Fee (XAF)', style: AppTextStyles.headlineSmall.copyWith(fontSize: 14)),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _feeController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.payments_outlined, color: AppColors.sky500),
-              hintText: 'e.g. 15000',
-              filled: true,
-              fillColor: AppColors.grey50,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
-            ),
-          ),
-          const SizedBox(height: 20),
 
           Text('Biography', style: AppTextStyles.headlineSmall.copyWith(fontSize: 14)),
           const SizedBox(height: 10),
@@ -904,11 +1436,24 @@ class _EditBioModalState extends State<_EditBioModal> {
           ),
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Profile updated successfully!'), backgroundColor: AppColors.accentGreen),
-              );
+            onPressed: _saving ? null : () async {
+              setState(() => _saving = true);
+              try {
+                await _ProviderApi.updateProfile({'bio': _bioController.text.trim()});
+                if (!mounted) return;
+                Navigator.pop(context);
+                await widget.onSaved();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Profile updated successfully!'), backgroundColor: AppColors.accentGreen),
+                );
+              } on DioException catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(e.response?.data?.toString() ?? 'Could not update profile.')),
+                );
+              } finally {
+                if (mounted) setState(() => _saving = false);
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.sky600,
@@ -917,7 +1462,9 @@ class _EditBioModalState extends State<_EditBioModal> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               elevation: 0,
             ),
-            child: const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            child: _saving
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

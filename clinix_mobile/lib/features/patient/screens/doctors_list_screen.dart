@@ -69,50 +69,19 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
       if (mounted) {
         setState(() { 
           final results = response.data is List ? response.data : (response.data['results'] ?? []);
-          _doctors = results.isEmpty ? _getDemoDoctors() : results;
+          _doctors = results;
           _isLoading = false; 
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _doctors = _getDemoDoctors(); // Fallback to demo data for simulation
+          _error = 'Could not load doctors. Please check your connection and backend setup.';
+          _doctors = [];
           _isLoading = false;
         });
       }
     }
-  }
-
-  List<dynamic> _getDemoDoctors() {
-    return [
-      {
-        'id': 'd1',
-        'provider_id': {'id': 'p1', 'first_name': 'Amadou', 'last_name': 'Bello'},
-        'specialization': 'Cardiologist',
-        'rating': 4.9,
-        'lat': 4.0511, 'lng': 9.7679,
-        'status': 'Online',
-        'is_available': true,
-      },
-      {
-        'id': 'd2',
-        'provider_id': {'id': 'p2', 'first_name': 'Claire', 'last_name': 'Nembot'},
-        'specialization': 'Pediatrician',
-        'rating': 4.7,
-        'lat': 4.0611, 'lng': 9.7779,
-        'status': 'Available',
-        'is_available': true,
-      },
-      {
-        'id': 'd3',
-        'provider_id': {'id': 'p3', 'first_name': 'Abel', 'last_name': 'Tako'},
-        'specialization': 'General Surgeon',
-        'rating': 4.8,
-        'lat': 4.0411, 'lng': 9.7579,
-        'status': 'Busy',
-        'is_available': false,
-      },
-    ];
   }
 
 
@@ -177,9 +146,11 @@ class _DoctorSlideCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = '${doctor['provider_id']?['first_name'] ?? 'Dr.'} ${doctor['provider_id']?['last_name'] ?? ''}';
-    final spec = doctor['specialization'] ?? 'General Practitioner';
-    final rating = (doctor['rating'] ?? 0.0).toStringAsFixed(1);
+    final name = doctor['full_name']?.toString() ?? 'Doctor';
+    final spec = doctor['other_specialty']?.toString().isNotEmpty == true
+        ? doctor['other_specialty'].toString()
+        : (doctor['specialty']?.toString() ?? 'General Practitioner');
+    final rating = (((doctor['rating'] ?? 0.0) as num).toDouble()).toStringAsFixed(1);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -213,7 +184,7 @@ class _DoctorSlideCard extends StatelessWidget {
                       children: [
                         Text(spec, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky600)),
                         const SizedBox(width: 8),
-                        _StatusBadge(status: doctor['status'] ?? 'Available'),
+                        _StatusBadge(status: (doctor['is_available'] == true) ? 'Available' : 'Offline'),
                       ],
                     ),
                     Row(

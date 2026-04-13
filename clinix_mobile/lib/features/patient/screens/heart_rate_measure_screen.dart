@@ -325,6 +325,7 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
                   hrvMs: hrvMs,
                   respiratoryRate: respiratoryRate,
                 );
+                ref.invalidate(healthSummaryProvider);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Vitals saved to your health dashboard')),

@@ -11,7 +11,6 @@ import '../../screens/nearby_clinics_screen.dart';
 import '../../screens/health_dashboard_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/health_metric_service.dart';
-import '../../services/activity_service.dart';
 import 'package:intl/intl.dart';
 
 class PatientHomePage extends StatefulWidget {
@@ -249,16 +248,11 @@ class _PatientDashboardState extends State<_PatientDashboard> {
               Consumer(
                 builder: (context, ref, child) {
                   final summaryAsync = ref.watch(healthSummaryProvider);
-                  final steps = ref.watch(stepCountProvider).value ?? 0;
 
                   return Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
-                      ),
+                      color: const Color(0xFF111827),
                       borderRadius: BorderRadius.circular(28),
                       boxShadow: [
                         BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10)),
@@ -308,6 +302,17 @@ class _PatientDashboardState extends State<_PatientDashboard> {
                                     ? '${data['latest_heart_rate']['bpm']}' 
                                     : '--',
                                 color: Colors.redAccent,
+                              ),
+                              loading: () => const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                              error: (_, __) => _MiniSummaryItem(icon: Icons.error_outline, label: 'Error', value: '!', color: Colors.red),
+                            ),
+                            const SizedBox(width: 24),
+                            summaryAsync.when(
+                              data: (data) => _MiniSummaryItem(
+                                icon: Icons.directions_walk_rounded,
+                                label: 'Steps',
+                                value: '${data['today_activity']?['steps'] ?? 0}',
+                                color: Colors.blueAccent,
                               ),
                               loading: () => const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
                               error: (_, __) => _MiniSummaryItem(icon: Icons.error_outline, label: 'Error', value: '!', color: Colors.red),
@@ -482,12 +487,17 @@ class _DoctorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = 'Dr. ${doctor['provider_id']?['last_name'] ?? 'Provider'}';
-    final spec = doctor['specialization'] ?? 'Specialist';
+    final providerId = doctor['provider_id']?.toString() ?? '';
+    final name = (doctor['full_name']?.toString().trim().isNotEmpty ?? false)
+        ? doctor['full_name'].toString()
+        : 'Doctor';
+    final spec = (doctor['other_specialty']?.toString().trim().isNotEmpty ?? false)
+        ? doctor['other_specialty'].toString()
+        : (doctor['specialty']?.toString() ?? 'Specialist');
     final rating = (doctor['rating'] ?? 5.0).toString();
 
     return GestureDetector(
-      onTap: () => context.push('/patient/doctor-profile/${doctor['id'] ?? doctor['provider_id']?['id']}'),
+      onTap: providerId.isEmpty ? null : () => context.push('/patient/doctor-profile/$providerId'),
       child: Container(
         width: 160,
         padding: const EdgeInsets.all(16),

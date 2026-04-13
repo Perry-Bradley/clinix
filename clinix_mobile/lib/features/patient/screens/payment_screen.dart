@@ -24,6 +24,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   String _paymentMethod = 'mtn_momo';
   bool _isProcessing = false;
   String? _errorMessage;
+  final TextEditingController _phoneController = TextEditingController(text: '+237');
 
   Future<void> _processPayment() async {
     if (widget.appointmentId.isEmpty) {
@@ -36,12 +37,35 @@ class _PaymentScreenState extends State<PaymentScreen> {
     });
     try {
       final total = widget.consultationFee + widget.serviceCharge;
-      await PaymentService.initiate(
+      final payment = await PaymentService.initiate(
         appointmentId: widget.appointmentId,
         paymentMethod: _paymentMethod,
         amount: total.toDouble(),
+        payerPhone: _phoneController.text.trim(),
       );
-      if (mounted) context.pop(true);
+      final paymentId = payment['payment_id']?.toString();
+      if (paymentId == null || paymentId.isEmpty) {
+        throw Exception('Missing payment id');
+      }
+
+      var attempts = 0;
+      while (attempts < 8) {
+        await Future.delayed(const Duration(seconds: 3));
+        final status = await PaymentService.getStatus(paymentId);
+        final paymentStatus = status['status']?.toString() ?? 'pending';
+        if (paymentStatus == 'success') {
+          if (mounted) context.pop(true);
+          return;
+        }
+        if (paymentStatus == 'failed' || paymentStatus == 'refunded') {
+          throw Exception('Payment failed');
+        }
+        attempts += 1;
+      }
+
+      if (mounted) {
+        setState(() => _errorMessage = 'Payment is still pending confirmation. Complete the prompt on your phone, then check again shortly.');
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _errorMessage = 'Payment could not be started. Check your connection and try again.');
@@ -94,6 +118,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
             Text(
               'Clinix checkout uses MTN MoMo and Orange Money for Cameroon.',
               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                labelText: 'Mobile money number',
+                hintText: '+237670000000',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppColors.grey200)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppColors.grey200)),
+              ),
             ),
             const SizedBox(height: 16),
             _buildPaymentOption(

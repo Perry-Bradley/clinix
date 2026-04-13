@@ -62,8 +62,8 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
 
   void _nextStep() {
     if (_currentStep == 0) {
-      if (_bioCtrl.text.trim().length < 12) {
-        _toast('Please add a short professional bio (at least a few sentences).');
+      if (_bioCtrl.text.trim().isEmpty) {
+        _toast('Please add a short professional bio or title.');
         return;
       }
     }
@@ -134,7 +134,7 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
     setState(() => _isLoading = true);
     try {
       await DoctorService.updateProfile({
-        'specialty': _selectedSpecialty,
+        'specialty': _selectedSpecialty.toLowerCase(),
         'other_specialty': _selectedSpecialty == 'Other' ? _otherSpecialtyCtrl.text : '',
         'bio': _bioCtrl.text,
         'years_experience': int.tryParse(_expCtrl.text) ?? 1,

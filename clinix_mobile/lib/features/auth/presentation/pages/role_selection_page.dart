@@ -44,50 +44,54 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.darkBlue900,
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.splashSlate900,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => AuthService.logout().then((_) => context.go('/login')),
+        ),
+      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 40),
+              const SizedBox(height: 16),
               Text(
                 'Welcome to Clinix',
-                style: AppTextStyles.displayLarge.copyWith(fontSize: 32),
+                style: AppTextStyles.headlineMedium.copyWith(
+                  color: AppColors.splashSlate900,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 28,
+                ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
                 'Tell us who you are so we can tailor your experience.',
-                style: AppTextStyles.bodyLarge.copyWith(color: AppColors.sky200),
+                style: AppTextStyles.bodyLarge.copyWith(color: AppColors.grey500),
               ),
-              const SizedBox(height: 60),
+              const SizedBox(height: 48),
               _RoleCard(
-                title: 'I am a Patient',
+                title: 'Patient',
                 subtitle: 'Looking for consultation and health advice',
-                icon: Icons.person_search_rounded,
+                icon: Icons.person_outline_rounded,
                 isSelected: _selectedRole == 'patient',
                 onTap: () => _onRoleSelected('patient'),
                 isLoading: _isLoading && _selectedRole == 'patient',
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               _RoleCard(
-                title: 'I am a Healthcare Professional',
+                title: 'Healthcare Professional',
                 subtitle: 'Registering as a doctor, nurse, or midwife',
-                icon: Icons.medical_services_rounded,
+                icon: Icons.medical_services_outlined,
                 isSelected: _selectedRole == 'provider',
                 onTap: () => _onRoleSelected('provider'),
                 isLoading: _isLoading && _selectedRole == 'provider',
-              ),
-              const Spacer(),
-              Center(
-                child: TextButton(
-                  onPressed: () => AuthService.logout().then((_) => context.go('/login')),
-                  child: Text(
-                    'Cancel & Logout',
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
-                  ),
-                ),
               ),
             ],
           ),
@@ -116,42 +120,61 @@ class _RoleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activeColor = AppColors.splashSlate900;
+    
     return GestureDetector(
       onTap: isLoading ? null : onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.sky600.withOpacity(0.2) : AppColors.darkBlue700,
-          borderRadius: BorderRadius.circular(20),
+          color: isSelected ? AppColors.grey50 : Colors.white,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? AppColors.sky500 : Colors.white12,
-            width: 2,
+            color: isSelected ? activeColor : AppColors.grey200,
+            width: isSelected ? 2 : 1.5,
           ),
-          boxShadow: isSelected
-              ? [BoxShadow(color: AppColors.sky500.withOpacity(0.2), blurRadius: 20)]
-              : [],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.sky500 : AppColors.darkBlue900,
+                color: isSelected ? activeColor : AppColors.grey50,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: Colors.white, size: 32),
+              child: Icon(
+                icon, 
+                color: isSelected ? Colors.white : AppColors.grey500, 
+                size: 28,
+              ),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: AppTextStyles.headlineSmall.copyWith(color: Colors.white)),
+                  Text(
+                    title, 
+                    style: AppTextStyles.headlineSmall.copyWith(
+                      color: AppColors.splashSlate900,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: AppTextStyles.caption.copyWith(color: AppColors.grey400),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.grey500,
+                      height: 1.3,
+                    ),
                   ),
                 ],
               ),
@@ -160,12 +183,13 @@ class _RoleCard extends StatelessWidget {
               const SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.splashSlate900),
               )
             else
               Icon(
-                Icons.chevron_right_rounded,
-                color: isSelected ? AppColors.sky300 : AppColors.grey500,
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: isSelected ? activeColor : AppColors.grey400,
               ),
           ],
         ),

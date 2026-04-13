@@ -1,68 +1,94 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_text_styles.dart';
 
 class PatientBottomNav extends StatelessWidget {
   final int currentIndex;
-  final ValueChanged<int> onTap;
+  final Function(int) onTap;
 
-  const PatientBottomNav({super.key, required this.currentIndex, required this.onTap});
+  const PatientBottomNav({
+    super.key,
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  static const _items = [
+    (icon: Icons.home_rounded, label: 'Home'),
+    (icon: Icons.grid_view_rounded, label: 'Doctors'),
+    (icon: Icons.map_rounded, label: 'Nearby'),
+    (icon: Icons.calendar_today_rounded, label: 'Appts'),
+    (icon: Icons.person_outline_rounded, label: 'Profile'),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        boxShadow: [BoxShadow(color: AppColors.darkBlue900.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -4))],
-        border: const Border(top: BorderSide(color: AppColors.grey200, width: 1)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(icon: Icons.home_rounded, label: 'Home', index: 0, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.search_rounded, label: 'Doctors', index: 1, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.calendar_month_rounded, label: 'Appointments', index: 2, current: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.person_rounded, label: 'Profile', index: 3, current: currentIndex, onTap: onTap),
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Container(
+          height: 64,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A1628),
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0A1628).withOpacity(0.35),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final int index;
-  final int current;
-  final ValueChanged<int> onTap;
-
-  const _NavItem({required this.icon, required this.label, required this.index, required this.current, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final isActive = index == current;
-    return GestureDetector(
-      onTap: () => onTap(index),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive ? AppColors.sky500.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: isActive ? AppColors.sky500 : AppColors.grey400, size: 24),
-            const SizedBox(height: 3),
-            Text(label, style: AppTextStyles.caption.copyWith(color: isActive ? AppColors.sky500 : AppColors.grey400, fontWeight: isActive ? FontWeight.w600 : FontWeight.w400, fontSize: 10)),
-          ],
+          child: Row(
+            children: List.generate(_items.length, (i) {
+              final item = _items[i];
+              final selected = currentIndex == i;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onTap(i),
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFF0EA5E9)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          item.icon,
+                          size: 20,
+                          color: selected
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.45),
+                        ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              item.label,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              softWrap: false,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
         ),
       ),
     );

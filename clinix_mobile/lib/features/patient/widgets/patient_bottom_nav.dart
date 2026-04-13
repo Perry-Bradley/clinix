@@ -10,116 +10,81 @@ class PatientBottomNav extends StatelessWidget {
     required this.onTap,
   });
 
+  static const _items = [
+    (icon: Icons.home_rounded, label: 'Home'),
+    (icon: Icons.grid_view_rounded, label: 'Doctors'),
+    (icon: Icons.map_rounded, label: 'Nearby'),
+    (icon: Icons.calendar_today_rounded, label: 'Appts'),
+    (icon: Icons.person_outline_rounded, label: 'Profile'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          height: 64,
           decoration: BoxDecoration(
-            color: Colors.white, // White background
-            borderRadius: BorderRadius.circular(40),
-            border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+            color: const Color(0xFF0A1628),
+            borderRadius: BorderRadius.circular(32),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0A1628).withOpacity(0.08),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              )
+                color: const Color(0xFF0A1628).withOpacity(0.35),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
             ],
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(
-                icon: Icons.home_rounded,
-                label: 'Home',
-                isSelected: currentIndex == 0,
-                onTap: () => onTap(0),
-              ),
-              _NavItem(
-                icon: Icons.grid_view_rounded,
-                label: 'Doctors',
-                isSelected: currentIndex == 1,
-                onTap: () => onTap(1),
-              ),
-              _NavItem(
-                icon: Icons.map_rounded,
-                label: 'Nearby',
-                isSelected: currentIndex == 2,
-                onTap: () => onTap(2),
-              ),
-              _NavItem(
-                icon: Icons.calendar_today_rounded,
-                label: 'Appts',
-                isSelected: currentIndex == 3,
-                onTap: () => onTap(3),
-              ),
-              _NavItem(
-                icon: Icons.person_outline_rounded,
-                label: 'Profile',
-                isSelected: currentIndex == 4,
-                onTap: () => onTap(4),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutQuint,
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 20.0 : 12.0,
-          vertical: 10.0,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0EA5E9).withOpacity(0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? const Color(0xFF0A1628) : const Color(0xFF94A3B8),
-              size: 24,
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF0A1628),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  fontFamily: 'Inter',
+            children: List.generate(_items.length, (i) {
+              final item = _items[i];
+              final selected = currentIndex == i;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onTap(i),
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFF0EA5E9)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          item.icon,
+                          size: 20,
+                          color: selected
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.45),
+                        ),
+                        if (selected) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            item.label,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ]
-          ],
+              );
+            }),
+          ),
         ),
       ),
     );

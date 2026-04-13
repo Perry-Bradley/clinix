@@ -17,6 +17,7 @@ class DoctorProfileScreen extends StatefulWidget {
 class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   final Dio _dio = Dio();
   dynamic _provider;
+  List<Map<String, dynamic>> _reviews = const [];
   bool _isLoading = true;
   String? _error;
 
@@ -24,6 +25,19 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   void initState() {
     super.initState();
     _fetchProviderDetails();
+  }
+
+  Future<void> _fetchReviews() async {
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.baseUrl}${ApiConstants.providers}${widget.providerId}/reviews/',
+      );
+      if (!mounted) return;
+      final data = response.data;
+      setState(() {
+        _reviews = data is List ? List<Map<String, dynamic>>.from(data) : const [];
+      });
+    } catch (_) {}
   }
 
   Future<void> _fetchProviderDetails() async {
@@ -39,38 +53,16 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           _isLoading = false;
         });
       }
+      await _fetchReviews();
     } catch (e) {
-      // Fallback to demo data if API fails or ID is a mock
-      final demo = _getDemoProvider(widget.providerId);
       if (mounted) {
         setState(() {
-          _provider = demo;
+          _provider = null;
           _isLoading = false;
-          _error = null;
+          _error = 'Could not load doctor profile.';
         });
       }
     }
-  }
-
-  Map<String, dynamic> _getDemoProvider(String id) {
-    // Generate some consistent mock data based on ID
-    final isMock0 = id.contains('0') || id.contains('d1');
-    final isMock1 = id.contains('1') || id.contains('d2');
-    
-    return {
-      'id': id,
-      'provider_id': {
-        'first_name': isMock0 ? 'Amadou' : (isMock1 ? 'Claire' : 'Abel'),
-        'last_name': isMock0 ? 'Bello' : (isMock1 ? 'Nembot' : 'Tako'),
-        'bio': isMock0 
-            ? 'Experienced cardiologist with over 10 years of experience in treating cardiovascular diseases. Committed to providing the best heart care using advanced diagnostic techniques.'
-            : 'Passionate healthcare professional dedicated to patient wellness and specialized medical care. Expert in pediatric medicine and family health.',
-      },
-      'specialization': isMock0 ? 'Cardiologist' : (isMock1 ? 'Pediatrician' : 'General Surgeon'),
-      'rating': 4.8,
-      'reviews_count': 124,
-      'status': 'Available',
-    };
   }
 
   @override
@@ -83,13 +75,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       );
     }
 
-    final userData = _provider['provider_id'] ?? _provider;
-    final name = 'Dr. ${userData['first_name'] ?? ''} ${userData['last_name'] ?? ''}';
-    final spec = _provider['specialization'] ?? 'General Practitioner';
-    final rawBio = _provider['bio'] ?? userData['bio'] ?? userData['about'] ?? '';
+    final name = _provider['full_name']?.toString() ?? 'Doctor';
+    final spec = (_provider['other_specialty']?.toString().trim().isNotEmpty ?? false)
+        ? _provider['other_specialty'].toString()
+        : (_provider['specialty']?.toString() ?? 'General Practitioner');
+    final rawBio = _provider['bio'] ?? '';
     final bioText = rawBio.isNotEmpty ? rawBio : 'Dedicated healthcare professional focusing on patient-centered care and modern medical practices.';
     final bio = 'As a $spec, $bioText';
-    final rating = (_provider['rating'] ?? 4.8).toStringAsFixed(1);
+    final rating = (((_provider['rating'] ?? 4.8) as num).toDouble()).toStringAsFixed(1);
     final reviewsCount = _provider['reviews_count'] ?? 124;
 
     return Scaffold(
@@ -201,7 +194,19 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                ..._getMockReviews().map((r) => _ReviewCard(review: r)),
+                if (_reviews.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.grey200)),
+                    child: Text('No patient reviews yet.', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500)),
+                  )
+                else
+                  ..._reviews.map((r) => _ReviewCard(review: {
+                    'name': r['patient_name'] ?? 'Patient',
+                    'rating': r['rating'] ?? 0,
+                    'comment': r['comment'] ?? '',
+                    'date': r['created_at']?.toString() ?? '',
+                  })),
 
                 const SizedBox(height: 32),
                 Text('Location', style: AppTextStyles.headlineSmall),
@@ -225,8 +230,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Clinix Central Hospital', style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text('Douala, Cameroon', style: AppTextStyles.caption),
+                            Text((_provider['locations'] is List && (_provider['locations'] as List).isNotEmpty)
+                                ? (((_provider['locations'] as List).first['facility_name'] ?? 'Clinic').toString())
+                                : 'Clinic location unavailable', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            Text((_provider['locations'] is List && (_provider['locations'] as List).isNotEmpty)
+                                ? ('${((_provider['locations'] as List).first['city'] ?? '').toString()}, ${((_provider['locations'] as List).first['region'] ?? '').toString()}')
+                                : 'Location unavailable', style: AppTextStyles.caption),
                           ],
                         ),
                       ),
@@ -261,19 +270,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   }
 
   void _showReviewModal(BuildContext context) {
+    final providerName = _provider?['full_name']?.toString() ?? 'Doctor';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _ReviewSubmissionModal(providerName: 'Dr. ${_provider['first_name']}'),
+      builder: (context) => _ReviewSubmissionModal(providerId: widget.providerId, providerName: providerName, onSubmitted: _fetchReviews),
     );
-  }
-
-  List<Map<String, dynamic>> _getMockReviews() {
-    return [
-      {'name': 'Jean Dupont', 'rating': 5, 'comment': 'Excellente expérience, très professionnel et rassurant.', 'date': '2 days ago'},
-      {'name': 'Sarah Mbarga', 'rating': 4, 'comment': 'Bonne écoute, a pris le temps d\'expliquer le diagnostic.', 'date': '1 week ago'},
-    ];
   }
 }
 
@@ -338,14 +341,18 @@ class _ReviewCard extends StatelessWidget {
 }
 
 class _ReviewSubmissionModal extends StatefulWidget {
+  final String providerId;
   final String providerName;
-  const _ReviewSubmissionModal({required this.providerName});
+  final Future<void> Function() onSubmitted;
+  const _ReviewSubmissionModal({required this.providerId, required this.providerName, required this.onSubmitted});
   @override
   State<_ReviewSubmissionModal> createState() => _ReviewSubmissionModalState();
 }
 
 class _ReviewSubmissionModalState extends State<_ReviewSubmissionModal> {
   int _rating = 0;
+  final TextEditingController _commentController = TextEditingController();
+  bool _submitting = false;
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -367,6 +374,7 @@ class _ReviewSubmissionModalState extends State<_ReviewSubmissionModal> {
           ),
           const SizedBox(height: 16),
           TextField(
+            controller: _commentController,
             maxLines: 3,
             decoration: InputDecoration(
               hintText: 'Share your experience...',
@@ -377,13 +385,33 @@ class _ReviewSubmissionModalState extends State<_ReviewSubmissionModal> {
           ),
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: _submitting || _rating == 0 ? null : () async {
+              setState(() => _submitting = true);
+              try {
+                final token = await AuthService.getAccessToken();
+                await Dio().post(
+                  '${ApiConstants.baseUrl}${ApiConstants.providers}${widget.providerId}/reviews/',
+                  data: {
+                    'rating': _rating,
+                    'comment': _commentController.text.trim(),
+                  },
+                  options: Options(headers: {'Authorization': 'Bearer $token'}),
+                );
+                if (!mounted) return;
+                Navigator.pop(context);
+                await widget.onSubmitted();
+              } finally {
+                if (mounted) setState(() => _submitting = false);
+              }
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.sky600,
               minimumSize: const Size(double.infinity, 56),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
-            child: const Text('Submit Review', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: _submitting
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text('Submit Review', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

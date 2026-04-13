@@ -37,10 +37,13 @@ class AiChatService {
     return Map<String, dynamic>.from(response.data ?? {});
   }
 
-  static Future<String> sendMessage(String sessionId, String message) async {
+  static Future<String> sendMessage(String sessionId, String message, {String? imageBase64}) async {
     final response = await _dio.post<Map<String, dynamic>>(
       'chat/$sessionId/message/',
-      data: {'message': message},
+      data: {
+        'message': message,
+        if (imageBase64 != null && imageBase64.trim().isNotEmpty) 'image': imageBase64,
+      },
     );
     final r = response.data?['reply'];
     final text = r?.toString().trim() ?? '';

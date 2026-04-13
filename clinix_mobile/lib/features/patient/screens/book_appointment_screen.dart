@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/appointment_service.dart';
 import '../../../../core/constants/api_constants.dart';
 
 
@@ -21,8 +22,10 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   TimeOfDay? _selectedTime;
   String _consultationType = 'video';
   bool _isLoading = false;
+  bool _isFetchingSlots = false;
   String? _successMessage;
   String? _errorMessage;
+  List<String> _availableSlots = const [];
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -36,15 +39,43 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+        _selectedTime = null;
+      });
+      await _loadSlots();
+    }
   }
 
   Future<void> _pickTime() async {
+    if (_availableSlots.isNotEmpty) return;
     final picked = await showTimePicker(
       context: context,
       initialTime: const TimeOfDay(hour: 9, minute: 0),
     );
     if (picked != null) setState(() => _selectedTime = picked);
+  }
+
+  Future<void> _loadSlots() async {
+    final rawPid = widget.doctor['provider_id'];
+    final providerId = rawPid is Map ? (rawPid['user_id'] ?? rawPid['provider_id']) : rawPid;
+    if (_selectedDate == null || providerId == null) return;
+    setState(() => _isFetchingSlots = true);
+    try {
+      final slots = await AppointmentService.getAvailableSlots(providerId.toString(), _selectedDate!);
+      if (!mounted) return;
+      setState(() {
+        _availableSlots = slots.map((s) => s.split('T')[1].substring(0, 5)).toList();
+        _isFetchingSlots = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _availableSlots = const [];
+        _isFetchingSlots = false;
+      });
+    }
   }
 
   Future<void> _bookAppointment() async {
@@ -55,7 +86,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
 
     setState(() { _isLoading = true; _errorMessage = null; });
 
-    int platformFee = 15000; // Default fallback
+    int platformFee = num.tryParse((widget.doctor['consultation_fee'] ?? 15000).toString())?.round() ?? 15000;
     int serviceCharge = 500;
 
     try {
@@ -149,8 +180,10 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final name = '${widget.doctor['provider_id']?['first_name'] ?? 'Dr.'} ${widget.doctor['provider_id']?['last_name'] ?? ''}';
-    final spec = widget.doctor['specialization'] ?? 'General Practitioner';
+    final name = widget.doctor['full_name']?.toString() ?? 'Doctor';
+    final spec = (widget.doctor['other_specialty']?.toString().trim().isNotEmpty ?? false)
+        ? widget.doctor['other_specialty'].toString()
+        : (widget.doctor['specialty']?.toString() ?? 'General Practitioner');
 
     return Scaffold(
       backgroundColor: AppColors.grey50,
@@ -256,6 +289,43 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 24),
+
+                Text('Available Time Slots', style: AppTextStyles.headlineSmall.copyWith(fontSize: 14)),
+                const SizedBox(height: 12),
+                if (_selectedDate == null)
+                  Text('Select a date first to see when this doctor is free.', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500))
+                else if (_isFetchingSlots)
+                  const Center(child: CircularProgressIndicator())
+                else if (_availableSlots.isEmpty)
+                  Text('No free slots available for the selected day.', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500))
+                else
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: _availableSlots.map((slot) {
+                      final selected = _selectedTime != null && '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}' == slot;
+                      return GestureDetector(
+                        onTap: () {
+                          final parts = slot.split(':');
+                          setState(() => _selectedTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])));
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: selected ? AppColors.sky500 : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: selected ? AppColors.sky500 : AppColors.grey200),
+                          ),
+                          child: Text(
+                            slot,
+                            style: TextStyle(color: selected ? Colors.white : AppColors.darkBlue900, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+
                 const SizedBox(height: 24),
 
                 if (_errorMessage != null) ...[
