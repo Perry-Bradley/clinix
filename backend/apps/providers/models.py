@@ -1,7 +1,6 @@
 from django.db import models
 from apps.accounts.models import User
 from apps.patients.models import Patient
-from apps.appointments.models import Appointment
 import uuid
 
 class HealthcareProvider(models.Model):
@@ -91,7 +90,7 @@ class ProviderReview(models.Model):
     review_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     provider = models.ForeignKey(HealthcareProvider, on_delete=models.CASCADE, related_name='reviews')
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='provider_reviews')
-    appointment = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True, blank=True, related_name='provider_reviews')
+    appointment = models.ForeignKey('appointments.Appointment', on_delete=models.SET_NULL, null=True, blank=True, related_name='provider_reviews')
     rating = models.PositiveSmallIntegerField()
     comment = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

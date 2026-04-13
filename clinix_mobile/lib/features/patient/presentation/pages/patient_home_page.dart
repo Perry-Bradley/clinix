@@ -287,13 +287,6 @@ class _PatientDashboardState extends State<_PatientDashboard> {
                         const SizedBox(height: 18),
                         Row(
                           children: [
-                            _MiniSummaryItem(
-                              icon: Icons.directions_walk_rounded,
-                              label: 'Steps',
-                              value: '$steps',
-                              color: Colors.blueAccent,
-                            ),
-                            const SizedBox(width: 24),
                             summaryAsync.when(
                               data: (data) => _MiniSummaryItem(
                                 icon: Icons.favorite_rounded,
