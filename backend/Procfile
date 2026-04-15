@@ -1,4 +1,3 @@
-web: daphne -b 0.0.0.0 -p $PORT clinix_project.asgi:application
-release: python manage.py migrate --noinput && python manage.py collectstatic --noinput
+web: sh -c 'python -u manage.py migrate --noinput && echo STARTING_DAPHNE && exec daphne -v 2 -b 0.0.0.0 -p 8080 clinix_project.asgi:application'
 worker: celery -A clinix_project worker --loglevel=info
 beat: celery -A clinix_project beat --loglevel=info
