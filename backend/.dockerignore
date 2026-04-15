@@ -1,0 +1,15 @@
+.env
+.env.*
+firebase_key.json
+gcp-key.json
+venv/
+__pycache__/
+*.pyc
+db.sqlite3
+.git/
+.gitignore
+media/
+staticfiles/
+celerybeat-schedule
+*.log
+DEPLOY.md
