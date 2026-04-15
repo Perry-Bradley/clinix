@@ -18,6 +18,7 @@ from apps.payments.models import WithdrawalRequest, ProviderWallet, WalletTransa
 from django.db.models.functions import TruncDate
 import csv
 from django.http import HttpResponse
+from django.conf import settings
 
 class PlatformDashboardView(APIView):
     permission_classes = [IsSuperAdminUser]
@@ -81,6 +82,13 @@ class VerificationListView(APIView):
 class VerificationDetailView(APIView):
     permission_classes = [IsSuperAdminUser]
 
+    def _absolute_url(self, request, url):
+        if not url:
+            return url
+        if str(url).startswith('http://') or str(url).startswith('https://'):
+            return url
+        return request.build_absolute_uri(url)
+
     def get(self, request, pk):
         try:
             provider = HealthcareProvider.objects.get(provider_id=pk)
@@ -90,7 +98,7 @@ class VerificationDetailView(APIView):
                 cd_data.append({
                     'type': 'image',
                     'label': c.document_type.capitalize(),
-                    'url': c.document_url
+                    'url': self._absolute_url(request, c.document_url)
                 })
                 
             return Response({
@@ -181,12 +189,36 @@ class AdminWithdrawalActionView(APIView):
         notes = request.data.get('notes', '')
 
         if action == 'approve':
+            # Approve → immediately send money via CamPay disbursement
             withdrawal.status = 'approved'
+            withdrawal.admin_notes = notes
+            withdrawal.save()
+            result = _disburse_via_campay(withdrawal)
+            if result.get('ok'):
+                withdrawal.status = 'completed'
+                withdrawal.processed_at = timezone.now()
+                withdrawal.save()
+                # Deduct from wallet
+                wallet = withdrawal.provider.wallet
+                wallet.balance -= withdrawal.amount
+                wallet.save()
+                WalletTransaction.objects.create(
+                    wallet=wallet,
+                    amount=withdrawal.amount,
+                    transaction_type='debit',
+                    reference=f"WD-{withdrawal.id}"
+                )
+                return Response({'status': 'completed', 'reference': result.get('reference')})
+            else:
+                # Disbursement failed — keep status 'approved' so admin can retry
+                return Response(
+                    {'status': 'approved', 'error': result.get('error') or 'CamPay disbursement failed'},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
         elif action == 'complete':
+            # Manual mark-as-completed (bypass auto-disbursement)
             withdrawal.status = 'completed'
             withdrawal.processed_at = timezone.now()
-            # Deduct from wallet if not already done (business logic decide when to deduct)
-            # Usually we deduct when COMPLETED.
             wallet = withdrawal.provider.wallet
             wallet.balance -= withdrawal.amount
             wallet.save()
@@ -198,10 +230,56 @@ class AdminWithdrawalActionView(APIView):
             )
         elif action == 'reject':
             withdrawal.status = 'rejected'
-        
+
         withdrawal.admin_notes = notes
         withdrawal.save()
         return Response({'status': f'Withdrawal {withdrawal.status}'})
+
+
+def _disburse_via_campay(withdrawal):
+    """Send money from the Clinix platform wallet to the provider's mobile money number."""
+    import requests
+    from django.conf import settings
+    base_url = getattr(settings, 'CAMPAY_BASE_URL', '')
+    username = getattr(settings, 'CAMPAY_USERNAME', '')
+    password = getattr(settings, 'CAMPAY_PASSWORD', '')
+    if not username or not password:
+        return {'ok': False, 'error': 'CamPay credentials not configured'}
+
+    try:
+        token_res = requests.post(
+            f'{base_url}/api/token/',
+            json={'username': username, 'password': password},
+            timeout=15,
+        )
+        if token_res.status_code != 200:
+            return {'ok': False, 'error': 'Failed to get CamPay token'}
+        token = token_res.json().get('token')
+
+        # Clean phone to CamPay format (237XXXXXXXXX)
+        phone = (withdrawal.payout_details or '').replace('+', '').replace(' ', '').replace('-', '')
+        if not phone.startswith('237'):
+            phone = '237' + phone.lstrip('0')
+
+        payload = {
+            'amount': str(int(withdrawal.amount)),
+            'currency': 'XAF',
+            'to': phone,
+            'description': f'Clinix provider payout #{withdrawal.id}',
+            'external_reference': f'WD-{withdrawal.id}',
+        }
+        r = requests.post(
+            f'{base_url}/api/withdraw/',
+            json=payload,
+            headers={'Authorization': f'Token {token}', 'Content-Type': 'application/json'},
+            timeout=30,
+        )
+        if r.status_code in (200, 201):
+            data = r.json()
+            return {'ok': True, 'reference': data.get('reference'), 'raw': data}
+        return {'ok': False, 'error': f'CamPay {r.status_code}: {r.text[:200]}'}
+    except requests.RequestException as e:
+        return {'ok': False, 'error': str(e)}
 
 class AdminRevenueStatsView(APIView):
     permission_classes = [IsSuperAdminUser]

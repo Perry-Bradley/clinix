@@ -76,7 +76,7 @@ class ProviderCredential(models.Model):
     credential_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     provider = models.ForeignKey(HealthcareProvider, on_delete=models.CASCADE, related_name='credentials')
     document_type = models.CharField(max_length=20, choices=DOC_TYPE_CHOICES)
-    document_url = models.URLField(max_length=500)
+    document_url = models.URLField(max_length=1024)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_verified = models.BooleanField(default=False)
 

@@ -16,6 +16,7 @@ urlpatterns = [
         path('', include('apps.payments.urls_settings')),
     ])),
     path('api/v1/notifications/', include('apps.notifications.urls')),
+    path('api/v1/dchat/', include('apps.direct_chat.urls')),
     path('api/v1/locations/', include('apps.locations.urls')),
     path('api/v1/admin/', include('apps.admin_dashboard.urls')),
     path('api/v1/health/', include('apps.health_metrics.urls')),

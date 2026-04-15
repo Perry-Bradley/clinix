@@ -16,15 +16,20 @@ from channels.routing import ProtocolTypeRouter, URLRouter
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'clinix_project.settings.development')
 django_asgi_app = get_asgi_application()
 
+from apps.accounts.ws_auth import JWTAuthMiddlewareStack
 import apps.consultations.routing
 import apps.notifications.routing
+import apps.direct_chat.routing
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": AuthMiddlewareStack(
-        URLRouter(
-            apps.consultations.routing.websocket_urlpatterns +
-            apps.notifications.routing.websocket_urlpatterns
+    "websocket": JWTAuthMiddlewareStack(
+        AuthMiddlewareStack(
+            URLRouter(
+                apps.consultations.routing.websocket_urlpatterns +
+                apps.notifications.routing.websocket_urlpatterns +
+                apps.direct_chat.routing.websocket_urlpatterns
+            )
         )
     ),
 })

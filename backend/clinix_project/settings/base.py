@@ -50,6 +50,7 @@ INSTALLED_APPS = _ASGI_INSTALLED + [
     'apps.federated_learning',
     'apps.payments',
     'apps.notifications',
+    'apps.direct_chat',
     'apps.locations',
     'apps.admin_dashboard',
     'apps.health_metrics',
@@ -64,6 +65,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'apps.accounts.middleware.LastSeenMiddleware',
 ]
 
 ROOT_URLCONF = 'clinix_project.urls'
@@ -159,6 +161,17 @@ CHANNEL_LAYERS = {
 
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/1')
 
+# ─── Celery Beat Schedule ────────────────────────────────────────────────────
+from celery.schedules import crontab  # noqa: E402
+CELERY_BEAT_SCHEDULE = {
+    # Send appointment reminders every hour — catches any appointments ~24h out
+    'send-appointment-reminders': {
+        'task': 'apps.appointments.tasks.send_appointment_reminders',
+        'schedule': crontab(minute=0),  # every hour on the hour
+    },
+}
+CELERY_TIMEZONE = 'Africa/Douala'
+
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Clinix API',
     'DESCRIPTION': 'Comprehensive mobile healthcare platform for Cameroon',
@@ -178,4 +191,10 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='Clinix <noreply@clinix.a
 # In development without email configured, use console backend
 if not EMAIL_HOST_USER:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# ─── CamPay Payment Gateway ────────────────────────────────────────────────────
+CAMPAY_BASE_URL = env('CAMPAY_BASE_URL', default='https://demo.campay.net')
+CAMPAY_USERNAME = env('CAMPAY_USERNAME', default='')
+CAMPAY_PASSWORD = env('CAMPAY_PASSWORD', default='')
+CAMPAY_WEBHOOK_URL = env('CAMPAY_WEBHOOK_URL', default='')
 

@@ -1,6 +1,7 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.exceptions import ValidationError
 from django.db.models import Q
 from datetime import datetime, timedelta
 from .models import Appointment
@@ -41,12 +42,12 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
         weekday = scheduled_at.strftime('%A').lower()
         schedule = ProviderSchedule.objects.filter(provider=provider, day=weekday, is_working=True).first()
         if not schedule:
-            raise ValueError('Provider is not available on the selected day.')
+            raise ValidationError({'detail': 'Provider is not available on the selected day.'})
 
         start_time = scheduled_at.time()
         end_time = appointment_end.time()
         if start_time < schedule.start_time or end_time > schedule.end_time:
-            raise ValueError('Selected time is outside the provider\'s working hours.')
+            raise ValidationError({'detail': 'Selected time is outside the provider\'s working hours.'})
 
         clash_exists = Appointment.objects.filter(
             provider=provider,
@@ -59,7 +60,7 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
         ).exists()
 
         if clash_exists:
-            raise ValueError('This doctor is not free at the selected time.')
+            raise ValidationError({'detail': 'This doctor is not free at the selected time.'})
 
         serializer.save(patient=patient, status='pending')
 

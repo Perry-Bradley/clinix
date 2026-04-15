@@ -48,6 +48,14 @@ class AIChatStartView(APIView):
         )
 
 
+class AIChatSessionListView(generics.ListAPIView):
+    serializer_class = AISymptomSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return AISymptomSession.objects.filter(patient__patient_id=self.request.user).order_by('-created_at')
+
+
 class AIChatMessageView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
