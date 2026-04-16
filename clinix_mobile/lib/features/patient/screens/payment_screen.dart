@@ -7,13 +7,11 @@ import '../../../core/services/payment_service.dart';
 class PaymentScreen extends StatefulWidget {
   final String appointmentId;
   final int consultationFee;
-  final int serviceCharge;
 
   const PaymentScreen({
     super.key,
     required this.appointmentId,
     this.consultationFee = 15000,
-    this.serviceCharge = 500,
   });
 
   @override
@@ -36,7 +34,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       _errorMessage = null;
     });
     try {
-      final total = widget.consultationFee + widget.serviceCharge;
+      final total = widget.consultationFee;
       final payment = await PaymentService.initiate(
         appointmentId: widget.appointmentId,
         paymentMethod: _paymentMethod,
@@ -77,7 +75,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final total = widget.consultationFee + widget.serviceCharge;
+    final total = widget.consultationFee;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
@@ -105,10 +103,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
               child: Column(
                 children: [
-                  _buildSummaryRow('Consultation', '${widget.consultationFee} XAF'),
-                  _buildSummaryRow('Platform fee', '${widget.serviceCharge} XAF'),
-                  const Divider(height: 32),
-                  _buildSummaryRow('Total', '$total XAF', isTotal: true),
+                  _buildSummaryRow('Consultation Fee', '${widget.consultationFee} XAF', isTotal: true),
                 ],
               ),
             ),

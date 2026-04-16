@@ -27,6 +27,7 @@ dependencies:
   firebase_core: ^3.1.0
   firebase_auth: ^5.1.0
   firebase_messaging: ^15.0.1
+  firebase_storage: ^12.1.0
   google_sign_in: ^6.2.1
 
   # Images & Files
@@ -68,11 +69,13 @@ dependencies:
   pedometer: ^4.0.1
   fl_chart: ^0.68.0
   camera: ^0.10.5+5
+  flutter_local_notifications: ^20.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
@@ -82,3 +85,12 @@ flutter:
     - assets/images/
     - assets/animations/
     - assets/icons/
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/icons/app_icon.png"
+  adaptive_icon_background: "#0F172A"
+  adaptive_icon_foreground: "assets/icons/app_icon_foreground.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true

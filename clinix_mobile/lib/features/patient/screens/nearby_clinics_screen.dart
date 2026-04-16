@@ -25,8 +25,20 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
   final Set<Polyline> _polylines = {};
   bool _isLoading = true;
   bool _isSearching = false;
+  bool _showListView = true;
 
   final List<Map<String, dynamic>> _clinics = [];
+  String _searchQuery = '';
+
+  List<Map<String, dynamic>> get _filteredClinics {
+    if (_searchQuery.trim().isEmpty) return _clinics;
+    final q = _searchQuery.trim().toLowerCase();
+    return _clinics.where((c) {
+      final name = c['name']?.toString().toLowerCase() ?? '';
+      final addr = c['address']?.toString().toLowerCase() ?? '';
+      return name.contains(q) || addr.contains(q);
+    }).toList();
+  }
   Map<String, dynamic>? _selectedClinic;
   
   final _dio = Dio();
@@ -319,9 +331,23 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
           southwest: LatLng(minLat, minLng),
           northeast: LatLng(maxLat, maxLng),
         ),
-        50, // Padding
+        80, // Padding
       ),
     );
+  }
+
+  String _calculateDistance(double clinicLat, double clinicLng) {
+    if (_currentPosition == null) return '';
+    final distanceInMeters = Geolocator.distanceBetween(
+      _currentPosition!.latitude,
+      _currentPosition!.longitude,
+      clinicLat,
+      clinicLng,
+    );
+    if (distanceInMeters >= 1000) {
+      return '${(distanceInMeters / 1000).toStringAsFixed(1)} km';
+    }
+    return '${distanceInMeters.round()} m';
   }
 
   @override
@@ -332,19 +358,21 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
         children: [
           _isLoading
               ? const Center(child: CircularProgressIndicator())
-              : GoogleMap(
-                  onMapCreated: (controller) => _mapController = controller,
-                  initialCameraPosition: CameraPosition(
-                    target: LatLng(_currentPosition?.latitude ?? 4.0511, _currentPosition?.longitude ?? 9.7679),
-                    zoom: 14.5,
-                  ),
-                  markers: _markers,
-                  polylines: _polylines,
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: false,
-                  zoomControlsEnabled: false,
-                  mapType: MapType.normal,
-                ),
+              : _showListView
+                  ? _buildClinicListView()
+                  : GoogleMap(
+                      onMapCreated: (controller) => _mapController = controller,
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(_currentPosition?.latitude ?? 4.0511, _currentPosition?.longitude ?? 9.7679),
+                        zoom: 14.5,
+                      ),
+                      markers: _markers,
+                      polylines: _polylines,
+                      myLocationEnabled: true,
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: false,
+                      mapType: MapType.normal,
+                    ),
 
           // Header
           Positioned(
@@ -364,26 +392,35 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Container(
-                      height: 50,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4)),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.search_rounded, color: AppColors.grey400),
-                          const SizedBox(width: 10),
-                          Text('Search clinics nearby...', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400)),
-                        ],
+                    child: Material(
+                      elevation: 4,
+                      color: Colors.white,
+                      shadowColor: Colors.black26,
+                      borderRadius: BorderRadius.circular(15),
+                      child: TextField(
+                        onChanged: (v) => setState(() => _searchQuery = v),
+                        cursorColor: AppColors.sky500,
+                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.darkBlue900, fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'Search clinics nearby...',
+                          hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
+                          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.grey400, size: 20),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
+                  _buildIconButton(
+                    _showListView ? Icons.map_rounded : Icons.list_rounded,
+                    () => setState(() => _showListView = !_showListView),
+                  ),
+                  const SizedBox(width: 8),
                   _buildIconButton(Icons.tune_rounded, () {}),
                 ],
               ),
@@ -391,9 +428,9 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
           ),
 
           // Bottom clinic card
-          if (_selectedClinic != null)
+          if (_selectedClinic != null && !_showListView)
             Positioned(
-              bottom: 92,
+              bottom: 24,
               left: 16,
               right: 16,
               child: Material(
@@ -514,7 +551,6 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
-                                  flex: 2,
                                   child: FilledButton.icon(
                                     onPressed: () =>
                                         context.push('/patient/book-appointment', extra: _selectedClinic),
@@ -543,6 +579,7 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
             ),
           
           // Current Location Button
+          if (!_showListView)
           Positioned(
             right: 24,
             bottom: _selectedClinic != null ? 300 : 120,
@@ -553,6 +590,177 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildClinicListView() {
+    final clinics = _filteredClinics;
+    if (clinics.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 160),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.local_hospital_outlined, size: 64, color: AppColors.grey200),
+              const SizedBox(height: 16),
+              Text('No clinics found nearby', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Positioned.fill(
+      top: 130,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        itemCount: clinics.length,
+        itemBuilder: (context, index) {
+          final clinic = clinics[index];
+          final isOpen = clinic['open_now'] ?? false;
+          final distance = _calculateDistance(clinic['lat'], clinic['lng']);
+
+          return GestureDetector(
+            onTap: () => context.push('/patient/clinic-profile/${clinic['id']}'),
+            child: Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.grey200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          clinic['name'] ?? '',
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isOpen
+                              ? AppColors.accentGreen.withValues(alpha: 0.12)
+                              : AppColors.grey100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          isOpen ? 'Open' : 'Closed',
+                          style: AppTextStyles.caption.copyWith(
+                            color: isOpen ? AppColors.accentGreen : AppColors.grey500,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_rounded, color: AppColors.sky500, size: 16),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          clinic['address'] ?? '',
+                          style: AppTextStyles.caption.copyWith(color: AppColors.grey500),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${clinic['rating']} (${clinic['total_ratings']})',
+                        style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      if (distance.isNotEmpty) ...[
+                        const SizedBox(width: 12),
+                        const Icon(Icons.directions_walk_rounded, color: AppColors.grey400, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          distance,
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.grey500,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _selectedClinic = clinic;
+                              _showListView = false;
+                            });
+                            _getDirections(clinic['lat'], clinic['lng']);
+                          },
+                          icon: const Icon(Icons.directions_rounded, size: 18),
+                          label: const Text('Directions'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.splashSlate900,
+                            side: BorderSide(color: AppColors.grey200),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => context.push('/patient/book-appointment', extra: clinic),
+                          icon: const Icon(Icons.calendar_today_rounded, size: 18),
+                          label: const Text('Book'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.splashSlate900,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            ),
+          );
+        },
       ),
     );
   }

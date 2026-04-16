@@ -66,6 +66,7 @@ class PatientBottomNav extends StatelessWidget {
                               ? Colors.white
                               : Colors.white.withOpacity(0.45),
                         ),
+                        if (selected) ...[
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(

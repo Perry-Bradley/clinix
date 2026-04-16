@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:clinix_mobile/core/services/auth_service.dart';
 import 'package:clinix_mobile/core/theme/app_colors.dart';
 import 'package:clinix_mobile/core/theme/app_text_styles.dart';
@@ -47,22 +48,31 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     );
 
     _mainController.forward().then((_) async {
+      const storage = FlutterSecureStorage();
+      final onboardingSeen = await storage.read(key: 'onboarding_seen');
       final token = await AuthService.getAccessToken();
-      final userType = await AuthService.getUserType(); // I need to add this method or read storage directly
+      final userType = await AuthService.getUserType();
 
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          if (token == null) {
-            context.go('/onboarding');
-          } else {
-            if (userType == 'unassigned') {
-              context.go('/role-selection');
-            } else if (userType == 'provider') {
-              context.go('/provider/home');
-            } else {
-              context.go('/patient/home');
-            }
-          }
+        if (!mounted) return;
+
+        // Show onboarding on first launch (before login)
+        if (onboardingSeen != 'true') {
+          context.go('/onboarding');
+          return;
+        }
+
+        if (token == null) {
+          context.go('/login');
+          return;
+        }
+
+        if (userType == 'unassigned') {
+          context.go('/role-selection');
+        } else if (userType == 'provider') {
+          context.go('/provider/home');
+        } else {
+          context.go('/patient/home');
         }
       });
     });

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/notification_service.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/gradient_button.dart';
 
@@ -30,6 +31,7 @@ class _LoginPageState extends State<LoginPage> {
         identifier: _idCtrl.text.trim(),
         password: _passCtrl.text,
       );
+      await NotificationService.registerToken();
       if (mounted) {
         final userType = data['user_type'] ?? 'unassigned';
         if (userType == 'unassigned') {
@@ -53,6 +55,9 @@ class _LoginPageState extends State<LoginPage> {
     setState(() { _isLoading = true; _errorMessage = null; });
     try {
       final data = await AuthService.signInWithGoogle();
+      if (data != null) {
+        await NotificationService.registerToken();
+      }
       if (mounted && data != null) {
         final userType = data['user_type'] ?? 'unassigned';
         if (userType == 'unassigned') {

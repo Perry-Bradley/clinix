@@ -59,4 +59,22 @@ class AppointmentService {
     }
     return [];
   }
+
+  static Future<Map<String, dynamic>> getAppointment(String appointmentId) async {
+    final token = await AuthService.getAccessToken();
+    final response = await _dio.get(
+      '$appointmentId/',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  static Future<void> cancelAppointment(String appointmentId, {String? reason}) async {
+    final token = await AuthService.getAccessToken();
+    await _dio.patch(
+      '$appointmentId/',
+      data: {'status': 'cancelled', if (reason != null) 'cancellation_reason': reason},
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+  }
 }

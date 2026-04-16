@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+
+Future<void> _markOnboardingSeen() async {
+  const storage = FlutterSecureStorage();
+  await storage.write(key: 'onboarding_seen', value: 'true');
+}
 
 class _OnboardingData {
   final IconData icon;
@@ -58,7 +64,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
               Align(
                 alignment: Alignment.topRight,
                 child: TextButton(
-                  onPressed: () => context.go('/login'),
+                  onPressed: () async { await _markOnboardingSeen(); if (context.mounted) context.go('/login'); },
                   child: Text(
                     'Skip',
                     style: AppTextStyles.bodyMedium.copyWith(
@@ -100,14 +106,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: () {
+                        onPressed: () async {
                           if (_currentPage < _pages.length - 1) {
                             _controller.nextPage(
                               duration: const Duration(milliseconds: 350),
                               curve: Curves.easeOutCubic,
                             );
                           } else {
-                            context.go('/login');
+                            await _markOnboardingSeen();
+                            if (context.mounted) context.go('/login');
                           }
                         },
                         style: FilledButton.styleFrom(

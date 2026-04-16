@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/constants/api_constants.dart';
-import '../../../../core/services/auth_service.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/constants/api_constants.dart';
+import '../../../core/services/auth_service.dart';
 
 class DoctorProfileScreen extends StatefulWidget {
   final String providerId;
@@ -49,7 +49,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       );
       if (mounted) {
         setState(() {
-          _provider = response.data;
+          if (response.data is Map) {
+            _provider = response.data;
+          } else {
+            _provider = null;
+            _error = 'Unexpected data format from server.';
+          }
           _isLoading = false;
         });
       }
@@ -68,7 +73,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (_error != null || _provider == null) {
+    if (_error != null || _provider == null || _provider is! Map) {
       return Scaffold(
         appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, leading: const BackButton(color: AppColors.darkBlue900)),
         body: Center(child: Text(_error ?? 'Doctor not found')),
@@ -79,107 +84,90 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     final spec = (_provider['other_specialty']?.toString().trim().isNotEmpty ?? false)
         ? _provider['other_specialty'].toString()
         : (_provider['specialty']?.toString() ?? 'General Practitioner');
-    final rawBio = _provider['bio'] ?? '';
+    final rawBio = (_provider['bio'] ?? '').toString();
     final bioText = rawBio.isNotEmpty ? rawBio : 'Dedicated healthcare professional focusing on patient-centered care and modern medical practices.';
     final bio = 'As a $spec, $bioText';
-    final rating = (((_provider['rating'] ?? 4.8) as num).toDouble()).toStringAsFixed(1);
-    final reviewsCount = _provider['reviews_count'] ?? 124;
+    final rating = (double.tryParse(_provider['rating']?.toString() ?? '') ?? 0.0).toStringAsFixed(1);
+    final reviewsCount = _provider['review_count'] ?? _provider['reviews_count'] ?? 0;
+    final yearsExp = _provider['years_experience'] ?? 0;
+    final fee = _provider['consultation_fee']?.toString() ?? '0';
 
     return Scaffold(
       backgroundColor: AppColors.grey50,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 250,
             pinned: true,
+            expandedHeight: 190,
             backgroundColor: AppColors.darkBlue900,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [AppColors.darkBlue800, AppColors.darkBlue900],
-                  ),
-                ),
-                child: Center(
-                  child: Container(
-                    width: 100, height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
-                    ),
-                    child: const Icon(Icons.person_outline_rounded, size: 60, color: Colors.white),
-                  ),
-                ),
-              ),
-            ),
+            surfaceTintColor: Colors.transparent,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
               onPressed: () => context.pop(),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+                padding: const EdgeInsets.fromLTRB(24, 60, 24, 20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.headlineLarge.copyWith(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(spec, style: AppTextStyles.caption.copyWith(color: AppColors.sky200, fontWeight: FontWeight.w700, fontSize: 12)),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFBBF24).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(children: [
+                            const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 14),
+                            const SizedBox(width: 3),
+                            Text(rating, style: const TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.w800, fontSize: 12)),
+                          ]),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           SliverPadding(
             padding: const EdgeInsets.all(24),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(name, style: AppTextStyles.headlineLarge.copyWith(fontSize: 24)),
-                          const SizedBox(height: 4),
-                          Text(spec, style: AppTextStyles.bodyLarge.copyWith(color: AppColors.sky600, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(color: const Color(0xFFFBBF24).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 20),
-                          const SizedBox(width: 4),
-                          Text(rating, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 24),
                 // Stats Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _StatItem(label: 'Patients', value: '1,000+'),
-                    _StatItem(label: 'Experience', value: '8 YRS'),
-                    _StatItem(label: 'Reviews', value: reviewsCount.toString()),
+                    _StatItem(label: 'Consults', value: '${_provider['total_consultations'] ?? 0}'),
+                    _StatItem(label: 'Experience', value: '$yearsExp YRS'),
+                    _StatItem(label: 'Fee', value: '$fee XAF'),
                   ],
                 ),
                 const SizedBox(height: 32),
                 Text('Biography', style: AppTextStyles.headlineSmall),
                 const SizedBox(height: 8),
                 Text(bio, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, height: 1.6)),
-                const SizedBox(height: 32),
-                
-                // Workplace Gallery
-                _SectionHeader(title: 'Workplace Gallery'),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 120,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      _GalleryItem(url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=400'),
-                      _GalleryItem(url: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=400'),
-                      _GalleryItem(url: 'https://images.unsplash.com/photo-1551076805-e1869033e561?w=400'),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 32),
 
                 // Reviews Section
@@ -275,7 +263,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _ReviewSubmissionModal(providerId: widget.providerId, providerName: providerName, onSubmitted: _fetchReviews),
+      builder: (context) => _ReviewSubmissionModal(
+        providerId: widget.providerId,
+        providerName: providerName,
+        onSubmitted: () async {
+          // Re-fetch both reviews AND provider data (rating updates server-side)
+          await _fetchProviderDetails();
+        },
+      ),
     );
   }
 }
@@ -286,22 +281,6 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(title, style: AppTextStyles.headlineSmall);
-  }
-}
-
-class _GalleryItem extends StatelessWidget {
-  final String url;
-  const _GalleryItem({required this.url});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 160,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        image: DecorationImage(image: NetworkImage(url), fit: BoxFit.cover),
-      ),
-    );
   }
 }
 

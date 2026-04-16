@@ -24,9 +24,12 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
   int? respiratoryRate;
   bool isMeasuring = false;
   bool hasFinished = false;
-  
-  // For HRV calculation
+
+  // For adaptive peak detection & HRV calculation
   List<DateTime> _beatTimestamps = [];
+  double _runningSum = 0;
+  int _runningCount = 0;
+  bool _wasAboveThreshold = false;
 
   @override
   void initState() {
@@ -44,27 +47,38 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
   }
 
   void _calculateAdvancedVitals() {
-    if (_beatTimestamps.length < 5) return;
+    if (_beatTimestamps.length < 4) return;
 
-    // Calculate HRV (RMSSD)
+    // Calculate R-R intervals in milliseconds
     List<double> intervals = [];
     for (int i = 0; i < _beatTimestamps.length - 1; i++) {
-      intervals.add(_beatTimestamps[i+1].difference(_beatTimestamps[i]).inMilliseconds.toDouble());
+      final ms = _beatTimestamps[i + 1].difference(_beatTimestamps[i]).inMilliseconds.toDouble();
+      // Filter out physiologically impossible intervals (< 300ms or > 2000ms)
+      if (ms > 300 && ms < 2000) {
+        intervals.add(ms);
+      }
     }
 
+    if (intervals.length < 3) return;
+
+    // HRV: RMSSD (Root Mean Square of Successive Differences)
     double sumSquaredDiff = 0;
     for (int i = 0; i < intervals.length - 1; i++) {
-        sumSquaredDiff += math.pow(intervals[i+1] - intervals[i], 2);
+      sumSquaredDiff += math.pow(intervals[i + 1] - intervals[i], 2);
     }
-    
-    if (intervals.length > 1) {
-      setState(() {
-        hrvMs = math.sqrt(sumSquaredDiff / (intervals.length - 1));
-        // Simple RR estimation: standard respiratory rate is 12-20
-        // In a high-end app we'd use FFT, here we'll simulate a plausible value based on HR
-        respiratoryRate = 14 + (math.Random().nextInt(4)); 
-      });
-    }
+    final rmssd = math.sqrt(sumSquaredDiff / (intervals.length - 1));
+
+    // Respiratory rate estimation from heart rate
+    // Uses the known relationship: RR ~ HR / 4 (rough clinical estimate)
+    // Normal range: 12-20 breaths/min for adults
+    final avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
+    final avgHR = 60000.0 / avgInterval;
+    final estimatedRR = (avgHR / 4.2).clamp(12.0, 22.0).round();
+
+    setState(() {
+      hrvMs = rmssd;
+      respiratoryRate = estimatedRR;
+    });
   }
 
   @override
@@ -215,15 +229,31 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
           context: context,
           onRawData: (value) {
             setState(() {
-              _pulseHistory.add(value.value.toDouble());
+              final v = value.value.toDouble();
+              _pulseHistory.add(v);
               if (_pulseHistory.length > 50) _pulseHistory.removeAt(0);
-              
-              // Simple peak detection for beat timestamps
-              if (value.value > 200 && (data.isEmpty || data.last.value < 200)) {
-                _beatTimestamps.add(DateTime.now());
-                if (_beatTimestamps.length > 20) _beatTimestamps.removeAt(0);
-                _calculateAdvancedVitals();
+
+              // Adaptive peak detection using running average
+              _runningSum += v;
+              _runningCount++;
+              final avg = _runningSum / _runningCount;
+              // Threshold = 10% above average signal level
+              final threshold = avg * 1.1;
+
+              final isAbove = v > threshold;
+              // Detect rising edge (crossing above threshold)
+              if (isAbove && !_wasAboveThreshold && _runningCount > 30) {
+                // Min 300ms between beats (= max 200 BPM)
+                final now = DateTime.now();
+                if (_beatTimestamps.isEmpty ||
+                    now.difference(_beatTimestamps.last).inMilliseconds > 300) {
+                  _beatTimestamps.add(now);
+                  if (_beatTimestamps.length > 30) _beatTimestamps.removeAt(0);
+                  _calculateAdvancedVitals();
+                }
               }
+              _wasAboveThreshold = isAbove;
+
               data.add(value);
             });
           },
@@ -249,6 +279,11 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
               _pulseHistory = [];
               _beatTimestamps = [];
               data = [];
+              _runningSum = 0;
+              _runningCount = 0;
+              _wasAboveThreshold = false;
+              hrvMs = null;
+              respiratoryRate = null;
             }),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.redAccent,
@@ -356,7 +391,7 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
         ),
         const SizedBox(height: 20),
         TextButton(
-          onPressed: () => setState(() { hasFinished = false; isMeasuring = false; data = []; _pulseHistory = []; }),
+          onPressed: () => setState(() { hasFinished = false; isMeasuring = false; data = []; _pulseHistory = []; _beatTimestamps = []; _runningSum = 0; _runningCount = 0; _wasAboveThreshold = false; hrvMs = null; respiratoryRate = null; }),
           child: Text('DISCARD & RETRY', style: TextStyle(color: Colors.blueGrey.shade500, fontWeight: FontWeight.bold)),
         ),
       ],

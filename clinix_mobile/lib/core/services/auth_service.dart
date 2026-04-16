@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/services.dart';
@@ -167,6 +168,49 @@ class AuthService {
 
   static Future<String?> getAccessToken() async {
     return await _storage.read(key: 'access_token');
+  }
+
+  /// Decode the JWT access token and return the current user's UUID.
+  static Future<String?> getCurrentUserId() async {
+    final token = await getAccessToken();
+    if (token == null) return null;
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      // JWT payload is base64url-encoded (no padding).
+      var payload = parts[1];
+      while (payload.length % 4 != 0) {
+        payload += '=';
+      }
+      final decodedBytes = base64Url.decode(payload);
+      final map = jsonDecode(utf8.decode(decodedBytes)) as Map<String, dynamic>;
+      return map['user_id']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Refresh the access token using the stored refresh token.
+  /// Returns the new access token, or null if refresh failed.
+  static Future<String?> refreshAccessToken() async {
+    final refreshToken = await _storage.read(key: 'refresh_token');
+    if (refreshToken == null || refreshToken.isEmpty) return null;
+    try {
+      final response = await _dio.post('token/refresh/', data: {
+        'refresh': refreshToken,
+      });
+      final newAccess = response.data['access']?.toString();
+      if (newAccess != null && newAccess.isNotEmpty) {
+        await _storage.write(key: 'access_token', value: newAccess);
+        // If backend rotates refresh tokens, save the new one too
+        final newRefresh = response.data['refresh']?.toString();
+        if (newRefresh != null && newRefresh.isNotEmpty) {
+          await _storage.write(key: 'refresh_token', value: newRefresh);
+        }
+        return newAccess;
+      }
+    } catch (_) {}
+    return null;
   }
 
   static Future<void> logout() async {

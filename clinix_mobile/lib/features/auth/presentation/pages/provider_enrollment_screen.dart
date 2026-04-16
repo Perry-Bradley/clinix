@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/doctor_service.dart';
 import '../widgets/map_location_picker_screen.dart';
+import '../widgets/places_autocomplete_field.dart';
 
 /// Provider clinical onboarding: white surface, splash slate accents, real map-based coordinates.
 class ProviderEnrollmentScreen extends StatefulWidget {
@@ -22,6 +23,8 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
   final _bioCtrl = TextEditingController();
   final _expCtrl = TextEditingController();
   final _otherSpecialtyCtrl = TextEditingController();
+  final _licenseCtrl = TextEditingController();
+  final _feeCtrl = TextEditingController();
 
   final List<String> _days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   final Map<String, Map<String, dynamic>> _schedules = {};
@@ -53,6 +56,8 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
     _bioCtrl.dispose();
     _expCtrl.dispose();
     _otherSpecialtyCtrl.dispose();
+    _licenseCtrl.dispose();
+    _feeCtrl.dispose();
     _residenceAddressCtrl.dispose();
     _residenceCityCtrl.dispose();
     _clinicNameCtrl.dispose();
@@ -62,6 +67,10 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
 
   void _nextStep() {
     if (_currentStep == 0) {
+      if (_licenseCtrl.text.trim().isEmpty) {
+        _toast('Please enter your medical license number.');
+        return;
+      }
       if (_bioCtrl.text.trim().isEmpty) {
         _toast('Please add a short professional bio or title.');
         return;
@@ -138,6 +147,9 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
         'other_specialty': _selectedSpecialty == 'Other' ? _otherSpecialtyCtrl.text : '',
         'bio': _bioCtrl.text,
         'years_experience': int.tryParse(_expCtrl.text) ?? 1,
+        'license_number': _licenseCtrl.text.trim(),
+        if (_feeCtrl.text.trim().isNotEmpty)
+          'consultation_fee': _feeCtrl.text.trim(),
       });
 
       final scheduleList = _schedules.entries
@@ -303,8 +315,14 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
           _textField(_otherSpecialtyCtrl, 'Specify your specialty', lines: 1),
         ],
         const SizedBox(height: 20),
+        _fieldLabel('Medical license number *'),
+        _textField(_licenseCtrl, 'e.g. CM-MED-2019-0451', lines: 1),
+        const SizedBox(height: 20),
         _fieldLabel('Years of experience'),
         _textField(_expCtrl, 'e.g. 5', keyboard: TextInputType.number),
+        const SizedBox(height: 20),
+        _fieldLabel('Consultation fee (XAF)'),
+        _textField(_feeCtrl, 'e.g. 15000', keyboard: TextInputType.number),
         const SizedBox(height: 20),
         _fieldLabel('Professional bio'),
         _textField(_bioCtrl, 'Training, focus areas, languages spoken…', lines: 5),
@@ -424,7 +442,18 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
           onPickMap: () => _openMapPicker(forClinic: false),
         ),
         const SizedBox(height: 16),
-        _textField(_residenceAddressCtrl, 'Street address'),
+        PlacesAutocompleteField(
+          controller: _residenceAddressCtrl,
+          hint: 'Type your practice address',
+          onSelected: (address, lat, lng) {
+            setState(() {
+              if (lat != null) _resLat = lat;
+              if (lng != null) _resLng = lng;
+              final parts = address.split(',');
+              if (parts.length >= 2) _residenceCityCtrl.text = parts[parts.length - 2].trim();
+            });
+          },
+        ),
         const SizedBox(height: 12),
         _textField(_residenceCityCtrl, 'City / region'),
         const SizedBox(height: 28),
@@ -447,7 +476,16 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
           onPickMap: () => _openMapPicker(forClinic: true),
         ),
         const SizedBox(height: 12),
-        _textField(_clinicAddressCtrl, 'Facility address (or use map)'),
+        PlacesAutocompleteField(
+          controller: _clinicAddressCtrl,
+          hint: 'Type clinic / facility address',
+          onSelected: (address, lat, lng) {
+            setState(() {
+              if (lat != null) _clinicLat = lat;
+              if (lng != null) _clinicLng = lng;
+            });
+          },
+        ),
       ],
     );
   }

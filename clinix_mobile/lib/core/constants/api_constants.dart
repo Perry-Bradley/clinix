@@ -8,7 +8,7 @@ class ApiConstants {
   // static const String _host = 'http://10.0.2.2:8000';
 
   // ✅ Use this for a real phone on the same Wi-Fi as your PC
-  static const String _host = 'http://192.168.1.165:8000';
+  static const String _host = 'https://clinix-production-81cf.up.railway.app';
 
   static const String baseUrl = '$_host/api/v1/';
   static const String accounts = 'auth/';

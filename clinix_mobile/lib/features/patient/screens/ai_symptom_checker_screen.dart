@@ -7,7 +7,12 @@ import '../../../core/services/ai_chat_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
-const Color _kAiBgTop = Color(0xFFF1F5F9);
+// ─── Primary accent used throughout the AI screen ───────────────────────────
+const Color _kAccent = Color(0xFF0EA5E9);      // sky blue accent
+const Color _kAccentLight = Color(0xFFE0F4FF); // very light sky
+const Color _kAccentDark = Color(0xFF0A1628);  // darkBlue for text only
+const Color _kBg = Colors.white;               // mostly white
+const Color _kCardBg = Colors.white;
 
 class AiConsultScreen extends StatefulWidget {
   const AiConsultScreen({super.key});
@@ -18,6 +23,7 @@ class AiConsultScreen extends StatefulWidget {
 
 class _AiConsultScreenState extends State<AiConsultScreen> {
   final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _historySearchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
@@ -28,47 +34,80 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
   String? _pendingImageBase64;
   String? _pendingImageMime;
 
+  List<Map<String, dynamic>> _sessions = [];
+  bool _isLoadingSessions = false;
+
   @override
   void initState() {
     super.initState();
-    _initializeChat();
+    _loadSessions();
   }
 
-  Future<void> _initializeChat() async {
-    setState(() => _isLoading = true);
+  // ─── Session management ─────────────────────────────────────────────────
+
+  Future<void> _loadSessions() async {
+    setState(() => _isLoadingSessions = true);
+    try {
+      _sessions = await AiChatService.getSessions();
+    } catch (_) {}
+    if (mounted) setState(() => _isLoadingSessions = false);
+  }
+
+  Future<void> _startNewChat() async {
+    setState(() {
+      _messages.clear();
+      _sessionId = null;
+      _isSessionActive = true;
+      _finalAssessment = null;
+      _isLoading = true;
+    });
     try {
       final result = await AiChatService.startChat();
       setState(() {
         _sessionId = result['session_id'];
-        _messages.add(ChatMessage(
-          text: result['message'],
-          isUser: false,
-        ));
+        _messages.add(ChatMessage(text: result['message'] ?? 'Hello! How can I help you today?', isUser: false));
       });
     } on DioException catch (e) {
-      final code = e.response?.statusCode;
-      final body = e.response?.data;
-      final map = body is Map ? Map<String, dynamic>.from(body as Map) : <String, dynamic>{};
-      final detail = map['detail']?.toString() ?? map['error']?.toString();
-      if (code == 401 || code == 403) {
-        _showError(detail ?? 'Sign in as a patient to use Clinix AI.');
-      } else if (code == 404) {
-        _showError('AI endpoint not found. Update api_constants.dart base URL to your running API (e.g. same Wi‑Fi IP as this phone).');
-      } else if (code == 503 || code == 502) {
-        _showError(
-          detail ??
-              'Clinix AI (MedLM) is not available. Set GCP project env vars and credentials on the server, '
-              'then restart the API.',
-        );
-      } else {
-        _showError(detail ?? 'Could not start AI session (${code ?? e.message}). Check that the backend is running.');
-      }
+      _handleDioError(e);
     } catch (e) {
-      _showError('Failed to initialize session: $e');
+      _showError('Failed to start session: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
+    }
+    _loadSessions();
+  }
+
+  Future<void> _openSession(String? sessionId) async {
+    if (sessionId == null) return;
+    setState(() {
+      _messages.clear();
+      _isLoading = true;
+      _isSessionActive = true;
+      _finalAssessment = null;
+    });
+    try {
+      final data = await AiChatService.getChatHistory(sessionId);
+      final msgs = (data['messages'] as List?) ?? [];
+      setState(() {
+        _sessionId = sessionId;
+        _isSessionActive = data['is_active'] == true;
+        for (final m in msgs) {
+          final map = Map<String, dynamic>.from(m as Map);
+          _messages.add(ChatMessage(
+            text: map['message']?.toString() ?? '',
+            isUser: map['role'] == 'user',
+          ));
+        }
+      });
+    } catch (e) {
+      _showError('Could not load chat.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+      _scrollToBottom();
     }
   }
+
+  // ─── Messaging ──────────────────────────────────────────────────────────
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
@@ -84,32 +123,24 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
       _pendingImageMime = null;
       _isLoading = true;
     });
-
     _scrollToBottom();
 
     try {
-      final reply = await AiChatService.sendMessage(
-        _sessionId!,
-        text,
-        imageBase64: imageDataUri,
-      );
-      setState(() {
-        _messages.add(ChatMessage(text: reply, isUser: false));
-      });
+      final reply = await AiChatService.sendMessage(_sessionId!, text, imageBase64: imageDataUri);
+      setState(() => _messages.add(ChatMessage(text: reply, isUser: false)));
     } on DioException catch (e) {
       final body = e.response?.data;
       final map = body is Map ? Map<String, dynamic>.from(body as Map) : <String, dynamic>{};
-      final detail = map['detail']?.toString() ?? map['error']?.toString();
-      _showError(detail ?? e.message ?? 'Could not send message (${e.response?.statusCode}).');
+      _showError(map['detail']?.toString() ?? map['error']?.toString() ?? 'Could not send message.');
     } catch (e) {
       _showError("Couldn't send message. Please try again.");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       _scrollToBottom();
     }
   }
 
-  Future<void> _completeClinicalOnboarding() async {
+  Future<void> _completeChat() async {
     if (_sessionId == null) return;
     setState(() => _isLoading = true);
     try {
@@ -118,23 +149,49 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
         _isSessionActive = false;
         _finalAssessment = result['assessment'];
         _messages.add(ChatMessage(
-          text: "I've completed my assessment based on our discussion. Here is your summary:",
+          text: "I've completed my assessment. Here is your summary:",
           isUser: false,
           isFinal: true,
           assessment: _finalAssessment,
         ));
       });
     } catch (e) {
-      _showError("Error generating final assessment.");
+      _showError("Error generating assessment.");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       _scrollToBottom();
+    }
+  }
+
+  // ─── Helpers ────────────────────────────────────────────────────────────
+
+  void _handleDioError(DioException e) {
+    final code = e.response?.statusCode;
+    final body = e.response?.data;
+    final map = body is Map ? Map<String, dynamic>.from(body as Map) : <String, dynamic>{};
+    final detail = map['detail']?.toString() ?? map['error']?.toString();
+    if (code == 401 || code == 403) {
+      _showError(detail ?? 'Sign in as a patient to use Clinix AI.');
+    } else if (code == 404) {
+      _showError('AI endpoint not found. Check your backend URL.');
+    } else if (code == 503 || code == 502) {
+      _showError(detail ?? 'AI service unavailable. Check server config.');
+    } else {
+      _showError(detail ?? 'Could not connect (${code ?? e.message}).');
     }
   }
 
   void _showError(String error) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error), backgroundColor: Colors.redAccent));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
     }
   }
 
@@ -143,243 +200,11 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeOutBack,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
         );
       }
     });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.sky500.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.psychology_rounded, color: AppColors.sky600, size: 20),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Clinix AI',
-                  style: AppTextStyles.headlineSmall.copyWith(
-                    color: AppColors.splashSlate900,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Triage assistant · not for emergencies',
-              style: AppTextStyles.caption.copyWith(color: AppColors.grey500, fontSize: 10),
-            ),
-          ],
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.grey200),
-        ),
-        actions: [
-          if (_isSessionActive && _messages.length > 2)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: TextButton(
-                onPressed: _completeClinicalOnboarding,
-                child: Text(
-                  'Summary',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.splashSlate900,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-        ],
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.splashSlate900, size: 20),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [_kAiBgTop, Colors.white],
-            stops: [0.0, 0.35],
-          ),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                itemCount: _messages.length + (_isLoading ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == _messages.length) {
-                    return const _ThinkingIndicator();
-                  }
-                  return _messages[index];
-                },
-              ),
-            ),
-            _buildInputArea(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInputArea() {
-    if (!_isSessionActive) return _buildCompletedArea();
-
-    final bottom = MediaQuery.of(context).padding.bottom;
-    return Container(
-      padding: EdgeInsets.fromLTRB(12, 8, 12, bottom + 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          IconButton(
-            onPressed: _openAttachSheet,
-            icon: const Icon(Icons.add_circle_outline, color: AppColors.grey500, size: 28),
-          ),
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 140),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: AppColors.grey200),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_pendingImageBase64 != null && (_pendingImageBase64 ?? '').trim().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8, bottom: 8),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.memory(
-                              base64Decode(_pendingImageBase64!),
-                              width: 54,
-                              height: 54,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Image attached',
-                              style: AppTextStyles.caption.copyWith(color: AppColors.grey500),
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => setState(() {
-                              _pendingImageBase64 = null;
-                              _pendingImageMime = null;
-                            }),
-                            icon: const Icon(Icons.close_rounded, color: AppColors.grey500, size: 18),
-                          ),
-                        ],
-                      ),
-                    ),
-                  TextField(
-                    controller: _messageController,
-                    maxLines: null,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _sendMessage(),
-                    style: AppTextStyles.bodyLarge.copyWith(color: AppColors.splashSlate900),
-                    cursorColor: AppColors.splashSlate900,
-                    decoration: InputDecoration(
-                      hintText: 'Describe how you feel…',
-                      hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      isDense: true,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Material(
-            color: AppColors.splashSlate900,
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: _sendMessage,
-              child: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openAttachSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _AttachChip(
-              icon: Icons.image_rounded,
-              label: 'Photo',
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage();
-              },
-            ),
-            _AttachChip(
-              icon: Icons.photo_camera_rounded,
-              label: 'Camera',
-              onTap: () {
-                Navigator.pop(context);
-                _pickCamera();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> _pickImage() async {
@@ -404,42 +229,618 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
     });
   }
 
-  Widget _buildCompletedArea() {
-    final bottom = MediaQuery.of(context).padding.bottom;
-    return Container(
-      padding: EdgeInsets.fromLTRB(20, 16, 20, bottom + 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.black.withValues(alpha: 0.06))),
-      ),
-      child: Row(
+  // ─── Build ──────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    // If no session started yet, show the landing page
+    final bool showLanding = _sessionId == null && _messages.isEmpty && !_isLoading;
+
+    return Scaffold(
+      backgroundColor: _kBg,
+      body: showLanding ? _buildLandingPage() : _buildChatPage(),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LANDING PAGE — shown before any chat starts
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildLandingPage() {
+    return SafeArea(
+      child: Column(
         children: [
-          const Icon(Icons.verified_rounded, color: AppColors.accentGreen, size: 28),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+          // Top bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+            child: Row(
               children: [
-                Text('Session complete', style: AppTextStyles.bodyLarge.copyWith(color: AppColors.darkBlue900, fontWeight: FontWeight.bold)),
-                Text('Review your summary above.', style: AppTextStyles.caption.copyWith(color: AppColors.grey500)),
+                IconButton(
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.grey500, size: 20),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: _showHistorySheet,
+                  icon: const Icon(Icons.history_rounded, color: _kAccent, size: 20),
+                  label: Text('History', style: AppTextStyles.bodyMedium.copyWith(color: _kAccent, fontWeight: FontWeight.w600)),
+                ),
               ],
             ),
           ),
-          ElevatedButton(
-            onPressed: () => context.pop(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.sky500,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
+          const Spacer(flex: 2),
+          // Logo
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: _kAccentLight,
+              shape: BoxShape.circle,
             ),
-            child: Text('Close', style: AppTextStyles.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Icon(Icons.spa_rounded, color: _kAccent, size: 50),
+          ),
+          const SizedBox(height: 28),
+          Text(
+            'Clinix AI',
+            style: AppTextStyles.displayLarge.copyWith(color: _kAccentDark, fontSize: 32, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              'Your intelligent health assistant.\nDescribe symptoms, get guidance, and connect with doctors.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, height: 1.5),
+            ),
+          ),
+          const SizedBox(height: 40),
+          // Topic chips
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              alignment: WrapAlignment.center,
+              children: [
+                _TopicChip(label: 'Symptoms', icon: Icons.thermostat_rounded, onTap: () => _startWithPrompt('I have some symptoms I want to discuss')),
+                _TopicChip(label: 'Medication', icon: Icons.medication_rounded, onTap: () => _startWithPrompt('I need advice about medication')),
+                _TopicChip(label: 'Mental Health', icon: Icons.self_improvement_rounded, onTap: () => _startWithPrompt('I want to discuss my mental health')),
+                _TopicChip(label: 'Nutrition', icon: Icons.restaurant_rounded, onTap: () => _startWithPrompt('I need nutrition and diet advice')),
+              ],
+            ),
+          ),
+          const Spacer(flex: 3),
+          // Start button
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+            child: SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: FilledButton(
+                onPressed: _startNewChat,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _kAccent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+                child: Text('Start New Chat', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w800, fontSize: 16)),
+              ),
+            ),
+          ),
+          // History button
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            child: SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: OutlinedButton(
+                onPressed: _showHistorySheet,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.grey200),
+                  foregroundColor: _kAccentDark,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: Text('View Chat History', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w700, fontSize: 16, color: _kAccentDark)),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
+
+  Future<void> _startWithPrompt(String prompt) async {
+    await _startNewChat();
+    if (_sessionId != null) {
+      _messageController.text = prompt;
+      await _sendMessage();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CHAT PAGE — active conversation
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildChatPage() {
+    return Column(
+      children: [
+        _buildChatAppBar(),
+        Expanded(
+          child: _messages.isEmpty && _isLoading
+              ? const Center(child: CircularProgressIndicator(color: _kAccent))
+              : ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  itemCount: _messages.length + (_isLoading ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == _messages.length) return const _ThinkingIndicator();
+                    return _messages[index];
+                  },
+                ),
+        ),
+        _buildInputArea(),
+      ],
+    );
+  }
+
+  Widget _buildChatAppBar() {
+    return Container(
+      padding: EdgeInsets.fromLTRB(4, MediaQuery.of(context).padding.top + 4, 4, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () {
+              // Go back to landing
+              setState(() {
+                _messages.clear();
+                _sessionId = null;
+                _isSessionActive = true;
+                _finalAssessment = null;
+              });
+            },
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          ),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: const BoxDecoration(color: _kAccentLight, shape: BoxShape.circle),
+            child: const Icon(Icons.spa_rounded, color: _kAccent, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Clinix AI', style: AppTextStyles.headlineSmall.copyWith(fontSize: 16, fontWeight: FontWeight.w800)),
+                Text(
+                  _isSessionActive ? 'Online' : 'Session ended',
+                  style: AppTextStyles.caption.copyWith(color: _isSessionActive ? AppColors.accentGreen : AppColors.grey400, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          if (_isSessionActive && _messages.length > 2)
+            TextButton(
+              onPressed: _completeChat,
+              style: TextButton.styleFrom(
+                backgroundColor: _kAccentLight,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              ),
+              child: Text('Summary', style: AppTextStyles.caption.copyWith(color: _kAccent, fontWeight: FontWeight.w800)),
+            ),
+          IconButton(
+            onPressed: _startNewChat,
+            icon: const Icon(Icons.edit_note_rounded, color: _kAccent, size: 24),
+            tooltip: 'New Chat',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputArea() {
+    if (!_isSessionActive) return _buildCompletedBar();
+
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(12, 10, 12, bottom + 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, -2))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Image preview
+          if (_pendingImageBase64 != null && (_pendingImageBase64 ?? '').trim().isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _kAccentLight,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(base64Decode(_pendingImageBase64!), width: 48, height: 48, fit: BoxFit.cover),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('Image attached', style: AppTextStyles.caption.copyWith(color: _kAccentDark))),
+                  IconButton(
+                    onPressed: () => setState(() { _pendingImageBase64 = null; _pendingImageMime = null; }),
+                    icon: const Icon(Icons.close_rounded, size: 18, color: _kAccentDark),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Attach button
+              Material(
+                color: AppColors.grey50,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: _openAttachSheet,
+                  child: const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Icon(Icons.add_rounded, color: AppColors.grey500, size: 22),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Text field
+              Expanded(
+                child: Material(
+                  color: Colors.white,
+                  elevation: 2,
+                  shadowColor: Colors.black12,
+                  borderRadius: BorderRadius.circular(24),
+                  child: TextField(
+                    controller: _messageController,
+                    maxLines: null,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _sendMessage(),
+                    style: AppTextStyles.bodyLarge.copyWith(color: AppColors.splashSlate900, fontSize: 15),
+                    cursorColor: _kAccent,
+                    decoration: InputDecoration(
+                      hintText: 'Ask me anything...',
+                      hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Send button
+              Material(
+                color: _kAccent,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: _sendMessage,
+                  child: const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompletedBar() {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 14, 20, bottom + 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, -2))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: const BoxDecoration(color: Color(0xFFD1FAE5), shape: BoxShape.circle),
+            child: const Icon(Icons.check_rounded, color: AppColors.accentGreen, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Session complete', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+                Text('Review your summary above', style: AppTextStyles.caption.copyWith(color: AppColors.grey500)),
+              ],
+            ),
+          ),
+          FilledButton(
+            onPressed: _startNewChat,
+            style: FilledButton.styleFrom(
+              backgroundColor: _kAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            child: Text('New Chat', style: AppTextStyles.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openAttachSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(100))),
+            const SizedBox(height: 20),
+            Text('Attach an image', style: AppTextStyles.headlineSmall.copyWith(fontSize: 16)),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _AttachOption(icon: Icons.photo_library_rounded, label: 'Gallery', color: _kAccent, onTap: () { Navigator.pop(context); _pickImage(); }),
+                _AttachOption(icon: Icons.camera_alt_rounded, label: 'Camera', color: AppColors.accentCyan, onTap: () { Navigator.pop(context); _pickCamera(); }),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HISTORY SHEET
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _showHistorySheet() {
+    _loadSessions();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            final query = _historySearchController.text.trim().toLowerCase();
+            final filtered = _sessions.where((s) {
+              final msgs = (s['messages'] as List?) ?? [];
+              final preview = msgs.isNotEmpty ? Map<String, dynamic>.from(msgs.last as Map)['message']?.toString() ?? '' : '';
+              return query.isEmpty || preview.toLowerCase().contains(query);
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.78,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(100))),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.history_rounded, color: _kAccent),
+                        const SizedBox(width: 10),
+                        Text('Chat History', style: AppTextStyles.headlineSmall.copyWith(fontSize: 18)),
+                        const Spacer(),
+                        FilledButton.icon(
+                          onPressed: () { Navigator.pop(context); _startNewChat(); },
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('New'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _kAccent,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Search
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: TextField(
+                      controller: _historySearchController,
+                      onChanged: (_) => setLocal(() {}),
+                      decoration: InputDecoration(
+                        hintText: 'Search conversations...',
+                        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.grey400),
+                        filled: true,
+                        fillColor: AppColors.grey50,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // List
+                  Expanded(
+                    child: _isLoadingSessions
+                        ? const Center(child: CircularProgressIndicator(color: _kAccent))
+                        : filtered.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.chat_bubble_outline_rounded, size: 48, color: AppColors.grey200),
+                                    const SizedBox(height: 12),
+                                    Text('No conversations yet', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400)),
+                                  ],
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                itemBuilder: (context, index) {
+                                  final session = filtered[index];
+                                  final msgs = (session['messages'] as List?) ?? [];
+                                  final preview = msgs.isNotEmpty
+                                      ? Map<String, dynamic>.from(msgs.last as Map)['message']?.toString() ?? 'New chat'
+                                      : 'New chat';
+                                  final createdAt = session['created_at']?.toString() ?? '';
+                                  final isActive = session['is_active'] == true;
+
+                                  return InkWell(
+                                    onTap: () { Navigator.pop(context); _openSession(session['session_id']?.toString()); },
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: AppColors.grey100),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 42,
+                                            height: 42,
+                                            decoration: BoxDecoration(
+                                              color: isActive ? _kAccentLight : AppColors.grey50,
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Icon(
+                                              isActive ? Icons.chat_rounded : Icons.check_circle_rounded,
+                                              color: isActive ? _kAccent : AppColors.accentGreen,
+                                              size: 20,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(preview, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
+                                                const SizedBox(height: 2),
+                                                Text(createdAt, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.caption.copyWith(color: AppColors.grey400, fontSize: 11)),
+                                              ],
+                                            ),
+                                          ),
+                                          const Icon(Icons.chevron_right_rounded, color: AppColors.grey200, size: 20),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGETS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _TopicChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _TopicChip({required this.label, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: _kAccentLight,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.grey200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: _kAccent, size: 18),
+            const SizedBox(width: 8),
+            Text(label, style: const TextStyle(color: _kAccentDark, fontSize: 13, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AttachOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _AttachOption({required this.icon, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        width: 90,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 26),
+            ),
+            const SizedBox(height: 8),
+            Text(label, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Chat message bubble ──────────────────────────────────────────────────
 
 class ChatMessage extends StatelessWidget {
   final String text;
@@ -464,37 +865,33 @@ class ChatMessage extends StatelessWidget {
     final String? b64 = hasImage && img.contains('base64,') ? img.split('base64,')[1] : null;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!isUser) _avatar(Icons.health_and_safety_rounded, AppColors.sky600),
+              if (!isUser) _avatar(),
               if (!isUser) const SizedBox(width: 8),
               Flexible(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: isUser ? AppColors.splashSlate900 : Colors.white,
+                    color: isUser ? _kAccent : Colors.white,
                     borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18),
-                      topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(isUser ? 18 : 4),
-                      bottomRight: Radius.circular(isUser ? 4 : 18),
-                    ),
-                    border: Border.all(
-                      color: isUser ? Colors.transparent : AppColors.grey200,
+                      topLeft: const Radius.circular(20),
+                      topRight: const Radius.circular(20),
+                      bottomLeft: Radius.circular(isUser ? 20 : 4),
+                      bottomRight: Radius.circular(isUser ? 4 : 20),
                     ),
                     boxShadow: [
-                      if (!isUser)
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
+                      BoxShadow(
+                        color: (isUser ? _kAccent : Colors.black).withValues(alpha: 0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
                     ],
                   ),
                   child: Column(
@@ -505,11 +902,8 @@ class ChatMessage extends StatelessWidget {
                         Padding(
                           padding: EdgeInsets.only(bottom: text.trim().isEmpty ? 0 : 10),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: Image.memory(
-                              base64Decode(b64),
-                              fit: BoxFit.cover,
-                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.memory(base64Decode(b64), fit: BoxFit.cover),
                           ),
                         ),
                       if (text.trim().isNotEmpty)
@@ -517,14 +911,16 @@ class ChatMessage extends StatelessWidget {
                           text,
                           style: AppTextStyles.bodyLarge.copyWith(
                             color: isUser ? Colors.white : AppColors.splashSlate900,
-                            fontSize: 15,
-                            height: 1.45,
+                            fontSize: 14.5,
+                            height: 1.5,
                           ),
                         ),
                     ],
                   ),
                 ),
               ),
+              if (isUser) const SizedBox(width: 8),
+              if (isUser) _userAvatar(),
             ],
           ),
           if (isFinal && assessment != null) _buildFinalSummary(context),
@@ -533,25 +929,34 @@ class ChatMessage extends StatelessWidget {
     );
   }
 
-  Widget _avatar(IconData icon, Color color) {
+  Widget _avatar() {
     return Container(
       width: 32,
       height: 32,
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
-      child: Icon(icon, color: color, size: 18),
+      decoration: const BoxDecoration(color: _kAccentLight, shape: BoxShape.circle),
+      child: const Icon(Icons.spa_rounded, color: _kAccent, size: 18),
+    );
+  }
+
+  Widget _userAvatar() {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(color: _kAccent.withValues(alpha: 0.2), shape: BoxShape.circle),
+      child: const Icon(Icons.person_rounded, color: _kAccent, size: 18),
     );
   }
 
   Widget _buildFinalSummary(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: 20, left: 40),
-      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(top: 16, left: 40),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.grey200),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _kAccentLight),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10)),
+          BoxShadow(color: _kAccent.withValues(alpha: 0.08), blurRadius: 20, offset: const Offset(0, 8)),
         ],
       ),
       child: Column(
@@ -559,28 +964,32 @@ class ChatMessage extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.analytics_rounded, color: AppColors.sky500),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: _kAccentLight, borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.analytics_rounded, color: _kAccent, size: 20),
+              ),
               const SizedBox(width: 12),
-              Text('Medical Insight', style: AppTextStyles.headlineSmall.copyWith(fontSize: 18)),
+              Text('Medical Insight', style: AppTextStyles.headlineSmall.copyWith(fontSize: 16)),
             ],
           ),
-          const SizedBox(height: 20),
-          _summaryRow('Triage Priority', assessment!['triage_priority'] ?? 'Standard', Icons.flag_rounded, 
+          const SizedBox(height: 18),
+          _summaryRow('Triage Priority', assessment!['triage_priority'] ?? 'Standard', Icons.flag_rounded,
               (assessment!['triage_priority']?.toString().toLowerCase().contains('high') ?? false) ? Colors.red : AppColors.accentGreen),
-          _summaryRow('Recommended Care', assessment!['recommended_specialization'] ?? 'General Consultation', Icons.medical_services_rounded, AppColors.sky500),
-          const SizedBox(height: 24),
+          _summaryRow('Recommended Care', assessment!['recommended_specialization'] ?? 'General Consultation', Icons.medical_services_rounded, _kAccent),
+          const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
-            height: 52,
+            height: 48,
             child: FilledButton(
               onPressed: () => context.push('/patient/book-appointment', extra: {'specialty': assessment!['recommended_specialization']}),
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.splashSlate900,
+                backgroundColor: _kAccent,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
-              child: Text('Book recommended care', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w800)),
+              child: Text('Book recommended care', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w800, fontSize: 14)),
             ),
           ),
         ],
@@ -590,21 +999,21 @@ class ChatMessage extends StatelessWidget {
 
   Widget _summaryRow(String label, String value, IconData icon, Color color) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 18),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 16),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.grey500)),
-                Text(value, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold, color: AppColors.darkBlue900)),
+                Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.grey400, fontSize: 11)),
+                Text(value, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold, color: AppColors.darkBlue900, fontSize: 14)),
               ],
             ),
           ),
@@ -614,44 +1023,7 @@ class ChatMessage extends StatelessWidget {
   }
 }
 
-class _AttachChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _AttachChip({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.grey50,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.grey200),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: AppColors.splashSlate900, size: 20),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// ─── Thinking dots ────────────────────────────────────────────────────────
 
 class _ThinkingIndicator extends StatefulWidget {
   const _ThinkingIndicator();
@@ -666,7 +1038,7 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator> with SingleTicke
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..repeat();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
   }
 
   @override
@@ -678,38 +1050,44 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator> with SingleTicke
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 32,
             height: 32,
-            decoration: BoxDecoration(color: AppColors.sky500.withValues(alpha: 0.15), shape: BoxShape.circle),
-            child: const Icon(Icons.health_and_safety_rounded, color: AppColors.sky600, size: 18),
+            decoration: const BoxDecoration(color: _kAccentLight, shape: BoxShape.circle),
+            child: const Icon(Icons.spa_rounded, color: _kAccent, size: 18),
           ),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.grey200),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: List.generate(3, (index) {
                 return AnimatedBuilder(
                   animation: _controller,
                   builder: (context, child) {
-                    final delay = index * 0.2;
-                    final value = Curves.easeInOut.transform((_controller.value + delay) % 1.0);
+                    final delay = index * 0.25;
+                    final t = ((_controller.value + delay) % 1.0);
+                    final scale = 0.5 + 0.5 * (1 - (2 * t - 1).abs());
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: Opacity(
-                        opacity: value,
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: Transform.scale(
+                        scale: scale,
                         child: Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(color: AppColors.grey400, shape: BoxShape.circle),
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: _kAccent.withValues(alpha: 0.5 + 0.5 * scale),
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
                     );

@@ -5,16 +5,20 @@ import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'core/theme/app_theme.dart';
 import 'core/constants/app_router.dart';
+import 'core/services/notification_service.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase
   await Firebase.initializeApp();
-  
+
+  // Initialize push notifications (request permission + register FCM token)
+  await NotificationService.initialize();
+
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {

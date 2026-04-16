@@ -26,9 +26,38 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
   List<dynamic> _doctors = [];
   bool _isLoading = true;
   String? _error;
-  
+  String _searchQuery = '';
+  String _selectedSpecialty = 'All';
+
   dynamic _selectedDoctor;
   Position? _currentPosition;
+
+  List<dynamic> get _filteredDoctors {
+    return _doctors.where((doctor) {
+      // Filter by search query
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        final name = (doctor['full_name'] ?? '').toString().toLowerCase();
+        final specialty = (doctor['specialty'] ?? '').toString().toLowerCase();
+        final otherSpecialty = (doctor['other_specialty'] ?? '').toString().toLowerCase();
+        if (!name.contains(query) && !specialty.contains(query) && !otherSpecialty.contains(query)) {
+          return false;
+        }
+      }
+
+      // Filter by selected specialty
+      if (_selectedSpecialty != 'All') {
+        final specialty = (doctor['specialty'] ?? '').toString().toLowerCase();
+        if (_selectedSpecialty == 'Specialist') {
+          if (specialty != 'other') return false;
+        } else {
+          if (specialty != _selectedSpecialty.toLowerCase()) return false;
+        }
+      }
+
+      return true;
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -51,15 +80,10 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
       }
 
       final token = await AuthService.getAccessToken();
-      // Fetch dynamic fee from system settings (mimicked endpoint)
-      final feeResp = await Dio().get(
-        '${ApiConstants.baseUrl}system/settings/fee/',
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
       final response = await Dio().get(
         '${ApiConstants.baseUrl}providers/nearby/',
         queryParameters: {
-          'available': 'true',
+          // 'available': 'true',
           if (position != null) 'lat': position.latitude,
           if (position != null) 'lng': position.longitude,
         },
@@ -68,7 +92,17 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
       
       if (mounted) {
         setState(() { 
-          final results = response.data is List ? response.data : (response.data['results'] ?? []);
+          List<dynamic> results = [];
+          
+          if (response.data is List) {
+            results = response.data;
+          } else if (response.data is Map) {
+            results = response.data['results'] ?? [];
+          } else {
+            // Handle cases where response.data is a String (e.g. HTML 500 error)
+            _error = 'Backend returned an unexpected response format.';
+          }
+          
           _doctors = results;
           _isLoading = false; 
         });
@@ -116,19 +150,81 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
               ),
             ),
           ),
+          // Search bar and specialty filter chips
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Column(
+                children: [
+                  TextField(
+                    onChanged: (value) => setState(() => _searchQuery = value),
+                    decoration: InputDecoration(
+                      hintText: 'Search by name or specialty...',
+                      hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
+                      prefixIcon: const Icon(Icons.search_rounded, color: AppColors.grey400),
+                      filled: true,
+                      fillColor: AppColors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: AppColors.grey200),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: AppColors.grey200),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: AppColors.sky500, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 38,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: ['All', 'Generalist', 'Nurse', 'Midwife', 'Specialist'].map((specialty) {
+                        final isSelected = _selectedSpecialty == specialty;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(specialty),
+                            selected: isSelected,
+                            onSelected: (_) => setState(() => _selectedSpecialty = specialty),
+                            selectedColor: AppColors.sky500,
+                            backgroundColor: AppColors.white,
+                            labelStyle: AppTextStyles.caption.copyWith(
+                              color: isSelected ? AppColors.white : AppColors.grey500,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(color: isSelected ? AppColors.sky500 : AppColors.grey200),
+                            ),
+                            showCheckmark: false,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           if (_isLoading)
             const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
           else if (_error != null)
             SliverFillRemaining(child: Center(child: Text(_error!, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400))))
-          else if (_doctors.isEmpty)
-            SliverFillRemaining(child: Center(child: Text('No doctors available right now', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400))))
+          else if (_filteredDoctors.isEmpty)
+            SliverFillRemaining(child: Center(child: Text('No doctors match your search', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400))))
           else
             SliverPadding(
               padding: const EdgeInsets.all(20),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (ctx, i) => _DoctorCard(doctor: _doctors[i]),
-                  childCount: _doctors.length,
+                  (ctx, i) => _DoctorCard(doctor: _filteredDoctors[i]),
+                  childCount: _filteredDoctors.length,
                 ),
               ),
             )
@@ -150,7 +246,7 @@ class _DoctorSlideCard extends StatelessWidget {
     final spec = doctor['other_specialty']?.toString().isNotEmpty == true
         ? doctor['other_specialty'].toString()
         : (doctor['specialty']?.toString() ?? 'General Practitioner');
-    final rating = (((doctor['rating'] ?? 0.0) as num).toDouble()).toStringAsFixed(1);
+    final rating = (double.tryParse(doctor['rating']?.toString() ?? '') ?? 0.0).toStringAsFixed(1);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -242,13 +338,27 @@ class _DoctorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = '${doctor['provider_id']?['first_name'] ?? 'Dr.'} ${doctor['provider_id']?['last_name'] ?? ''}';
-    final spec = doctor['specialization'] ?? 'General Practitioner';
-    final rating = (doctor['rating'] ?? 0.0).toStringAsFixed(1);
-    final isAvailable = doctor['is_available'] == true;
+    final name = doctor['full_name']?.toString() ?? 'Doctor';
+    final spec = (doctor['other_specialty']?.toString().isNotEmpty == true)
+        ? doctor['other_specialty']
+        : (doctor['specialty'] ?? 'General Practitioner');
+    final ratingValue = double.tryParse(doctor['rating']?.toString() ?? '0.0') ?? 0.0;
+    final rating = ratingValue.toStringAsFixed(1);
+    final status = doctor['status']?.toString() ?? 'Offline';
+
+    // Get real location from provider data
+    final locations = (doctor['locations'] as List?) ?? [];
+    String locationText = 'Location unavailable';
+    if (locations.isNotEmpty) {
+      final loc = locations.first;
+      final city = loc['city']?.toString() ?? '';
+      final region = loc['region']?.toString() ?? '';
+      locationText = [city, region].where((s) => s.isNotEmpty).join(', ');
+      if (locationText.isEmpty) locationText = loc['address']?.toString() ?? 'Location unavailable';
+    }
 
     return GestureDetector(
-      onTap: () => context.push('/patient/doctor-profile/${doctor['id'] ?? doctor['provider_id']?['id']}'),
+      onTap: () => context.push('/patient/doctor-profile/${doctor['provider_id']}'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         padding: const EdgeInsets.all(16),
@@ -263,11 +373,7 @@ class _DoctorCard extends StatelessWidget {
             Container(
               width: 56, height: 56,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [AppColors.darkBlue700.withOpacity(0.1), AppColors.sky500.withOpacity(0.1)],
-                ),
+                color: AppColors.sky100,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(Icons.person_outline_rounded, color: AppColors.sky600, size: 28),
@@ -279,9 +385,9 @@ class _DoctorCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(name, style: AppTextStyles.headlineSmall.copyWith(fontSize: 16)),
+                      Flexible(child: Text(name, style: AppTextStyles.headlineSmall.copyWith(fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       const SizedBox(width: 6),
-                      _StatusDot(status: doctor['status'] ?? 'Available'),
+                      _StatusDot(status: status),
                     ],
                   ),
                   Text(spec, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, fontSize: 13)),
@@ -294,13 +400,23 @@ class _DoctorCard extends StatelessWidget {
                       const SizedBox(width: 12),
                       const Icon(Icons.location_on_rounded, size: 14, color: AppColors.grey400),
                       const SizedBox(width: 4),
-                      Text('Douala, CM', style: AppTextStyles.caption),
+                      Flexible(child: Text(locationText, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ],
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.grey200, size: 16),
+            GestureDetector(
+              onTap: () => context.push('/dchat/launch/${doctor['provider_id']}?name=${Uri.encodeComponent(name)}'),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.sky500,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 18),
+              ),
+            ),
           ],
         ),
       ),

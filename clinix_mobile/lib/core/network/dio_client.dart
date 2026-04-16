@@ -25,10 +25,21 @@ final dioProvider = Provider<Dio>((ref) {
         }
         return handler.next(options);
       },
-      onError: (e, handler) {
-        // Handle common errors like 401 Unauthorized
+      onError: (e, handler) async {
+        // Auto-refresh token on 401
         if (e.response?.statusCode == 401) {
-          // Logic for logout or token refresh could go here
+          try {
+            final newToken = await AuthService.refreshAccessToken();
+            if (newToken != null) {
+              // Retry the original request with the new token
+              final opts = e.requestOptions;
+              opts.headers['Authorization'] = 'Bearer $newToken';
+              final response = await dio.fetch(opts);
+              return handler.resolve(response);
+            }
+          } catch (_) {
+            // Refresh failed - token is fully expired, user needs to re-login
+          }
         }
         return handler.next(e);
       },

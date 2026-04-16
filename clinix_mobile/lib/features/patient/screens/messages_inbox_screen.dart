@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import '../../../core/services/appointment_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/services/direct_chat_service.dart';
 
-/// Lists appointments that have an active [consultation_id] so the user can open in-app chat.
+/// Lists all direct-message conversations for the current user.
 class MessagesInboxScreen extends StatefulWidget {
   final bool isProvider;
-
   const MessagesInboxScreen({super.key, this.isProvider = false});
 
   @override
@@ -17,7 +17,7 @@ class MessagesInboxScreen extends StatefulWidget {
 class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
   bool _loading = true;
   String? _error;
-  List<Map<String, dynamic>> _rows = [];
+  List<Map<String, dynamic>> _conversations = [];
 
   @override
   void initState() {
@@ -26,126 +26,120 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() { _loading = true; _error = null; });
     try {
-      final all = await AppointmentService.getMyAppointments();
-      final withChat = <Map<String, dynamic>>[];
-      for (final a in all) {
-        final cid = a['consultation_id']?.toString();
-        if (cid != null && cid.isNotEmpty) {
-          withChat.add(Map<String, dynamic>.from(a));
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _rows = withChat;
-          _loading = false;
-        });
-      }
+      final list = await DirectChatService.listConversations();
+      if (!mounted) return;
+      setState(() {
+        _conversations = list;
+        _loading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not load conversations';
+        _loading = false;
+      });
     }
   }
 
-  String _peerTitle(Map<String, dynamic> a) {
-    if (widget.isProvider) {
-      final u = a['patient']?['user'];
-      if (u is Map && u['full_name'] != null) {
-        return u['full_name'].toString();
-      }
-      return 'Patient';
-    }
-    final p = a['provider'];
-    if (p is Map && p['full_name'] != null) {
-      return p['full_name'].toString();
-    }
-    return 'Provider';
-  }
-
-  String _scheduledLabel(Map<String, dynamic> a) {
-    final raw = a['scheduled_at']?.toString();
-    if (raw == null || raw.isEmpty) return '';
+  String _formatTime(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
     try {
-      final dt = DateTime.parse(raw).toLocal();
-      return DateFormat('MMM d, y • HH:mm').format(dt);
+      final dt = DateTime.parse(iso).toLocal();
+      final now = DateTime.now();
+      if (now.difference(dt).inDays == 0) return DateFormat('HH:mm').format(dt);
+      if (now.difference(dt).inDays < 7) return DateFormat('EEE').format(dt);
+      return DateFormat('MMM d').format(dt);
     } catch (_) {
-      return raw;
+      return '';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.grey50,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Messages'),
+        title: Text('Messages', style: AppTextStyles.headlineSmall.copyWith(fontSize: 18)),
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.darkBlue900,
+        iconTheme: const IconThemeData(color: AppColors.darkBlue900),
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.darkBlue900, size: 20),
+          onPressed: () => context.canPop() ? context.pop() : context.go(widget.isProvider ? '/provider/home' : '/patient/home'),
+        ),
       ),
       body: RefreshIndicator(
+        color: AppColors.sky500,
         onRefresh: _load,
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CircularProgressIndicator(color: AppColors.sky500))
             : _error != null
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(24),
-                    children: [
-                      Text(_error!, style: const TextStyle(color: Colors.redAccent)),
-                      const SizedBox(height: 16),
-                      FilledButton(onPressed: _load, child: const Text('Retry')),
-                    ],
-                  )
-                : _rows.isEmpty
-                    ? ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(32),
-                        children: [
-                          Icon(Icons.chat_bubble_outline_rounded, size: 56, color: Colors.grey.shade400),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No message threads yet',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'After you book an appointment and a consultation is started for it, your provider chat will appear here.',
-                            style: TextStyle(color: Colors.grey.shade700, height: 1.4),
-                          ),
-                        ],
-                      )
+                ? ListView(children: [Padding(padding: const EdgeInsets.all(24), child: Text(_error!, style: AppTextStyles.bodyMedium))])
+                : _conversations.isEmpty
+                    ? ListView(children: [
+                        const SizedBox(height: 80),
+                        Icon(Icons.chat_bubble_outline_rounded, size: 64, color: AppColors.grey200),
+                        const SizedBox(height: 16),
+                        Center(child: Text('No conversations yet', style: AppTextStyles.bodyLarge.copyWith(color: AppColors.grey400))),
+                        const SizedBox(height: 6),
+                        Center(child: Text('Tap the chat icon on a doctor to start.', style: AppTextStyles.caption.copyWith(color: AppColors.grey400))),
+                      ])
                     : ListView.separated(
-                        physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: _rows.length,
-                        separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade200),
-                        itemBuilder: (context, i) {
-                          final a = _rows[i];
-                          final cid = a['consultation_id']!.toString();
-                          final title = _peerTitle(a);
-                          final sub = _scheduledLabel(a);
+                        itemCount: _conversations.length,
+                        separatorBuilder: (_, __) => Divider(color: AppColors.grey100, height: 1, indent: 78),
+                        itemBuilder: (ctx, i) {
+                          final c = _conversations[i];
+                          final convId = c['conversation_id']?.toString() ?? '';
+                          final peerName = c['peer_name']?.toString() ?? 'User';
+                          final peerPhoto = c['peer_photo']?.toString();
+                          final last = c['last_message'];
+                          final preview = last is Map
+                              ? (last['message_type'] == 'image'
+                                  ? '📷 Photo'
+                                  : last['message_type'] == 'file'
+                                      ? '📎 File'
+                                      : (last['content']?.toString() ?? ''))
+                              : 'Say hi 👋';
+                          final time = _formatTime(c['last_message_at']?.toString());
+                          final unread = (c['unread_count'] is int) ? c['unread_count'] as int : 0;
+
                           return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                            leading: const CircleAvatar(
-                              backgroundColor: AppColors.sky100,
-                              child: Icon(Icons.chat_rounded, color: AppColors.sky600),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            leading: Container(
+                              width: 50, height: 50,
+                              decoration: BoxDecoration(
+                                color: AppColors.sky100,
+                                shape: BoxShape.circle,
+                                image: (peerPhoto != null && peerPhoto.isNotEmpty)
+                                    ? DecorationImage(image: NetworkImage(peerPhoto), fit: BoxFit.cover)
+                                    : null,
+                              ),
+                              child: (peerPhoto == null || peerPhoto.isEmpty)
+                                  ? const Icon(Icons.person_rounded, color: AppColors.sky500, size: 24)
+                                  : null,
                             ),
-                            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: sub.isEmpty ? null : Text(sub, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                            trailing: const Icon(Icons.chevron_right_rounded),
-                            onTap: () {
-                              final q = Uri.encodeComponent(title);
-                              context.push('/chat/$cid?doctorName=$q');
-                            },
+                            title: Text(peerName, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w700, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text(preview, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(time, style: AppTextStyles.caption.copyWith(color: unread > 0 ? AppColors.sky500 : AppColors.grey400, fontSize: 11)),
+                                const SizedBox(height: 4),
+                                if (unread > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(color: AppColors.sky500, borderRadius: BorderRadius.circular(10)),
+                                    child: Text('$unread', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                                  ),
+                              ],
+                            ),
+                            onTap: () => context.push('/dchat/$convId?name=${Uri.encodeComponent(peerName)}${peerPhoto != null && peerPhoto.isNotEmpty ? '&photo=${Uri.encodeComponent(peerPhoto)}' : ''}'),
                           );
                         },
                       ),

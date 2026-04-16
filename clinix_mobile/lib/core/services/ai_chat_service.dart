@@ -37,6 +37,12 @@ class AiChatService {
     return Map<String, dynamic>.from(response.data ?? {});
   }
 
+  static Future<List<Map<String, dynamic>>> getSessions() async {
+    final response = await _dio.get<List<dynamic>>('chat/sessions/');
+    final data = response.data ?? const [];
+    return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
   static Future<String> sendMessage(String sessionId, String message, {String? imageBase64}) async {
     final response = await _dio.post<Map<String, dynamic>>(
       'chat/$sessionId/message/',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -48,6 +49,112 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
 
   String _getPhotoUrl(String reference) {
     return 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=$reference&key=$_apiKey';
+  }
+
+  Future<void> _call() async {
+    final phone = _clinicDetails?['formatted_phone_number']?.toString();
+    if (phone == null || phone.isEmpty) {
+      _toast('No phone number available for this clinic');
+      return;
+    }
+    if (!mounted) return;
+    // Show a confirmation sheet with the number + Call button
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(4))),
+          const SizedBox(height: 20),
+          Container(
+            width: 60, height: 60,
+            decoration: BoxDecoration(color: AppColors.sky100, shape: BoxShape.circle),
+            child: const Icon(Icons.phone_rounded, color: AppColors.sky500, size: 28),
+          ),
+          const SizedBox(height: 12),
+          Text(_clinicDetails?['name']?.toString() ?? 'Clinic', style: AppTextStyles.headlineSmall),
+          const SizedBox(height: 4),
+          Text(phone, style: AppTextStyles.bodyLarge.copyWith(color: AppColors.darkBlue900, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton.icon(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final uri = Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'\s+'), ''));
+                try {
+                  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  if (!ok) _toast('Could not open phone dialer');
+                } catch (e) {
+                  _toast('Could not open dialer: $e');
+                }
+              },
+              icon: const Icon(Icons.call_rounded, color: Colors.white),
+              label: Text('Call now', style: AppTextStyles.bodyLarge.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.sky500, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _openWebsite() async {
+    final website = _clinicDetails?['website']?.toString();
+    if (website == null || website.isEmpty) {
+      _toast('No website available');
+      return;
+    }
+    try {
+      await launchUrl(Uri.parse(website), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      _toast('Could not open website');
+    }
+  }
+
+  Future<void> _openDirections() async {
+    final name = _clinicDetails?['name']?.toString() ?? '';
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(name)}&query_place_id=${widget.placeId}');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      _toast('Could not open maps');
+    }
+  }
+
+  Future<void> _share() async {
+    final name = _clinicDetails?['name']?.toString() ?? 'this clinic';
+    _toast('Sharing: $name');
+  }
+
+  void _toast(String msg) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  Widget _contactRow(IconData icon, String value, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.grey50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.grey200),
+        ),
+        child: Row(children: [
+          Icon(icon, color: AppColors.sky500, size: 18),
+          const SizedBox(width: 10),
+          Expanded(child: Text(value, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.darkBlue900, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
+          const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.grey400),
+        ]),
+      ),
+    );
   }
 
   @override
@@ -114,12 +221,13 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildQuickAction(Icons.phone_rounded, 'Call', () {}),
-                      _buildQuickAction(Icons.language_rounded, 'Website', () {}),
-                      _buildQuickAction(Icons.share_rounded, 'Share', () {}),
-                      _buildQuickAction(Icons.bookmark_outline_rounded, 'Save', () {}),
+                      _buildQuickAction(Icons.phone_rounded, 'Call', () => _call()),
+                      _buildQuickAction(Icons.language_rounded, 'Website', () => _openWebsite()),
+                      _buildQuickAction(Icons.directions_rounded, 'Directions', () => _openDirections()),
+                      _buildQuickAction(Icons.share_rounded, 'Share', () => _share()),
                     ],
                   ),
+
 
                   const Divider(height: 48),
 

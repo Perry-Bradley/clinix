@@ -182,6 +182,43 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
     setState(() {});
   }
 
+  void _showMoreMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1F2937),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(100))),
+              const SizedBox(height: 12),
+              if (!widget.audioOnly)
+                _MoreMenuItem(
+                  icon: _speakerOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                  label: _speakerOn ? 'Speaker On' : 'Speaker Off',
+                  onTap: () { Navigator.pop(ctx); _toggleSpeaker(); },
+                ),
+              _MoreMenuItem(
+                icon: _onHold ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                label: _onHold ? 'Resume call' : 'Hold call',
+                onTap: () { Navigator.pop(ctx); _toggleHold(); },
+              ),
+              _MoreMenuItem(
+                icon: Icons.chat_bubble_rounded,
+                label: 'Open chat',
+                onTap: () { Navigator.pop(ctx); },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     final e = _engine;
@@ -310,7 +347,7 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
                     Positioned(
                       left: 0,
                       right: 0,
-                      bottom: 24,
+                      bottom: 30,
                       child: Column(
                         children: [
                           if (_onHold)
@@ -323,57 +360,55 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
                               ),
                               child: const Text('Call on hold', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                             ),
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _CallButton(
+                                icon: _muted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                                color: _muted ? Colors.white : Colors.white24,
+                                iconColor: _muted ? Colors.black87 : Colors.white,
+                                onPressed: _toggleMute,
+                              ),
+                              const SizedBox(width: 18),
+                              if (!widget.audioOnly)
                                 _CallButton(
-                                  icon: _muted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                                  color: Colors.white24,
-                                  onPressed: _toggleMute,
-                                  label: _muted ? 'Unmute' : 'Mute',
-                                ),
-                                const SizedBox(width: 14),
+                                  icon: _videoDisabled ? Icons.videocam_off_rounded : Icons.videocam_rounded,
+                                  color: _videoDisabled ? Colors.white : Colors.white24,
+                                  iconColor: _videoDisabled ? Colors.black87 : Colors.white,
+                                  onPressed: _toggleVideo,
+                                )
+                              else
                                 _CallButton(
-                                  icon: _speakerOn ? Icons.volume_up_rounded : Icons.hearing_disabled_rounded,
-                                  color: Colors.white24,
+                                  icon: _speakerOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                                  color: _speakerOn ? Colors.white24 : Colors.white,
+                                  iconColor: _speakerOn ? Colors.white : Colors.black87,
                                   onPressed: _toggleSpeaker,
-                                  label: 'Speaker',
                                 ),
-                                const SizedBox(width: 14),
+                              const SizedBox(width: 18),
+                              if (!widget.audioOnly)
                                 _CallButton(
-                                  icon: _onHold ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                                  color: const Color(0x33F59E0B),
-                                  onPressed: _toggleHold,
-                                  label: _onHold ? 'Resume' : 'Hold',
+                                  icon: Icons.cameraswitch_rounded,
+                                  color: Colors.white24,
+                                  iconColor: Colors.white,
+                                  onPressed: _switchCamera,
                                 ),
-                                if (!widget.audioOnly) ...[
-                                  const SizedBox(width: 14),
-                                  _CallButton(
-                                    icon: _videoDisabled ? Icons.videocam_off_rounded : Icons.videocam_rounded,
-                                    color: Colors.white24,
-                                    onPressed: _toggleVideo,
-                                    label: _videoDisabled ? 'Video Off' : 'Video',
-                                  ),
-                                  const SizedBox(width: 14),
-                                  _CallButton(
-                                    icon: Icons.cameraswitch_rounded,
-                                    color: Colors.white24,
-                                    onPressed: _switchCamera,
-                                    label: 'Switch',
-                                  ),
-                                ],
-                                const SizedBox(width: 14),
-                                _CallButton(
-                                  icon: Icons.call_end_rounded,
-                                  color: Colors.redAccent,
-                                  onPressed: _leave,
-                                  label: 'End',
-                                ),
-                              ],
-                            ),
+                              if (!widget.audioOnly) const SizedBox(width: 18),
+                              // More menu (3-dots) — Speaker, Hold, etc.
+                              _CallButton(
+                                icon: Icons.more_vert_rounded,
+                                color: Colors.white24,
+                                iconColor: Colors.white,
+                                onPressed: _showMoreMenu,
+                              ),
+                              const SizedBox(width: 18),
+                              _CallButton(
+                                icon: Icons.call_end_rounded,
+                                color: Colors.redAccent,
+                                iconColor: Colors.white,
+                                onPressed: _leave,
+                                size: 64,
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -384,35 +419,51 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   }
 }
 
-class _CallButton extends StatelessWidget {
+class _MoreMenuItem extends StatelessWidget {
   final IconData icon;
-  final Color color;
-  final VoidCallback onPressed;
   final String label;
-
-  const _CallButton({required this.icon, required this.color, required this.onPressed, required this.label});
+  final VoidCallback onTap;
+  const _MoreMenuItem({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Material(
-          color: color,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onPressed,
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: Icon(icon, color: Colors.white),
-            ),
-          ),
+    return ListTile(
+      leading: Icon(icon, color: Colors.white, size: 22),
+      title: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      onTap: onTap,
+    );
+  }
+}
+
+class _CallButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final Color iconColor;
+  final VoidCallback onPressed;
+  final double size;
+
+  const _CallButton({
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+    this.iconColor = Colors.white,
+    this.size = 54,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onPressed,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Icon(icon, color: iconColor, size: size * 0.44),
         ),
-        const SizedBox(height: 6),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
-      ],
+      ),
     );
   }
 }

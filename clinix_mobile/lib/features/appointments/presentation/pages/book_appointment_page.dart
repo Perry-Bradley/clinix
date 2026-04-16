@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/appointment_service.dart';
+import '../../../../core/constants/api_constants.dart';
 
 class BookAppointmentPage extends StatefulWidget {
   final String providerId;
@@ -21,11 +23,29 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
   String _consultationFee = '15,000';
 
   List<String> _timeSlots = [];
+  Map<String, dynamic>? _providerData;
+  List<dynamic> _schedules = [];
 
   @override
   void initState() {
     super.initState();
+    _loadProviderInfo();
     _loadSlots();
+  }
+
+  Future<void> _loadProviderInfo() async {
+    try {
+      final response = await Dio().get('${ApiConstants.baseUrl}${ApiConstants.providers}${widget.providerId}/');
+      if (mounted && response.data is Map) {
+        setState(() {
+          _providerData = Map<String, dynamic>.from(response.data as Map);
+          _schedules = (_providerData!['schedules'] as List?) ?? [];
+          final fee = _providerData!['consultation_fee']?.toString() ?? '15000';
+          final parsed = double.tryParse(fee) ?? 15000;
+          _consultationFee = parsed.toInt().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadSlots() async {
@@ -105,19 +125,30 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
                   children: [
                     Container(
                       width: 64, height: 64,
-                      decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.sky500, AppColors.sky300]), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.3), width: 2)),
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
                       child: const Icon(Icons.person_rounded, color: AppColors.white, size: 34),
                     ),
                     const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('Book Appointment', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
-                        const SizedBox(height: 4),
-                        Text('Dr. Marie Nkomo', style: AppTextStyles.headlineLarge.copyWith(color: AppColors.white, fontSize: 18)),
-                        Text('Cardiologist', style: AppTextStyles.caption.copyWith(color: AppColors.sky300)),
-                      ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('Book Appointment', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
+                          const SizedBox(height: 4),
+                          Text(
+                            _providerData?['full_name']?.toString() ?? 'Loading...',
+                            style: AppTextStyles.headlineLarge.copyWith(color: AppColors.white, fontSize: 18),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            _providerData?['other_specialty']?.toString().isNotEmpty == true
+                                ? _providerData!['other_specialty'].toString()
+                                : (_providerData?['specialty']?.toString() ?? ''),
+                            style: AppTextStyles.caption.copyWith(color: AppColors.sky300),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -128,6 +159,49 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+
+                // Working Hours
+                if (_schedules.isNotEmpty) ...[
+                  Text('Working Hours', style: AppTextStyles.headlineMedium),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.sky100.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.sky200),
+                    ),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _schedules.map<Widget>((s) {
+                        final day = (s['day']?.toString() ?? '').toString();
+                        final dayShort = day.length >= 3 ? '${day[0].toUpperCase()}${day.substring(1, 3)}' : day;
+                        final start = s['start_time']?.toString().substring(0, 5) ?? '';
+                        final end = s['end_time']?.toString().substring(0, 5) ?? '';
+                        final isWorking = s['is_working'] == true;
+                        final isSelectedDay = _selectedDate.weekday == (['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].indexOf(day) + 1);
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isSelectedDay ? AppColors.sky500 : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: isSelectedDay ? AppColors.sky500 : AppColors.grey200),
+                          ),
+                          child: Text(
+                            isWorking ? '$dayShort $start-$end' : '$dayShort Off',
+                            style: AppTextStyles.caption.copyWith(
+                              color: isSelectedDay ? Colors.white : (isWorking ? AppColors.darkBlue900 : AppColors.grey400),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
 
                 // Appointment Type
                 Text('Appointment Type', style: AppTextStyles.headlineMedium),

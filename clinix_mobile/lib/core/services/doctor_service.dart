@@ -50,7 +50,7 @@ class DoctorService {
       final response = await _dio.get(
         'nearby/',
         queryParameters: {
-          'available': 'true',
+          // 'available': 'true',
           if (lat != null) 'lat': lat,
           if (lng != null) 'lng': lng,
         },
@@ -72,8 +72,8 @@ class DoctorService {
     try {
       final token = await AuthService.getAccessToken();
       final response = await _dio.get(
-        '/',
-        queryParameters: {'ordering': '-rating', 'limit': 5},
+        'nearby/',
+        queryParameters: {'limit': 5},
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
       

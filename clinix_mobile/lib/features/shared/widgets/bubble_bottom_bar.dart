@@ -15,87 +15,79 @@ class BubbleBottomBar extends StatelessWidget {
     required this.currentIndex,
     required this.onTap,
     required this.items,
-    this.backgroundColor = AppColors.splashSlate900,
-    this.selectedColor = AppColors.sky500,
-    this.unselectedColor = const Color(0x99FFFFFF),
+    this.backgroundColor = Colors.white,
+    this.selectedColor = AppColors.sky600,
+    this.unselectedColor = const Color(0xFF94A3B8), // Slate 400
   });
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Container(
-        height: 64,
-        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.35),
-              blurRadius: 28,
-              offset: const Offset(0, 12),
-            ),
-          ],
+    return Container(
+      height: 85,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(36),
+          topRight: Radius.circular(36),
         ),
-        child: Row(
-          children: items.asMap().entries.map((entry) {
-            final int idx = entry.key;
-            final item = entry.value;
-            final bool isSelected = idx == currentIndex;
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: items.asMap().entries.map((entry) {
+              final int idx = entry.key;
+              final item = entry.value;
+              final bool isSelected = idx == currentIndex;
 
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => onTap(idx),
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 280),
-                  curve: Curves.easeOutCubic,
-                  margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-                  padding: EdgeInsets.symmetric(
-                    vertical: 10,
-                    horizontal: isSelected ? 11 : 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected ? selectedColor : Colors.transparent,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Row(
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onTap(idx),
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.max,
                     children: [
-                      Icon(
-                        item.icon,
-                        color: isSelected ? Colors.white : unselectedColor,
-                        size: 19,
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? selectedColor.withOpacity(0.12) : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          item.icon,
+                          color: isSelected ? selectedColor : unselectedColor,
+                          size: 24,
+                        ),
                       ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          item.label,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          softWrap: false,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : unselectedColor,
-                            fontSize: 11,
-                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                            letterSpacing: -0.2,
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.label,
+                        style: TextStyle(
+                          color: isSelected ? selectedColor : unselectedColor,
+                          fontSize: 11,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            );
-          }).toList(),
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
   }
- }
+}
 
 class BubbleNavItem {
   final IconData icon;

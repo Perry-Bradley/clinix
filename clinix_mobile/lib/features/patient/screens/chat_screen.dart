@@ -67,10 +67,20 @@ class _ChatScreenState extends State<ChatScreen> {
     _chatService.connect(widget.consultationId, token);
     _sub = _chatService.messages.listen((data) {
       if (!mounted) return;
+      final incoming = data['message']?.toString() ?? '';
+      final isMine = data['sender_name'] == _myUserName;
+
+      // Skip echo of my own text messages (already added optimistically)
+      if (isMine && (data['message_type']?.toString() ?? 'text') == 'text') {
+        final existsLocally = _messages.any((m) =>
+          m['isMe'] == true && m['msg'] == incoming && m['type'] == 'text');
+        if (existsLocally) return;
+      }
+
       setState(() {
         _messages.add({
-          'msg': data['message'],
-          'isMe': data['sender_name'] == _myUserName,
+          'msg': incoming,
+          'isMe': isMine,
           'time': 'Now',
           'type': data['message_type'],
           'file_url': data['file_url'],
@@ -105,9 +115,24 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _send() {
-    if (_msgCtrl.text.trim().isEmpty) return;
-    _chatService.sendMessage(_msgCtrl.text.trim());
+    final text = _msgCtrl.text.trim();
+    if (text.isEmpty) return;
+
+    // Optimistic UI — show message immediately so the sender sees it
+    setState(() {
+      _messages.add({
+        'msg': text,
+        'isMe': true,
+        'time': 'Now',
+        'type': 'text',
+        'file_url': null,
+        'file_name': null,
+      });
+    });
+
+    _chatService.sendMessage(text);
     _msgCtrl.clear();
+    _scrollToBottom();
   }
 
   Future<void> _pickImage() async {
@@ -172,18 +197,25 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: const Color(0xFFF7F7F8),
       appBar: AppBar(
         backgroundColor: const Color(0xFFF7F7F8),
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         foregroundColor: AppColors.darkBlue900,
+        iconTheme: const IconThemeData(color: AppColors.darkBlue900),
         title: Text(widget.doctorName ?? 'Consultation', style: AppTextStyles.headlineSmall.copyWith(fontSize: 17)),
         actions: [
           IconButton(
             onPressed: () => _openCall(audioOnly: false),
-            icon: const Icon(Icons.videocam_outlined),
+            iconSize: 30,
+            icon: const Icon(Icons.videocam_rounded, color: AppColors.darkBlue900),
+            tooltip: 'Video call',
           ),
           IconButton(
             onPressed: () => _openCall(audioOnly: true),
-            icon: const Icon(Icons.phone_outlined),
+            iconSize: 28,
+            icon: const Icon(Icons.phone_rounded, color: AppColors.darkBlue900),
+            tooltip: 'Audio call',
           ),
+          const SizedBox(width: 6),
         ],
       ),
       body: Column(
@@ -213,62 +245,51 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildComposer() {
     return Container(
-      padding: EdgeInsets.fromLTRB(12, 8, 12, MediaQuery.of(context).padding.bottom + 12),
+      padding: EdgeInsets.fromLTRB(12, 10, 12, MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F8),
-        border: Border(top: BorderSide(color: Colors.black.withValues(alpha: 0.06))),
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, -2))],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          IconButton(
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                backgroundColor: Colors.transparent,
-                builder: (context) => Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _AttachChip(icon: Icons.image_rounded, label: 'Photo', onTap: () {
-                        Navigator.pop(context);
-                        _pickImage();
-                      }),
-                      _AttachChip(icon: Icons.description_rounded, label: 'File', onTap: () {
-                        Navigator.pop(context);
-                        _pickFile();
-                      }),
-                    ],
-                  ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.add_circle_outline, color: AppColors.grey500, size: 28),
-          ),
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 120),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: AppColors.grey200),
+          // Attach button
+          Material(
+            color: AppColors.grey50,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _openAttachSheet,
+              child: const Padding(
+                padding: EdgeInsets.all(10),
+                child: Icon(Icons.add_rounded, color: AppColors.grey500, size: 22),
               ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Material(
+              color: Colors.white,
+              elevation: 2,
+              shadowColor: Colors.black12,
+              borderRadius: BorderRadius.circular(24),
               child: TextField(
                 controller: _msgCtrl,
                 maxLines: null,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _send(),
-                decoration: const InputDecoration(
+                cursorColor: AppColors.sky500,
+                style: AppTextStyles.bodyLarge.copyWith(color: AppColors.darkBlue900, fontSize: 15),
+                decoration: InputDecoration(
                   hintText: 'Message…',
-                  border: InputBorder.none,
+                  hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                   isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
             ),
@@ -281,7 +302,7 @@ class _ChatScreenState extends State<ChatScreen> {
               customBorder: const CircleBorder(),
               onTap: _send,
               child: const Padding(
-                padding: EdgeInsets.all(12),
+                padding: EdgeInsets.all(10),
                 child: Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
               ),
             ),
@@ -290,28 +311,70 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+
+  void _openAttachSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(100))),
+            const SizedBox(height: 20),
+            Text('Attach', style: AppTextStyles.headlineSmall.copyWith(fontSize: 16)),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _AttachOption(icon: Icons.photo_library_rounded, label: 'Gallery', color: AppColors.sky500, onTap: () { Navigator.pop(context); _pickImage(); }),
+                _AttachOption(icon: Icons.camera_alt_rounded, label: 'Camera', color: AppColors.accentCyan, onTap: () async {
+                  Navigator.pop(context);
+                  final picker = ImagePicker();
+                  final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+                  if (image != null) _uploadAndSend(image.path, 'image');
+                }),
+                _AttachOption(icon: Icons.description_rounded, label: 'File', color: AppColors.accentOrange, onTap: () { Navigator.pop(context); _pickFile(); }),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _AttachChip extends StatelessWidget {
+class _AttachOption extends StatelessWidget {
   final IconData icon;
   final String label;
+  final Color color;
   final VoidCallback onTap;
-
-  const _AttachChip({required this.icon, required this.label, required this.onTap});
+  const _AttachOption({required this.icon, required this.label, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
+      child: SizedBox(
+        width: 90,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: AppColors.sky600, size: 32),
-            const SizedBox(height: 6),
-            Text(label, style: AppTextStyles.caption),
+            Container(
+              width: 56, height: 56,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 26),
+            ),
+            const SizedBox(height: 8),
+            Text(label, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w700)),
           ],
         ),
       ),
