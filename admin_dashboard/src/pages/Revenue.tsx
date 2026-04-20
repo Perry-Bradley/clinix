@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { API_BASE } from '../config';
 
 const Revenue = () => {
   const queryClient = useQueryClient();
@@ -18,7 +19,7 @@ const Revenue = () => {
   const { data: stats } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/admin/dashboard/', {
+      const res = await fetch(`${API_BASE}/admin/dashboard/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       return res.json();
@@ -29,7 +30,7 @@ const Revenue = () => {
   const { data: withdrawals, isLoading: loadingWithdrawals } = useQuery({
     queryKey: ['admin-withdrawals'],
     queryFn: async () => {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/admin/withdrawals/', {
+      const res = await fetch(`${API_BASE}/admin/withdrawals/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       return res.json();
@@ -39,7 +40,7 @@ const Revenue = () => {
   // Withdrawal Action Mutation
   const actionMutation = useMutation({
     mutationFn: async ({ id, action, notes }: { id: number, action: string, notes?: string }) => {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/withdrawals/${id}/action/`, {
+      const res = await fetch(`${API_BASE}/admin/withdrawals/${id}/action/`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

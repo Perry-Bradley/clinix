@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Edit2, Trash2, UserPlus, Phone, Mail, Droplet } from 'lucide-react';
+import { API_BASE } from '../config';
 
 interface Patient {
   patient_id: string;
@@ -15,7 +16,7 @@ interface Patient {
 
 const fetchPatients = async (): Promise<Patient[]> => {
   const token = localStorage.getItem('clinix_admin_token');
-  const res = await fetch('http://127.0.0.1:8000/api/v1/admin/patients/', {
+  const res = await fetch(`${API_BASE}/admin/patients/`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
   if (res.status === 401) {
@@ -51,9 +52,9 @@ const Patients = () => {
   const mutation = useMutation({
     mutationFn: async (formData: any) => {
       const token = localStorage.getItem('clinix_admin_token');
-      const url = editingPatient 
-          ? `http://127.0.0.1:8000/api/v1/admin/patients/${editingPatient.patient_id}/` 
-          : 'http://127.0.0.1:8000/api/v1/admin/patients/';
+      const url = editingPatient
+          ? `${API_BASE}/admin/patients/${editingPatient.patient_id}/`
+          : `${API_BASE}/admin/patients/`;
       const method = editingPatient ? 'PUT' : 'POST';
       
       const payload = {
@@ -88,7 +89,7 @@ const Patients = () => {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const token = localStorage.getItem('clinix_admin_token');
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/patients/${id}/`, {
+      const res = await fetch(`${API_BASE}/admin/patients/${id}/`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Check, X, Eye } from 'lucide-react';
 import DocumentReviewModal from '../components/DocumentReviewModal';
+import { API_BASE } from '../config';
 
 interface VerificationRequest {
   id: string;
@@ -15,7 +16,7 @@ interface VerificationRequest {
 const fetchVerifications = async (): Promise<VerificationRequest[]> => {
   const token = localStorage.getItem('clinix_admin_token');
   try {
-    const res = await fetch('http://127.0.0.1:8000/api/v1/admin/verifications/', {
+    const res = await fetch(`${API_BASE}/admin/verifications/`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -54,7 +55,7 @@ const Verifications = () => {
   const handleReview = async (req: VerificationRequest) => {
     const token = localStorage.getItem('clinix_admin_token');
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/verifications/${req.id}/`, {
+      const res = await fetch(`${API_BASE}/admin/verifications/${req.id}/`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -78,7 +79,7 @@ const Verifications = () => {
     if (!selectedRequest) return;
     const token = localStorage.getItem('clinix_admin_token');
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/verifications/${selectedRequest.id}/`, {
+      const res = await fetch(`${API_BASE}/admin/verifications/${selectedRequest.id}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

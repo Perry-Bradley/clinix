@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE } from '../config';
 
 // Database-backed authentication active
 
@@ -16,7 +17,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/auth/login/', {
+      const res = await fetch(`${API_BASE}/auth/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: email, password })

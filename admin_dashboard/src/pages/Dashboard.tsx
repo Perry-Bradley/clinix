@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, Users, UserCheck, DollarSign, TrendingUp, Settings, Save, RefreshCw } from 'lucide-react';
+import { API_BASE } from '../config';
 
 interface DashboardStats {
   total_patients: number;
@@ -19,7 +20,7 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
   };
 
   try {
-    const res = await fetch('http://127.0.0.1:8000/api/v1/admin/dashboard/', { headers });
+    const res = await fetch(`${API_BASE}/admin/dashboard/`, { headers });
     if (res.status === 401) {
       localStorage.removeItem('clinix_admin_token');
       window.location.href = '/login';
@@ -29,7 +30,7 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
     const data = await res.json();
     
     // Also fetch global fee
-    const feeRes = await fetch('http://127.0.0.1:8000/api/v1/system/settings/fee/', { headers });
+    const feeRes = await fetch(`${API_BASE}/system/settings/fee/`, { headers });
     const feeData = feeRes.ok ? await feeRes.json() : { consultation_fee: 15000 };
     
     return {
@@ -73,7 +74,7 @@ const Dashboard = () => {
     setIsUpdating(true);
     const token = localStorage.getItem('clinix_admin_token');
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/system/settings/fee/', {
+      const res = await fetch(`${API_BASE}/system/settings/fee/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
