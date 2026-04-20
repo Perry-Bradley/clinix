@@ -170,6 +170,10 @@ try:
             'task': 'apps.appointments.tasks.send_appointment_reminders',
             'schedule': crontab(minute=0),
         },
+        'send-medication-reminders': {
+            'task': 'apps.consultations.tasks.send_medication_reminders',
+            'schedule': crontab(minute='*/15'),  # every 15 minutes
+        },
     }
 except ImportError:
     pass

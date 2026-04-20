@@ -2,7 +2,8 @@ from django.urls import path
 from .views import (
     ConsultationStartView, ConsultationDetailView, ConsultationEndView,
     ConsultationPrescriptionView, ConsultationTranscriptView, WebRTCSignalEndpointView,
-    AgoraTokenView, ChatFileUploadView, ChatMessageListView
+    AgoraTokenView, ChatFileUploadView, ChatMessageListView,
+    PatientRemindersView, ReminderLogView, ReminderAdherenceView,
 )
 
 urlpatterns = [
@@ -15,4 +16,7 @@ urlpatterns = [
     path('agora/token/', AgoraTokenView.as_view(), name='agora_token'),
     path('<uuid:pk>/upload/', ChatFileUploadView.as_view(), name='chat_file_upload'),
     path('<uuid:pk>/messages/', ChatMessageListView.as_view(), name='chat_message_list'),
+    path('reminders/', PatientRemindersView.as_view(), name='patient_reminders'),
+    path('reminders/<uuid:reminder_id>/log/', ReminderLogView.as_view(), name='reminder_log'),
+    path('reminders/adherence/', ReminderAdherenceView.as_view(), name='reminder_adherence'),
 ]

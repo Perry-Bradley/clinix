@@ -44,6 +44,40 @@ class Prescription(models.Model):
         db_table = 'prescriptions'
 
 
+class MedicationReminder(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    prescription = models.ForeignKey(Prescription, on_delete=models.CASCADE, related_name='reminders')
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='medication_reminders')
+    medication_name = models.CharField(max_length=200)
+    dosage = models.CharField(max_length=100)
+    frequency = models.CharField(max_length=100)
+    reminder_times = models.JSONField(default=list, help_text='List of HH:MM times for daily reminders')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['medication_name']
+
+    def __str__(self):
+        return f"{self.medication_name} for {self.patient}"
+
+
+class MedicationLog(models.Model):
+    STATUS_CHOICES = [('taken', 'Taken'), ('skipped', 'Skipped'), ('missed', 'Missed')]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reminder = models.ForeignKey(MedicationReminder, on_delete=models.CASCADE, related_name='logs')
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='medication_logs')
+    scheduled_time = models.DateTimeField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='missed')
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-scheduled_time']
+        unique_together = ['reminder', 'scheduled_time']
+
+
 class MedicalRecord(models.Model):
     record_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='medical_records')

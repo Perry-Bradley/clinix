@@ -2,12 +2,12 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
-from .models import Consultation, Prescription, ChatMessage
+from .models import Consultation, Prescription, ChatMessage, MedicationReminder, MedicationLog
 from apps.appointments.models import Appointment
 from .serializers import (
-    ConsultationSerializer, ConsultationStartSerializer, 
+    ConsultationSerializer, ConsultationStartSerializer,
     ConsultationEndSerializer, PrescriptionSerializer, WebRTCSignalSerializer,
-    ChatMessageSerializer
+    ChatMessageSerializer, MedicationReminderSerializer, MedicationLogSerializer
 )
 import uuid
 import os
@@ -71,6 +71,48 @@ class ConsultationEndView(APIView):
         except Consultation.DoesNotExist:
             return Response({'error': 'Consultation not found'}, status=status.HTTP_404_NOT_FOUND)
 
+def _create_reminders_from_prescription(prescription):
+    """Auto-generate MedicationReminder entries from a prescription's medications list."""
+    from datetime import date, timedelta
+    medications = prescription.medications or []
+    for med in medications:
+        name = med.get('name', '').strip()
+        if not name:
+            continue
+        dosage = med.get('dosage', '')
+        frequency = med.get('frequency', '').lower()
+        duration_str = med.get('duration', '7 days')
+
+        # Parse duration to days
+        days = 7
+        for part in duration_str.split():
+            try:
+                days = int(part)
+                break
+            except ValueError:
+                continue
+
+        # Parse frequency to reminder times
+        times = ['08:00']
+        if 'twice' in frequency or '2' in frequency or 'bid' in frequency:
+            times = ['08:00', '20:00']
+        elif 'three' in frequency or '3' in frequency or 'tid' in frequency:
+            times = ['08:00', '14:00', '20:00']
+        elif 'four' in frequency or '4' in frequency or 'qid' in frequency:
+            times = ['08:00', '12:00', '16:00', '20:00']
+
+        MedicationReminder.objects.create(
+            prescription=prescription,
+            patient=prescription.patient,
+            medication_name=name,
+            dosage=dosage,
+            frequency=frequency or 'once daily',
+            reminder_times=times,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=days),
+        )
+
+
 class ConsultationPrescriptionView(generics.CreateAPIView):
     serializer_class = PrescriptionSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -78,11 +120,13 @@ class ConsultationPrescriptionView(generics.CreateAPIView):
     def perform_create(self, serializer):
         consultation_id = self.kwargs.get('pk')
         consultation = Consultation.objects.get(pk=consultation_id)
-        serializer.save(
+        prescription = serializer.save(
             consultation=consultation,
             patient=consultation.appointment.patient,
             provider=consultation.appointment.provider
         )
+        # Auto-generate medication reminders
+        _create_reminders_from_prescription(prescription)
 
 class ConsultationTranscriptView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -175,3 +219,89 @@ class ChatMessageListView(generics.ListAPIView):
     def get_queryset(self):
         consultation_id = self.kwargs.get('pk')
         return ChatMessage.objects.filter(consultation_id=consultation_id).order_by('created_at')
+
+
+# ─── Medication Reminders ──────────────────────────────────────────────────
+
+class PatientRemindersView(APIView):
+    """Patient sees their active medication reminders."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from apps.patients.models import Patient
+        try:
+            patient = Patient.objects.get(patient_id=request.user)
+        except Patient.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+        reminders = MedicationReminder.objects.filter(patient=patient, is_active=True)
+        return Response(MedicationReminderSerializer(reminders, many=True).data)
+
+
+class ReminderLogView(APIView):
+    """Patient logs taken/skipped for a reminder at a specific time."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, reminder_id):
+        logs = MedicationLog.objects.filter(reminder_id=reminder_id).order_by('-scheduled_time')[:30]
+        return Response(MedicationLogSerializer(logs, many=True).data)
+
+    def post(self, request, reminder_id):
+        from apps.patients.models import Patient
+        try:
+            reminder = MedicationReminder.objects.get(id=reminder_id)
+        except MedicationReminder.DoesNotExist:
+            return Response({'error': 'Reminder not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        scheduled_time = request.data.get('scheduled_time')
+        log_status = request.data.get('status', 'taken')
+        if not scheduled_time:
+            return Response({'error': 'scheduled_time required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from datetime import datetime
+        try:
+            dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            return Response({'error': 'Invalid datetime format'}, status=status.HTTP_400_BAD_REQUEST)
+
+        log, created = MedicationLog.objects.update_or_create(
+            reminder=reminder,
+            scheduled_time=dt,
+            defaults={
+                'patient': reminder.patient,
+                'status': log_status,
+                'responded_at': timezone.now(),
+            },
+        )
+        return Response(MedicationLogSerializer(log).data)
+
+
+class ReminderAdherenceView(APIView):
+    """Get adherence stats for a patient's reminders."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from apps.patients.models import Patient
+        try:
+            patient = Patient.objects.get(patient_id=request.user)
+        except Patient.DoesNotExist:
+            return Response({'overall': 0, 'medications': []})
+
+        reminders = MedicationReminder.objects.filter(patient=patient, is_active=True)
+        medications = []
+        total_taken = 0
+        total_logs = 0
+        for r in reminders:
+            logs = r.logs.count()
+            taken = r.logs.filter(status='taken').count()
+            total_taken += taken
+            total_logs += logs
+            medications.append({
+                'id': str(r.id),
+                'name': r.medication_name,
+                'dosage': r.dosage,
+                'adherence': round((taken / logs) * 100) if logs > 0 else None,
+                'total_doses': logs,
+                'taken': taken,
+            })
+        overall = round((total_taken / total_logs) * 100) if total_logs > 0 else None
+        return Response({'overall': overall, 'medications': medications})

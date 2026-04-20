@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Consultation, Prescription, MedicalRecord, ChatMessage
+from .models import Consultation, Prescription, MedicalRecord, ChatMessage, MedicationReminder, MedicationLog
 from apps.providers.models import HealthcareProvider
 
 class PrescriptionSerializer(serializers.ModelSerializer):
@@ -29,6 +29,29 @@ class ConsultationEndSerializer(serializers.Serializer):
 class WebRTCSignalSerializer(serializers.Serializer):
     consultation_id = serializers.UUIDField()
     signal_data = serializers.JSONField()
+
+class MedicationReminderSerializer(serializers.ModelSerializer):
+    adherence_rate = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MedicationReminder
+        fields = '__all__'
+
+    def get_adherence_rate(self, obj):
+        total = obj.logs.count()
+        if total == 0:
+            return None
+        taken = obj.logs.filter(status='taken').count()
+        return round((taken / total) * 100)
+
+
+class MedicationLogSerializer(serializers.ModelSerializer):
+    medication_name = serializers.CharField(source='reminder.medication_name', read_only=True)
+
+    class Meta:
+        model = MedicationLog
+        fields = '__all__'
+
 
 class ChatMessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.SerializerMethodField()
