@@ -54,6 +54,7 @@ INSTALLED_APPS = _ASGI_INSTALLED + [
     'apps.locations',
     'apps.admin_dashboard',
     'apps.health_metrics',
+    'apps.lab_tests',
 ]
 
 MIDDLEWARE = [
@@ -162,14 +163,16 @@ CHANNEL_LAYERS = {
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/1')
 
 # ─── Celery Beat Schedule ────────────────────────────────────────────────────
-from celery.schedules import crontab  # noqa: E402
-CELERY_BEAT_SCHEDULE = {
-    # Send appointment reminders every hour — catches any appointments ~24h out
-    'send-appointment-reminders': {
-        'task': 'apps.appointments.tasks.send_appointment_reminders',
-        'schedule': crontab(minute=0),  # every hour on the hour
-    },
-}
+try:
+    from celery.schedules import crontab  # noqa: E402
+    CELERY_BEAT_SCHEDULE = {
+        'send-appointment-reminders': {
+            'task': 'apps.appointments.tasks.send_appointment_reminders',
+            'schedule': crontab(minute=0),
+        },
+    }
+except ImportError:
+    pass
 CELERY_TIMEZONE = 'Africa/Douala'
 
 SPECTACULAR_SETTINGS = {
