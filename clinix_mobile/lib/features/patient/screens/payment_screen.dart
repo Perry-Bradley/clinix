@@ -29,6 +29,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
       setState(() => _errorMessage = 'Missing appointment. Go back and try booking again.');
       return;
     }
+    final phone = _phoneController.text.trim();
+    if (phone.length < 9) {
+      setState(() => _errorMessage = 'Enter a valid mobile money number (e.g. +237670000000).');
+      return;
+    }
     setState(() {
       _isProcessing = true;
       _errorMessage = null;
@@ -39,34 +44,58 @@ class _PaymentScreenState extends State<PaymentScreen> {
         appointmentId: widget.appointmentId,
         paymentMethod: _paymentMethod,
         amount: total.toDouble(),
-        payerPhone: _phoneController.text.trim(),
+        payerPhone: phone,
       );
+      debugPrint('[Payment] initiate response: $payment');
+
       final paymentId = payment['payment_id']?.toString();
+      final gateway = payment['gateway'];
       if (paymentId == null || paymentId.isEmpty) {
-        throw Exception('Missing payment id');
+        throw Exception('Missing payment id from server');
       }
 
-      var attempts = 0;
-      while (attempts < 8) {
+      // If the gateway said it could not submit, surface its message right away.
+      if (gateway is Map) {
+        final configured = gateway['configured'] == true;
+        final submitted = gateway['submitted'] == true;
+        if (!configured) {
+          throw Exception(
+            gateway['message']?.toString() ??
+                'Payment gateway is not configured. Contact support.',
+          );
+        }
+        if (!submitted) {
+          throw Exception(
+            'Gateway rejected the request: ${gateway['gateway_response'] ?? 'unknown reason'}',
+          );
+        }
+      }
+
+      // Poll up to ~90 seconds (Campay demo can take a while to auto-approve).
+      const maxAttempts = 30; // 30 × 3s = 90s
+      for (var attempt = 0; attempt < maxAttempts; attempt++) {
         await Future.delayed(const Duration(seconds: 3));
-        final status = await PaymentService.getStatus(paymentId);
-        final paymentStatus = status['status']?.toString() ?? 'pending';
+        final statusBody = await PaymentService.getStatus(paymentId);
+        final paymentStatus = statusBody['status']?.toString() ?? 'pending';
+        debugPrint('[Payment] poll #$attempt status=$paymentStatus');
+
         if (paymentStatus == 'success') {
           if (mounted) context.pop(true);
           return;
         }
         if (paymentStatus == 'failed' || paymentStatus == 'refunded') {
-          throw Exception('Payment failed');
+          throw Exception('Payment was declined.');
         }
-        attempts += 1;
       }
 
       if (mounted) {
-        setState(() => _errorMessage = 'Payment is still pending confirmation. Complete the prompt on your phone, then check again shortly.');
+        setState(() => _errorMessage =
+            'Payment is still pending. Complete the prompt on your phone, then come back to this screen — we\'ll auto-confirm.');
       }
     } catch (e) {
+      debugPrint('[Payment] error: $e');
       if (mounted) {
-        setState(() => _errorMessage = 'Payment could not be started. Check your connection and try again.');
+        setState(() => _errorMessage = e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
