@@ -113,7 +113,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                             height: 8,
                             decoration: BoxDecoration(
                               color: _currentPage == i
-                                  ? AppColors.darkBlue800
+                                  ? AppColors.darkBlue500
                                   : AppColors.grey200,
                               borderRadius: BorderRadius.circular(4),
                             ),
@@ -136,7 +136,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                             }
                           },
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.darkBlue800,
+                            backgroundColor: AppColors.darkBlue500,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
@@ -180,11 +180,11 @@ class _OnboardingCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: AppColors.darkBlue900,
+              color: AppColors.darkBlue500,
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.darkBlue900.withOpacity(0.15),
+                  color: AppColors.darkBlue500.withOpacity(0.15),
                   blurRadius: 24,
                   offset: const Offset(0, 12),
                 ),
@@ -199,7 +199,7 @@ class _OnboardingCard extends StatelessWidget {
             style: AppTextStyles.displayLarge.copyWith(
               fontSize: 28,
               letterSpacing: -0.5,
-              color: AppColors.darkBlue900,
+              color: AppColors.darkBlue500,
               fontWeight: FontWeight.w800,
             ),
           ),

@@ -126,11 +126,11 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                           width: 120,
                           height: 120,
                           decoration: BoxDecoration(
-                            color: AppColors.darkBlue900,
+                            color: AppColors.darkBlue500,
                             borderRadius: BorderRadius.circular(28),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.darkBlue900.withOpacity(0.18),
+                                color: AppColors.darkBlue500.withOpacity(0.18),
                                 blurRadius: 30,
                                 offset: const Offset(0, 12),
                               ),
@@ -153,7 +153,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                             fontFamily: 'Inter',
                             fontSize: 42,
                             fontWeight: FontWeight.w900,
-                            color: AppColors.darkBlue900,
+                            color: AppColors.darkBlue500,
                             letterSpacing: 8,
                           ),
                         ),
@@ -192,7 +192,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                     child: LinearProgressIndicator(
                       backgroundColor: AppColors.grey200,
                       valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.darkBlue800,
+                        AppColors.darkBlue500,
                       ),
                     ),
                   ),

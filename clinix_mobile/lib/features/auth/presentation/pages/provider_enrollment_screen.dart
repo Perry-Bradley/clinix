@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/doctor_service.dart';
 import '../../../../core/constants/api_constants.dart';
-import '../widgets/map_location_picker_screen.dart';
 import '../widgets/places_autocomplete_field.dart';
 
 /// Provider clinical onboarding: white surface, splash slate accents, real map-based coordinates.
@@ -117,12 +115,9 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
       }
     }
     if (_currentStep == 2) {
-      if (_resLat == null || _resLng == null) {
-        _toast('Pin your residence or practice on the map so patients can find you.');
-        return;
-      }
-      if (_residenceAddressCtrl.text.trim().isEmpty) {
-        _toast('Add a street address (you can refine text after using the map).');
+      if (_clinicAddressCtrl.text.trim().isEmpty &&
+          _residenceAddressCtrl.text.trim().isEmpty) {
+        _toast('Please enter your practice address.');
         return;
       }
       _submitOnboarding();
@@ -137,46 +132,6 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
 
   void _toast(String m) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
-  }
-
-  Future<void> _openMapPicker({required bool forClinic}) async {
-    final initial = forClinic
-        ? (_clinicLat != null && _clinicLng != null ? LatLng(_clinicLat!, _clinicLng!) : null)
-        : (_resLat != null && _resLng != null ? LatLng(_resLat!, _resLng!) : null);
-
-    final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (_) => MapLocationPickerScreen(
-          title: forClinic ? 'Clinic / facility location' : 'Primary practice location',
-          initialPosition: initial,
-        ),
-      ),
-    );
-    if (result == null || !mounted) return;
-
-    final lat = (result['latitude'] as num).toDouble();
-    final lng = (result['longitude'] as num).toDouble();
-    final formatted = result['formatted_address']?.toString();
-
-    setState(() {
-      if (forClinic) {
-        _clinicLat = lat;
-        _clinicLng = lng;
-        if (formatted != null && formatted.isNotEmpty) {
-          _clinicAddressCtrl.text = formatted;
-        }
-      } else {
-        _resLat = lat;
-        _resLng = lng;
-        if (formatted != null && formatted.isNotEmpty) {
-          _residenceAddressCtrl.text = formatted;
-          final parts = formatted.split(',');
-          if (parts.length >= 2) {
-            _residenceCityCtrl.text = parts[parts.length - 2].trim();
-          }
-        }
-      }
-    });
   }
 
   Future<void> _submitOnboarding() async {
@@ -476,7 +431,7 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Locations on the map',
+          'Where do you practice?',
           style: AppTextStyles.headlineMedium.copyWith(
             color: AppColors.splashSlate900,
             fontWeight: FontWeight.w800,
@@ -485,125 +440,82 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'We use your coordinates to match nearby patients. Google Maps picks an accurate pin.',
+          'Patients use this to find you on the map. The address autocomplete will fill in the rest.',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, height: 1.45),
         ),
-        const SizedBox(height: 20),
-        _locationCard(
-          title: 'Primary location (required)',
-          subtitle: 'Residence or main practice — used for distance search.',
-          lat: _resLat,
-          lng: _resLng,
-          onPickMap: () => _openMapPicker(forClinic: false),
-        ),
-        const SizedBox(height: 16),
-        PlacesAutocompleteField(
-          controller: _residenceAddressCtrl,
-          hint: 'Type your practice address',
-          onSelected: (address, lat, lng) {
-            setState(() {
-              if (lat != null) _resLat = lat;
-              if (lng != null) _resLng = lng;
-              final parts = address.split(',');
-              if (parts.length >= 2) _residenceCityCtrl.text = parts[parts.length - 2].trim();
-            });
-          },
-        ),
-        const SizedBox(height: 12),
-        _textField(_residenceCityCtrl, 'City / region'),
-        const SizedBox(height: 28),
-        Text(
-          'Facility (optional)',
-          style: TextStyle(
-            color: AppColors.splashSlate900,
-            fontWeight: FontWeight.w800,
-            fontSize: 16,
-          ),
-        ),
-        const SizedBox(height: 8),
-        _textField(_clinicNameCtrl, 'Hospital or clinic name'),
-        const SizedBox(height: 12),
-        _locationCard(
-          title: 'Facility map pin (optional)',
-          subtitle: 'If different from your primary location.',
-          lat: _clinicLat,
-          lng: _clinicLng,
-          onPickMap: () => _openMapPicker(forClinic: true),
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 24),
+
+        _fieldLabel('Hospital or clinic name'),
+        _textField(_clinicNameCtrl, 'e.g. Laquintinie Hospital'),
+        const SizedBox(height: 18),
+
+        _fieldLabel('Practice address *'),
+        const SizedBox(height: 6),
         PlacesAutocompleteField(
           controller: _clinicAddressCtrl,
-          hint: 'Type clinic / facility address',
+          hint: 'Start typing your address…',
           onSelected: (address, lat, lng) {
             setState(() {
-              if (lat != null) _clinicLat = lat;
-              if (lng != null) _clinicLng = lng;
+              // Mirror the picked coordinates onto the residence fields so
+              // the existing distance search keeps working.
+              if (lat != null) {
+                _clinicLat = lat;
+                _resLat = lat;
+              }
+              if (lng != null) {
+                _clinicLng = lng;
+                _resLng = lng;
+              }
+              _residenceAddressCtrl.text = address;
+              // Derive city / region from the picked address — last comma-
+              // separated segment before the country is usually the region,
+              // and the one before that is the city.
+              final parts = address
+                  .split(',')
+                  .map((s) => s.trim())
+                  .where((s) => s.isNotEmpty)
+                  .toList();
+              if (parts.length >= 3) {
+                _residenceCityCtrl.text =
+                    '${parts[parts.length - 3]}, ${parts[parts.length - 2]}';
+              } else if (parts.length >= 2) {
+                _residenceCityCtrl.text = parts[parts.length - 2];
+              } else if (parts.isNotEmpty) {
+                _residenceCityCtrl.text = parts.first;
+              }
             });
           },
         ),
-      ],
-    );
-  }
-
-  Widget _locationCard({
-    required String title,
-    required String subtitle,
-    required double? lat,
-    required double? lng,
-    required VoidCallback onPickMap,
-  }) {
-    final has = lat != null && lng != null;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.grey50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: has ? AppColors.sky200 : AppColors.grey200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.splashSlate900)),
-          const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(fontSize: 13, color: AppColors.grey500, height: 1.35)),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Icon(
-                has ? Icons.check_circle_rounded : Icons.location_searching_rounded,
-                color: has ? AppColors.accentGreen : AppColors.sky600,
-                size: 22,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  has
-                      ? '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}'
-                      : 'No pin yet — open the map',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: has ? AppColors.grey700 : AppColors.grey500,
+        if (_residenceCityCtrl.text.trim().isNotEmpty) ...[
+          const SizedBox(height: 12),
+          // Read-only confirmation chip showing what we parsed as city/region.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.grey50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.grey200),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.location_city_rounded,
+                    color: AppColors.darkBlue500, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _residenceCityCtrl.text,
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.grey700,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12.5,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onPickMap,
-            icon: const Icon(Icons.map_rounded, size: 20),
-            label: Text(has ? 'Adjust on map' : 'Choose on Google Map'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.splashSlate900,
-              side: BorderSide(color: AppColors.splashSlate900.withValues(alpha: 0.35)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ],
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 
@@ -636,74 +548,92 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
         'icon': Icons.health_and_safety_rounded,
       },
     ];
-    return Row(
+    return Column(
       children: kinds.map((k) {
         final selected = _providerKind == k['key'];
         final isLast = k['key'] == kinds.last['key'];
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: isLast ? 0 : 10),
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _providerKind = k['key']! as String;
-                  _selectedSpecialty = null;
-                  _specialties = const [];
-                  // Reset doctor role on kind switch.
-                  if (_providerKind == 'nurse') {
-                    _doctorRole = 'generalist';
-                  }
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-                decoration: BoxDecoration(
-                  color: selected ? AppColors.darkBlue800 : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: selected ? AppColors.darkBlue800 : AppColors.grey200,
-                    width: selected ? 1.5 : 1,
+        return Padding(
+          padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                _providerKind = k['key']! as String;
+                _selectedSpecialty = null;
+                _specialties = const [];
+                if (_providerKind == 'nurse') {
+                  _doctorRole = 'generalist';
+                }
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFFEFF6FF) : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: selected ? AppColors.darkBlue500 : AppColors.grey200,
+                  width: selected ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: selected ? AppColors.darkBlue500 : AppColors.grey50,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      k['icon'] as IconData,
+                      color: selected ? Colors.white : AppColors.darkBlue500,
+                      size: 20,
+                    ),
                   ),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 44, height: 44,
-                      decoration: BoxDecoration(
-                        color: selected ? Colors.white.withOpacity(0.15) : AppColors.sky100,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        k['icon'] as IconData,
-                        color: selected ? Colors.white : AppColors.darkBlue800,
-                        size: 22,
-                      ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          k['label']! as String,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: AppColors.darkBlue900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          k['sub']! as String,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: AppColors.grey500,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      k['label']! as String,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        color: selected ? Colors.white : AppColors.darkBlue900,
+                  ),
+                  // Radio indicator
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 22, height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: selected ? AppColors.darkBlue500 : AppColors.grey200,
+                        width: 2,
                       ),
+                      color: selected ? AppColors.darkBlue500 : Colors.white,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      k['sub']! as String,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11,
-                        color: selected
-                            ? Colors.white.withOpacity(0.85)
-                            : AppColors.grey500,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
+                    child: selected
+                        ? const Icon(Icons.check_rounded,
+                            color: Colors.white, size: 14)
+                        : null,
+                  ),
+                ],
               ),
             ),
           ),

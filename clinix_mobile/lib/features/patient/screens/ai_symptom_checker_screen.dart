@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/services/ai_chat_service.dart';
+import '../../../core/constants/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
