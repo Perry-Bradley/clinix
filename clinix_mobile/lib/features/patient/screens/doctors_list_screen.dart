@@ -478,81 +478,203 @@ class _DoctorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = doctor['full_name']?.toString() ?? 'Doctor';
-    final spec = (doctor['other_specialty']?.toString().isNotEmpty == true)
-        ? doctor['other_specialty']
-        : (doctor['specialty'] ?? 'General Practitioner');
+    final providerRole = doctor['provider_role']?.toString() ?? 'generalist';
+    // Prefer admin-configured specialty name; fall back to legacy fields.
+    String spec;
+    if (providerRole == 'generalist') {
+      spec = 'Generalist';
+    } else {
+      spec = (doctor['specialty_name']?.toString().isNotEmpty == true)
+          ? doctor['specialty_name'].toString()
+          : (doctor['other_specialty']?.toString().isNotEmpty == true
+              ? doctor['other_specialty'].toString()
+              : (doctor['specialty']?.toString() ?? 'Specialist'));
+    }
     final ratingValue = double.tryParse(doctor['rating']?.toString() ?? '0.0') ?? 0.0;
     final rating = ratingValue.toStringAsFixed(1);
     final status = doctor['status']?.toString() ?? 'Offline';
+    final feeRaw = doctor['consultation_fee']?.toString() ?? '0';
+    final fee = double.tryParse(feeRaw)?.toInt() ?? 0;
 
-    // Get real location from provider data
-    final locations = (doctor['locations'] as List?) ?? [];
-    String locationText = 'Location unavailable';
-    if (locations.isNotEmpty) {
-      final loc = locations.first;
-      final city = loc['city']?.toString() ?? '';
-      final region = loc['region']?.toString() ?? '';
-      locationText = [city, region].where((s) => s.isNotEmpty).join(', ');
-      if (locationText.isEmpty) locationText = loc['address']?.toString() ?? 'Location unavailable';
+    // Resolve a human-readable location from the doctor's locations list.
+    final locations = (doctor['locations'] as List?) ?? const [];
+    Map<String, dynamic>? primaryLoc;
+    for (final l in locations) {
+      if (l is Map) {
+        final m = Map<String, dynamic>.from(l);
+        // Prefer a clinic location, fall back to residence.
+        if (m['location_type']?.toString() == 'clinic') {
+          primaryLoc = m;
+          break;
+        }
+        primaryLoc ??= m;
+      }
+    }
+    String locationText = '';
+    if (primaryLoc != null) {
+      final city = primaryLoc['city']?.toString().trim() ?? '';
+      final region = primaryLoc['region']?.toString().trim() ?? '';
+      final address = primaryLoc['address']?.toString().trim() ?? '';
+      final facility = primaryLoc['facility_name']?.toString().trim() ?? '';
+      final cityRegion = [city, region].where((s) => s.isNotEmpty).join(', ');
+      if (facility.isNotEmpty) {
+        locationText = cityRegion.isNotEmpty ? '$facility · $cityRegion' : facility;
+      } else if (cityRegion.isNotEmpty) {
+        locationText = cityRegion;
+      } else if (address.isNotEmpty) {
+        locationText = address;
+      }
     }
 
     return GestureDetector(
       onTap: () => context.push('/patient/doctor-profile/${doctor['provider_id']}'),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
+        margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.grey200),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 56, height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.sky100,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.person_outline_rounded, color: AppColors.sky600, size: 28),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 56, height: 56,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.sky400, AppColors.darkBlue800],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.local_hospital_rounded,
+                      color: Colors.white, size: 26),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Flexible(child: Text(name, style: AppTextStyles.headlineSmall.copyWith(fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                      const SizedBox(width: 6),
-                      _StatusDot(status: status),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              style: AppTextStyles.headlineSmall.copyWith(
+                                fontSize: 15.5,
+                                color: AppColors.darkBlue900,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          _StatusDot(status: status),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          // Specialty pill
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.sky100,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                spec,
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.sky600,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded,
+                              color: Color(0xFFFBBF24), size: 14),
+                          const SizedBox(width: 3),
+                          Text(rating,
+                              style: const TextStyle(
+                                  fontSize: 12.5, fontWeight: FontWeight.bold,
+                                  color: AppColors.darkBlue900)),
+                          if (fee > 0) ...[
+                            const SizedBox(width: 10),
+                            Text(
+                              '$fee XAF',
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.grey500,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
-                  Text(spec, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 14),
-                      const SizedBox(width: 4),
-                      Text(rating, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.location_on_rounded, size: 14, color: AppColors.grey400),
-                      const SizedBox(width: 4),
-                      Flexible(child: Text(locationText, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                    ],
+                ),
+                GestureDetector(
+                  onTap: () => context.push(
+                    '/dchat/launch/${doctor['provider_id']}?name=${Uri.encodeComponent(name)}',
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.darkBlue800,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.chat_bubble_rounded,
+                        color: Colors.white, size: 16),
+                  ),
+                ),
+              ],
+            ),
+            // Location row — full width, prominent, with map pin
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.grey50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.grey200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on_rounded,
+                      color: AppColors.darkBlue600, size: 14),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      locationText.isEmpty
+                          ? 'Location not set'
+                          : locationText,
+                      style: AppTextStyles.caption.copyWith(
+                        color: locationText.isEmpty
+                            ? AppColors.grey400
+                            : AppColors.grey700,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
-              ),
-            ),
-            GestureDetector(
-              onTap: () => context.push('/dchat/launch/${doctor['provider_id']}?name=${Uri.encodeComponent(name)}'),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.sky500,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 18),
               ),
             ),
           ],

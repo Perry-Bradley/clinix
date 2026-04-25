@@ -5,10 +5,15 @@ from apps.locations.models import Location
 
 
 class SpecialtySerializer(serializers.ModelSerializer):
+    provider_count = serializers.SerializerMethodField(read_only=True)
+
+    def get_provider_count(self, obj):
+        return obj.providers.count()
+
     class Meta:
         model = Specialty
-        fields = ('specialty_id', 'name', 'role', 'description', 'is_active', 'created_at')
-        read_only_fields = ('specialty_id', 'created_at')
+        fields = ('specialty_id', 'name', 'description', 'is_active', 'created_at', 'provider_count')
+        read_only_fields = ('specialty_id', 'created_at', 'provider_count')
 
 class ProviderScheduleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -69,12 +74,11 @@ class ProviderPublicSerializer(serializers.ModelSerializer):
         return 'Offline'
 
     specialty_name = serializers.CharField(source='specialty_obj.name', read_only=True)
-    specialty_role = serializers.CharField(source='specialty_obj.role', read_only=True)
 
     class Meta:
         model = HealthcareProvider
         fields = ('provider_id', 'full_name', 'user_photo', 'specialty', 'other_specialty',
-                  'provider_role', 'specialty_obj', 'specialty_name', 'specialty_role',
+                  'provider_role', 'specialty_obj', 'specialty_name',
                   'years_experience', 'bio', 'consultation_fee', 'is_available', 'rating',
                   'total_consultations', 'review_count', 'status', 'locations', 'schedules')
         

@@ -54,90 +54,112 @@ class _OnboardingPageState extends State<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(gradient: AppColors.splashBackgroundGradient),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.topRight,
-                child: TextButton(
-                  onPressed: () async { await _markOnboardingSeen(); if (context.mounted) context.go('/login'); },
-                  child: Text(
-                    'Skip',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      fontWeight: FontWeight.w600,
-                    ),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Subtle sky-blue glow in the top-right — light accent on white.
+            Positioned(
+              top: -100,
+              right: -100,
+              child: Container(
+                width: 280, height: 280,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [AppColors.sky100, Colors.white.withOpacity(0)],
                   ),
                 ),
               ),
-              Expanded(
-                child: PageView.builder(
-                  controller: _controller,
-                  onPageChanged: (i) => setState(() => _currentPage = i),
-                  itemCount: _pages.length,
-                  itemBuilder: (ctx, i) => _OnboardingCard(data: _pages[i]),
+            ),
+            Column(
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: TextButton(
+                    onPressed: () async {
+                      await _markOnboardingSeen();
+                      if (context.mounted) context.go('/login');
+                    },
+                    child: Text(
+                      'Skip',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.grey500,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        _pages.length,
-                        (i) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: _currentPage == i ? 28 : 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: _currentPage == i ? AppColors.sky400 : Colors.white.withValues(alpha: 0.35),
-                            borderRadius: BorderRadius.circular(4),
+                Expanded(
+                  child: PageView.builder(
+                    controller: _controller,
+                    onPageChanged: (i) => setState(() => _currentPage = i),
+                    itemCount: _pages.length,
+                    itemBuilder: (ctx, i) => _OnboardingCard(data: _pages[i]),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          _pages.length,
+                          (i) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: _currentPage == i ? 28 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: _currentPage == i
+                                  ? AppColors.darkBlue800
+                                  : AppColors.grey200,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 28),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () async {
-                          if (_currentPage < _pages.length - 1) {
-                            _controller.nextPage(
-                              duration: const Duration(milliseconds: 350),
-                              curve: Curves.easeOutCubic,
-                            );
-                          } else {
-                            await _markOnboardingSeen();
-                            if (context.mounted) context.go('/login');
-                          }
-                        },
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: AppColors.splashSlate900,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                          _currentPage == _pages.length - 1 ? 'Get started' : 'Continue',
-                          style: AppTextStyles.labelLarge.copyWith(
-                            color: AppColors.splashSlate900,
-                            fontWeight: FontWeight.w800,
+                      const SizedBox(height: 28),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: () async {
+                            if (_currentPage < _pages.length - 1) {
+                              _controller.nextPage(
+                                duration: const Duration(milliseconds: 350),
+                                curve: Curves.easeOutCubic,
+                              );
+                            } else {
+                              await _markOnboardingSeen();
+                              if (context.mounted) context.go('/login');
+                            }
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.darkBlue800,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            _currentPage == _pages.length - 1
+                                ? 'Get started'
+                                : 'Continue',
+                            style: AppTextStyles.labelLarge.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -158,18 +180,17 @@ class _OnboardingCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(36),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+              color: AppColors.darkBlue900,
+              borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 32,
-                  offset: const Offset(0, 18),
+                  color: AppColors.darkBlue900.withOpacity(0.15),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
                 ),
               ],
             ),
-            child: Icon(data.icon, size: 72, color: Colors.white),
+            child: Icon(data.icon, size: 64, color: Colors.white),
           ),
           const SizedBox(height: 40),
           Text(
@@ -178,17 +199,17 @@ class _OnboardingCard extends StatelessWidget {
             style: AppTextStyles.displayLarge.copyWith(
               fontSize: 28,
               letterSpacing: -0.5,
-              color: Colors.white,
+              color: AppColors.darkBlue900,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Text(
             data.subtitle,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyLarge.copyWith(
-              color: Colors.white.withValues(alpha: 0.82),
-              fontSize: 16,
+              color: AppColors.grey500,
+              fontSize: 15.5,
               height: 1.55,
             ),
           ),

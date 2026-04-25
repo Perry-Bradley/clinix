@@ -87,24 +87,29 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // Background Gradient
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0F172A), // Slate 900
-                  Color(0xFF1E293B), // Slate 800
-                  Color(0xFF0F172A),
-                ],
+          // Subtle dark-blue glow in the corner — gives the page life without
+          // turning the whole splash blue.
+          Positioned(
+            top: -120,
+            right: -120,
+            child: Container(
+              width: 320, height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.sky100,
+                    Colors.white.withOpacity(0),
+                  ],
+                ),
               ),
             ),
           ),
-          
-          // Animated Content
+
+          // Animated content
           Center(
             child: AnimatedBuilder(
               animation: _mainController,
@@ -116,29 +121,18 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Logo Container with Glassmorphism
+                        // Logo block — dark navy badge so the logo pops on white.
                         Container(
                           width: 120,
                           height: 120,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.white.withOpacity(0.2),
-                                Colors.white.withOpacity(0.05),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(32),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
-                              width: 1.5,
-                            ),
+                            color: AppColors.darkBlue900,
+                            borderRadius: BorderRadius.circular(28),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.sky500.withOpacity(0.3),
-                                blurRadius: 40,
-                                spreadRadius: -10,
+                                color: AppColors.darkBlue900.withOpacity(0.18),
+                                blurRadius: 30,
+                                offset: const Offset(0, 12),
                               ),
                             ],
                           ),
@@ -151,7 +145,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 28),
                         // App Name
                         const Text(
                           'CLINIX',
@@ -159,19 +153,18 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                             fontFamily: 'Inter',
                             fontSize: 42,
                             fontWeight: FontWeight.w900,
-                            color: Colors.white,
+                            color: AppColors.darkBlue900,
                             letterSpacing: 8,
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        // Tagline
+                        const SizedBox(height: 10),
                         Text(
                           'Pioneering Modern Healthcare',
                           style: TextStyle(
                             fontFamily: 'Inter',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w300,
-                            color: AppColors.sky200.withOpacity(0.8),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: AppColors.grey500,
                             letterSpacing: 2,
                           ),
                         ),
@@ -182,8 +175,8 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
               },
             ),
           ),
-          
-          // Bottom Loading Indicator
+
+          // Bottom progress
           Positioned(
             bottom: 60,
             left: 0,
@@ -192,11 +185,16 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
               opacity: _fadeAnimation,
               child: Center(
                 child: SizedBox(
-                  width: 40,
-                  height: 2,
-                  child: LinearProgressIndicator(
-                    backgroundColor: Colors.white.withOpacity(0.1),
-                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.sky400),
+                  width: 56,
+                  height: 3,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: LinearProgressIndicator(
+                      backgroundColor: AppColors.grey200,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppColors.darkBlue800,
+                      ),
+                    ),
                   ),
                 ),
               ),

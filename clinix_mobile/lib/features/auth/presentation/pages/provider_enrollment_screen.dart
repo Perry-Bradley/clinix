@@ -21,13 +21,21 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
   int _currentStep = 0;
   bool _isLoading = false;
 
-  // Provider role: generalist | specialist | nurse
-  String _providerRole = 'generalist';
-  // Selected admin-configured specialty (only relevant for specialist/nurse).
+  // Top-level kind: 'doctor' | 'nurse'
+  String _providerKind = 'doctor';
+  // For doctors: 'generalist' | 'specialist'. For nurses we just store 'nurse'.
+  String _doctorRole = 'generalist';
+  // Selected admin-configured specialty (only when doctor + specialist).
   Map<String, dynamic>? _selectedSpecialty;
-  // Loaded list of available specialties for the current role.
+  // Loaded list of available specialties.
   List<Map<String, dynamic>> _specialties = const [];
   bool _loadingSpecialties = false;
+
+  /// Resolved provider_role to send to the backend.
+  String get _providerRole {
+    if (_providerKind == 'nurse') return 'nurse';
+    return _doctorRole; // 'generalist' or 'specialist'
+  }
 
   final _bioCtrl = TextEditingController();
   final _expCtrl = TextEditingController();
@@ -59,17 +67,14 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
     }
   }
 
-  Future<void> _loadSpecialties(String role) async {
+  Future<void> _loadSpecialties() async {
     setState(() {
       _loadingSpecialties = true;
       _specialties = const [];
       _selectedSpecialty = null;
     });
     try {
-      final res = await Dio().get(
-        '${ApiConstants.baseUrl}providers/specialties/',
-        queryParameters: {'role': role},
-      );
+      final res = await Dio().get('${ApiConstants.baseUrl}providers/specialties/');
       final data = res.data;
       if (data is List) {
         _specialties = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
@@ -104,8 +109,10 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
         _toast('Please add a short professional bio or title.');
         return;
       }
-      if ((_providerRole == 'specialist' || _providerRole == 'nurse') && _selectedSpecialty == null) {
-        _toast('Please pick your ${_providerRole == 'nurse' ? 'nurse role' : 'specialty'} from the list.');
+      if (_providerKind == 'doctor' &&
+          _doctorRole == 'specialist' &&
+          _selectedSpecialty == null) {
+        _toast('Please pick your specialty from the list.');
         return;
       }
     }
@@ -347,16 +354,20 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, height: 1.4),
         ),
         const SizedBox(height: 24),
-        _fieldLabel('What are you?'),
+        _fieldLabel('Are you a doctor or a nurse?'),
         const SizedBox(height: 6),
-        _roleSelector(),
-        if (_providerRole == 'specialist' || _providerRole == 'nurse') ...[
+        _kindSelector(),
+        if (_providerKind == 'doctor') ...[
           const SizedBox(height: 18),
-          _fieldLabel(_providerRole == 'nurse'
-              ? 'Pick your nursing role'
-              : 'Pick your specialty'),
+          _fieldLabel('Doctor type'),
           const SizedBox(height: 6),
-          _specialtyDropdown(),
+          _doctorTypeSelector(),
+          if (_doctorRole == 'specialist') ...[
+            const SizedBox(height: 18),
+            _fieldLabel('Pick your specialty'),
+            const SizedBox(height: 6),
+            _specialtyDropdown(),
+          ],
         ],
         const SizedBox(height: 20),
         _fieldLabel('Medical license number *'),
@@ -610,23 +621,114 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
     );
   }
 
-  Widget _roleSelector() {
-    const roles = [
-      {'key': 'generalist', 'label': 'Generalist', 'sub': 'General medicine'},
-      {'key': 'specialist', 'label': 'Specialist', 'sub': 'Choose specialty'},
-      {'key': 'nurse', 'label': 'Nurse', 'sub': 'Choose role'},
+  Widget _kindSelector() {
+    final kinds = [
+      {
+        'key': 'doctor',
+        'label': 'Doctor',
+        'sub': 'Generalist or specialist',
+        'icon': Icons.local_hospital_rounded,
+      },
+      {
+        'key': 'nurse',
+        'label': 'Nurse',
+        'sub': 'Nursing professional',
+        'icon': Icons.health_and_safety_rounded,
+      },
     ];
     return Row(
-      children: roles.map((r) {
-        final selected = _providerRole == r['key'];
+      children: kinds.map((k) {
+        final selected = _providerKind == k['key'];
+        final isLast = k['key'] == kinds.last['key'];
         return Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: EdgeInsets.only(right: isLast ? 0 : 10),
             child: GestureDetector(
               onTap: () {
-                setState(() => _providerRole = r['key']!);
-                if (r['key'] != 'generalist') {
-                  _loadSpecialties(r['key']!);
+                setState(() {
+                  _providerKind = k['key']! as String;
+                  _selectedSpecialty = null;
+                  _specialties = const [];
+                  // Reset doctor role on kind switch.
+                  if (_providerKind == 'nurse') {
+                    _doctorRole = 'generalist';
+                  }
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.darkBlue800 : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: selected ? AppColors.darkBlue800 : AppColors.grey200,
+                    width: selected ? 1.5 : 1,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(
+                        color: selected ? Colors.white.withOpacity(0.15) : AppColors.sky100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        k['icon'] as IconData,
+                        color: selected ? Colors.white : AppColors.darkBlue800,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      k['label']! as String,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        color: selected ? Colors.white : AppColors.darkBlue900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      k['sub']! as String,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        color: selected
+                            ? Colors.white.withOpacity(0.85)
+                            : AppColors.grey500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _doctorTypeSelector() {
+    const types = [
+      {'key': 'generalist', 'label': 'Generalist', 'sub': 'General medicine'},
+      {'key': 'specialist', 'label': 'Specialist', 'sub': 'Choose specialty'},
+    ];
+    return Row(
+      children: types.map((t) {
+        final selected = _doctorRole == t['key'];
+        final isLast = t['key'] == types.last['key'];
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: isLast ? 0 : 10),
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _doctorRole = t['key']!);
+                if (t['key'] == 'specialist') {
+                  _loadSpecialties();
                 } else {
                   setState(() {
                     _selectedSpecialty = null;
@@ -648,7 +750,7 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
                 child: Column(
                   children: [
                     Text(
-                      r['label']!,
+                      t['label']!,
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontWeight: FontWeight.w800,
@@ -658,11 +760,13 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      r['sub']!,
+                      t['sub']!,
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 11,
-                        color: selected ? Colors.white.withOpacity(0.85) : AppColors.grey500,
+                        color: selected
+                            ? Colors.white.withOpacity(0.85)
+                            : AppColors.grey500,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -712,7 +816,7 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'No options yet — please ask the admin to configure ${_providerRole == 'nurse' ? 'nursing roles' : 'specialties'}.',
+                'No options yet — please ask the admin to configure specialties.',
                 style: AppTextStyles.caption.copyWith(color: const Color(0xFF9A3412)),
               ),
             ),
@@ -722,7 +826,7 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
     }
     return DropdownButtonFormField<String>(
       value: _selectedSpecialty?['specialty_id']?.toString(),
-      decoration: _decoration(_providerRole == 'nurse' ? 'Pick a role' : 'Pick a specialty'),
+      decoration: _decoration('Pick a specialty'),
       items: _specialties
           .map((s) => DropdownMenuItem<String>(
                 value: s['specialty_id']?.toString(),

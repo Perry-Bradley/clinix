@@ -60,10 +60,7 @@ class _ReferralFormPageState extends State<ReferralFormPage> {
 
   Future<void> _loadSpecialties() async {
     try {
-      final res = await Dio().get(
-        '${ApiConstants.baseUrl}providers/specialties/',
-        queryParameters: {'role': 'specialist'},
-      );
+      final res = await Dio().get('${ApiConstants.baseUrl}providers/specialties/');
       final data = res.data;
       if (data is List) {
         setState(() {

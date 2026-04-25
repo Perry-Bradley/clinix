@@ -5,29 +5,24 @@ import uuid
 
 
 class Specialty(models.Model):
-    """Admin-configured catalogue of medical specialties / nurse roles.
+    """Admin-configured catalogue of medical specialties.
 
-    Used to populate the provider signup dropdown and to filter doctor lookups
-    when the AI recommends a doctor for a patient's case.
+    Used to populate the provider signup dropdown for specialists and to
+    filter doctor lookups when the AI recommends a doctor for a patient's
+    case.
     """
-    ROLE_CHOICES = (
-        ('specialist', 'Specialist'),
-        ('nurse', 'Nurse'),
-    )
-
     specialty_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=120, unique=True)
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='specialist')
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'specialties'
-        ordering = ['role', 'name']
+        ordering = ['name']
 
     def __str__(self):
-        return f'{self.name} ({self.role})'
+        return self.name
 
 
 class HealthcareProvider(models.Model):

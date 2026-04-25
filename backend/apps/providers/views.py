@@ -224,7 +224,7 @@ class ProviderDashboardView(APIView):
         })
 
 class SpecialtyListView(generics.ListAPIView):
-    """Public list of admin-configured specialties / nurse roles.
+    """Public list of admin-configured specialties.
 
     Used by the mobile provider signup screen to populate the dropdown,
     and by the AI doctor-recommendation flow to map AI-detected specialty
@@ -235,11 +235,7 @@ class SpecialtyListView(generics.ListAPIView):
     authentication_classes = []
 
     def get_queryset(self):
-        qs = Specialty.objects.filter(is_active=True)
-        role = self.request.query_params.get('role')
-        if role:
-            qs = qs.filter(role=role)
-        return qs
+        return Specialty.objects.filter(is_active=True)
 
 
 class ProviderNearbyView(generics.ListAPIView):
