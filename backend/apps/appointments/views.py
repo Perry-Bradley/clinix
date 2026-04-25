@@ -27,9 +27,18 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
             'consultation',
         )
         if user.user_type == 'patient':
+            # Patients see all of their own appointments — including
+            # pending-payment ones, so they can resume booking flows.
             return qs.filter(patient__patient_id=user).order_by('-scheduled_at')
         if user.user_type == 'provider':
-            return qs.filter(provider__provider_id=user).order_by('-scheduled_at')
+            # Providers must NOT see appointments that haven't been paid
+            # for yet. Only confirmed / completed / cancelled / no-show
+            # appointments belong on the doctor's dashboard.
+            return (
+                qs.filter(provider__provider_id=user)
+                .exclude(status='pending')
+                .order_by('-scheduled_at')
+            )
         return Appointment.objects.none()
 
     def perform_create(self, serializer):

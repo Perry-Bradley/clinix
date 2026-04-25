@@ -149,7 +149,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(
                 labelText: 'Mobile money number',
-                hintText: '+237670000000',
+                hintText: '+237677777777',
                 filled: true,
                 fillColor: Colors.white,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppColors.grey200)),
