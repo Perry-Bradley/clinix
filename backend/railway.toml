@@ -3,6 +3,9 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "sh -c 'python -u manage.py migrate --noinput && echo STARTING_DAPHNE && exec daphne -v 2 -b 0.0.0.0 -p 8080 clinix_project.asgi:application'"
+# Per-service start commands are configured in each Railway service's UI:
+#   clinix         -> sh -c 'python -u manage.py migrate --noinput && exec daphne -v 2 -b 0.0.0.0 -p 8080 clinix_project.asgi:application'
+#   Worker Service -> celery -A clinix_project worker --loglevel=info
+#   Beat Service   -> celery -A clinix_project beat --loglevel=info
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
