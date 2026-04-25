@@ -59,12 +59,24 @@ class _MedicalRecordFormPageState extends State<MedicalRecordFormPage> {
   }
 
   Future<void> _save() async {
-    if (_diagnosisCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Please add a diagnosis (even a provisional one).');
-      return;
-    }
     if (widget.patientId == null || widget.patientId!.isEmpty) {
       setState(() => _error = 'Missing patient. Open this form from a consultation.');
+      return;
+    }
+    // Accept any single field filled — doctors don't always have something
+    // for every section. Reject only if literally everything is blank.
+    final hasContent = [
+      _titleCtrl.text,
+      _chiefComplaintCtrl.text,
+      _symptomsCtrl.text,
+      _symptomDurationCtrl.text,
+      _findingsCtrl.text,
+      _diagnosisCtrl.text,
+      _treatmentCtrl.text,
+      _medicationsCtrl.text,
+    ].any((s) => s.trim().isNotEmpty) || _followUpDate != null;
+    if (!hasContent) {
+      setState(() => _error = 'Please fill at least one section before saving.');
       return;
     }
 
@@ -160,7 +172,7 @@ class _MedicalRecordFormPageState extends State<MedicalRecordFormPage> {
             _label('Examination findings'),
             _input(_findingsCtrl, hint: 'Vitals, observations…', lines: 3),
             const SizedBox(height: 18),
-            _label('Diagnosis *'),
+            _label('Diagnosis'),
             _input(_diagnosisCtrl, hint: 'Provisional or confirmed', lines: 2),
             const SizedBox(height: 18),
             _label('Treatment plan'),

@@ -644,30 +644,27 @@ class _DoctorCard extends StatelessWidget {
                 ),
               ],
             ),
-            // Location row — full width, prominent, with map pin
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.grey50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.grey200),
-              ),
-              child: Row(
+            // Location row — minimal, inline below the main row.
+            if (locationText.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  const Icon(Icons.location_on_rounded,
-                      color: AppColors.darkBlue600, size: 14),
-                  const SizedBox(width: 6),
+                  Container(
+                    width: 22, height: 22,
+                    decoration: BoxDecoration(
+                      color: AppColors.sky100,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(Icons.location_on_rounded,
+                        color: AppColors.darkBlue500, size: 13),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      locationText.isEmpty
-                          ? 'Location not set'
-                          : locationText,
+                      locationText,
                       style: AppTextStyles.caption.copyWith(
-                        color: locationText.isEmpty
-                            ? AppColors.grey400
-                            : AppColors.grey700,
-                        fontSize: 12,
+                        color: AppColors.grey700,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w600,
                       ),
                       maxLines: 1,
@@ -676,7 +673,7 @@ class _DoctorCard extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
+            ],
           ],
         ),
       ),

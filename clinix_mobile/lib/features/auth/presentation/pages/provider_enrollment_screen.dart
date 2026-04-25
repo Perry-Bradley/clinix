@@ -754,27 +754,246 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
         ),
       );
     }
-    return DropdownButtonFormField<String>(
-      value: _selectedSpecialty?['specialty_id']?.toString(),
-      decoration: _decoration('Pick a specialty'),
-      items: _specialties
-          .map((s) => DropdownMenuItem<String>(
-                value: s['specialty_id']?.toString(),
-                child: Text(s['name']?.toString() ?? ''),
-              ))
-          .toList(),
-      onChanged: (v) {
-        setState(() {
-          _selectedSpecialty = _specialties.firstWhere(
-            (s) => s['specialty_id']?.toString() == v,
-            orElse: () => const {},
-          );
-          if (_selectedSpecialty?.isEmpty ?? true) _selectedSpecialty = null;
-        });
+    final selectedName = _selectedSpecialty?['name']?.toString();
+    return GestureDetector(
+      onTap: _openSpecialtySheet,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.grey50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: _selectedSpecialty != null
+                ? AppColors.darkBlue500
+                : AppColors.grey200,
+            width: _selectedSpecialty != null ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: _selectedSpecialty != null
+                    ? AppColors.darkBlue500
+                    : Colors.white,
+                border: Border.all(color: AppColors.grey200),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.medical_services_rounded,
+                size: 18,
+                color: _selectedSpecialty != null
+                    ? Colors.white
+                    : AppColors.darkBlue500,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    selectedName ?? 'Pick a specialty',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: selectedName != null
+                          ? AppColors.darkBlue900
+                          : AppColors.grey400,
+                    ),
+                  ),
+                  if (selectedName != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Tap to change',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        color: AppColors.grey500,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const Icon(Icons.unfold_more_rounded,
+                color: AppColors.grey400, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openSpecialtySheet() {
+    String query = '';
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            final filtered = _specialties.where((s) {
+              if (query.isEmpty) return true;
+              return (s['name']?.toString().toLowerCase() ?? '')
+                  .contains(query.toLowerCase());
+            }).toList();
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: AppColors.grey200,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Pick your specialty',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.darkBlue900,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    autofocus: true,
+                    onChanged: (v) => setSheet(() => query = v),
+                    decoration: InputDecoration(
+                      hintText: 'Search specialties…',
+                      hintStyle: TextStyle(color: AppColors.grey400),
+                      prefixIcon: const Icon(Icons.search_rounded,
+                          color: AppColors.grey400, size: 20),
+                      filled: true,
+                      fillColor: AppColors.grey50,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.grey200),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.grey200),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: AppColors.darkBlue500, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(ctx).size.height * 0.5,
+                    ),
+                    child: filtered.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Text(
+                              'No specialties match "$query".',
+                              style: TextStyle(color: AppColors.grey400),
+                            ),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 6),
+                            itemBuilder: (_, i) {
+                              final s = filtered[i];
+                              final selected = _selectedSpecialty?['specialty_id'] ==
+                                  s['specialty_id'];
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() => _selectedSpecialty = s);
+                                  Navigator.pop(ctx);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: selected
+                                        ? const Color(0xFFEFF6FF)
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: selected
+                                          ? AppColors.darkBlue500
+                                          : AppColors.grey200,
+                                      width: selected ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              s['name']?.toString() ?? '',
+                                              style: TextStyle(
+                                                fontFamily: 'Inter',
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.darkBlue900,
+                                              ),
+                                            ),
+                                            if ((s['description'] ?? '')
+                                                .toString()
+                                                .trim()
+                                                .isNotEmpty) ...[
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                s['description'].toString(),
+                                                style: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontSize: 11.5,
+                                                  color: AppColors.grey500,
+                                                ),
+                                                maxLines: 2,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      if (selected)
+                                        const Icon(Icons.check_circle_rounded,
+                                            color: AppColors.darkBlue500,
+                                            size: 22),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
       },
-      style: TextStyle(color: AppColors.splashSlate900, fontWeight: FontWeight.w600),
-      dropdownColor: Colors.white,
-      iconEnabledColor: AppColors.grey500,
     );
   }
 

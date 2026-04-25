@@ -2007,31 +2007,21 @@ class _EditBioModal extends StatefulWidget {
 
 class _EditBioModalState extends State<_EditBioModal> {
   late final TextEditingController _bioController;
-  late final TextEditingController _otherSpecController;
   late final TextEditingController _yearsController;
   late final TextEditingController _feeController;
-  String _specialty = 'generalist';
   bool _saving = false;
-
-  static const List<String> _specialtyOptions = [
-    'generalist', 'nurse', 'midwife', 'other',
-  ];
 
   @override
   void initState() {
     super.initState();
     _bioController = TextEditingController(text: (widget.profile['bio'] ?? '').toString());
-    _otherSpecController = TextEditingController(text: (widget.profile['other_specialty'] ?? '').toString());
     _yearsController = TextEditingController(text: (widget.profile['years_experience'] ?? '').toString());
     _feeController = TextEditingController(text: (widget.profile['consultation_fee'] ?? '').toString());
-    final raw = (widget.profile['specialty'] ?? 'generalist').toString().toLowerCase();
-    _specialty = _specialtyOptions.contains(raw) ? raw : 'generalist';
   }
 
   @override
   void dispose() {
     _bioController.dispose();
-    _otherSpecController.dispose();
     _yearsController.dispose();
     _feeController.dispose();
     super.dispose();
@@ -2070,22 +2060,6 @@ class _EditBioModalState extends State<_EditBioModal> {
             TextField(controller: _bioController, maxLines: 4, decoration: _decoration('Tell patients about your practice...')),
             const SizedBox(height: 18),
 
-            Text('Specialty', style: AppTextStyles.headlineSmall.copyWith(fontSize: 14)),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: _specialty,
-              decoration: _decoration(''),
-              items: _specialtyOptions
-                  .map((s) => DropdownMenuItem(value: s, child: Text(s[0].toUpperCase() + s.substring(1))))
-                  .toList(),
-              onChanged: (v) => setState(() => _specialty = v ?? 'generalist'),
-            ),
-            if (_specialty == 'other') ...[
-              const SizedBox(height: 12),
-              TextField(controller: _otherSpecController, decoration: _decoration('e.g. Cardiologist')),
-            ],
-            const SizedBox(height: 18),
-
             Row(
               children: [
                 Expanded(
@@ -2118,8 +2092,6 @@ class _EditBioModalState extends State<_EditBioModal> {
                 try {
                   final payload = <String, dynamic>{
                     'bio': _bioController.text.trim(),
-                    'specialty': _specialty,
-                    'other_specialty': _specialty == 'other' ? _otherSpecController.text.trim() : '',
                   };
                   final years = int.tryParse(_yearsController.text.trim());
                   if (years != null) payload['years_experience'] = years;
