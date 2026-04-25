@@ -36,6 +36,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   StreamSubscription<Map<String, dynamic>>? _sub;
   String? _myUserId;
   bool _isLoading = true;
+  bool _polling = false;
 
   @override
   void initState() {
@@ -72,6 +73,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     }
 
     _service.connect(widget.conversationId, token);
+    _startPolling();
     _sub = _service.messages.listen((data) {
       if (!mounted) return;
       final id = data['message_id']?.toString();
@@ -92,6 +94,32 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
 
       setState(() => _messages.add(data));
       _scrollToBottom();
+    });
+  }
+
+  void _startPolling() {
+    _polling = true;
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 3));
+      if (!mounted || !_polling) return false;
+      try {
+        final fresh = await DirectChatService.fetchMessages(widget.conversationId);
+        if (!mounted) return false;
+        bool added = false;
+        for (final msg in fresh) {
+          final id = msg['message_id']?.toString();
+          if (id == null) continue;
+          if (!_messages.any((m) => m['message_id']?.toString() == id)) {
+            _messages.add(msg);
+            added = true;
+          }
+        }
+        if (added) {
+          setState(() {});
+          _scrollToBottom();
+        }
+      } catch (_) {}
+      return true;
     });
   }
 
@@ -135,8 +163,8 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     });
     _scrollToBottom();
 
-    // Send via WebSocket — the consumer persists and broadcasts back to both parties
-    _service.send(text);
+    // Send via WebSocket (falls back to HTTP if WS is down)
+    await _service.send(text);
   }
 
   Future<void> _pickImage() async {
@@ -189,7 +217,9 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   }
 
   @override
+  @override
   void dispose() {
+    _polling = false;
     _sub?.cancel();
     _service.dispose();
     _ctrl.dispose();

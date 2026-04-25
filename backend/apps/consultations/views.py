@@ -1,13 +1,17 @@
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, status, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.db.models import Q
 from django.utils import timezone
-from .models import Consultation, Prescription, ChatMessage, MedicationReminder, MedicationLog
+from .models import Consultation, Prescription, ChatMessage, MedicationReminder, MedicationLog, MedicalRecord, Referral
 from apps.appointments.models import Appointment
+from apps.providers.models import HealthcareProvider
+from apps.patients.models import Patient
 from .serializers import (
     ConsultationSerializer, ConsultationStartSerializer,
     ConsultationEndSerializer, PrescriptionSerializer, WebRTCSignalSerializer,
-    ChatMessageSerializer, MedicationReminderSerializer, MedicationLogSerializer
+    ChatMessageSerializer, MedicationReminderSerializer, MedicationLogSerializer,
+    MedicalRecordSerializer, MedicalRecordShareSerializer, ReferralSerializer,
 )
 import uuid
 import os
@@ -305,3 +309,149 @@ class ReminderAdherenceView(APIView):
             })
         overall = round((total_taken / total_logs) * 100) if total_logs > 0 else None
         return Response({'overall': overall, 'medications': medications})
+
+
+# ─── Medical Records ────────────────────────────────────────────────────────
+
+def _provider_for_user(user):
+    try:
+        return HealthcareProvider.objects.get(provider_id=user)
+    except HealthcareProvider.DoesNotExist:
+        return None
+
+
+def _patient_for_user(user):
+    try:
+        return Patient.objects.get(patient_id=user)
+    except Patient.DoesNotExist:
+        return None
+
+
+class MedicalRecordListCreateView(generics.ListCreateAPIView):
+    """List and create medical records.
+
+    GET behaviour depends on the caller:
+    * Patients see their own records.
+    * Providers see records they authored, plus records explicitly shared with them.
+    """
+    serializer_class = MedicalRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        provider = _provider_for_user(user)
+        patient = _patient_for_user(user)
+
+        qs = MedicalRecord.objects.all()
+        if provider and patient:
+            return qs.filter(
+                Q(patient=patient) |
+                Q(authored_by=provider) |
+                Q(shared_with=provider)
+            ).distinct()
+        if provider:
+            return qs.filter(
+                Q(authored_by=provider) | Q(shared_with=provider)
+            ).distinct()
+        if patient:
+            return qs.filter(patient=patient)
+        return MedicalRecord.objects.none()
+
+    def perform_create(self, serializer):
+        # Only providers can author records
+        provider = _provider_for_user(self.request.user)
+        if not provider:
+            raise serializers.ValidationError('Only providers can author medical records.')
+        serializer.save(authored_by=provider)
+
+
+class MedicalRecordDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = MedicalRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'record_id'
+
+    def get_queryset(self):
+        user = self.request.user
+        provider = _provider_for_user(user)
+        patient = _patient_for_user(user)
+        qs = MedicalRecord.objects.all()
+        if provider and patient:
+            return qs.filter(
+                Q(patient=patient) |
+                Q(authored_by=provider) |
+                Q(shared_with=provider)
+            ).distinct()
+        if provider:
+            return qs.filter(
+                Q(authored_by=provider) | Q(shared_with=provider)
+            ).distinct()
+        if patient:
+            return qs.filter(patient=patient)
+        return MedicalRecord.objects.none()
+
+
+class MedicalRecordShareView(APIView):
+    """Patient grants or revokes another doctor's access to a medical record."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, record_id):
+        patient = _patient_for_user(request.user)
+        if not patient:
+            return Response({'error': 'Only patients can share records.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            record = MedicalRecord.objects.get(record_id=record_id, patient=patient)
+        except MedicalRecord.DoesNotExist:
+            return Response({'error': 'Record not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = MedicalRecordShareSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            provider = HealthcareProvider.objects.get(provider_id=serializer.validated_data['provider_id'])
+        except HealthcareProvider.DoesNotExist:
+            return Response({'error': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if serializer.validated_data.get('revoke'):
+            record.shared_with.remove(provider)
+            return Response({'status': 'revoked', 'provider_id': str(provider.provider_id_id)})
+        record.shared_with.add(provider)
+        return Response({'status': 'granted', 'provider_id': str(provider.provider_id_id)})
+
+
+# ─── Referrals ──────────────────────────────────────────────────────────────
+
+class ReferralListCreateView(generics.ListCreateAPIView):
+    """Doctor issues a referral; patient or destination doctor sees it."""
+    serializer_class = ReferralSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        provider = _provider_for_user(user)
+        patient = _patient_for_user(user)
+        qs = Referral.objects.all()
+        if provider and patient:
+            return qs.filter(
+                Q(patient=patient) |
+                Q(referred_by=provider) |
+                Q(referred_to=provider)
+            ).distinct()
+        if provider:
+            return qs.filter(
+                Q(referred_by=provider) | Q(referred_to=provider)
+            ).distinct()
+        if patient:
+            return qs.filter(patient=patient)
+        return Referral.objects.none()
+
+    def perform_create(self, serializer):
+        provider = _provider_for_user(self.request.user)
+        if not provider:
+            raise serializers.ValidationError('Only providers can issue referrals.')
+        serializer.save(referred_by=provider)
+
+
+class ReferralDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = ReferralSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'referral_id'
+    queryset = Referral.objects.all()

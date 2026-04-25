@@ -10,6 +10,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../services/health_metric_service.dart';
 import '../services/activity_service.dart';
 import 'heart_rate_measure_screen.dart';
+import 'package:pedometer/pedometer.dart';
 
 double _asDouble(dynamic v) {
   if (v == null) return 0;
@@ -53,141 +54,160 @@ class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    final topPad = MediaQuery.of(context).padding.top;
     final summaryAsync = ref.watch(healthSummaryProvider);
-    final stepsStream = ref.watch(stepCountProvider);
-    final steps = stepsStream.value ?? 0;
+    final goal = _goalLoaded ? _stepGoal : 10000;
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: RefreshIndicator(
-        color: AppColors.sky500,
+        color: AppColors.splashSlate900,
         onRefresh: () async {
           ref.invalidate(healthSummaryProvider);
           await ref.read(healthSummaryProvider.future);
         },
-        child: CustomScrollView(
+        child: ListView(
+          padding: EdgeInsets.zero,
           physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            // App Bar with back button
-            SliverAppBar(
-              expandedHeight: 100,
-              floating: false,
-              pinned: true,
-              backgroundColor: Colors.white,
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-              leading: Navigator.of(context).canPop()
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.darkBlue900, size: 20),
-                      onPressed: () => Navigator.of(context).pop(),
-                    )
-                  : null,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.settings_rounded, color: AppColors.grey500, size: 22),
-                  onPressed: () => _showGoalSettings(context),
-                  tooltip: 'Set Goals',
+          children: [
+            // Simple header
+            Padding(
+              padding: EdgeInsets.fromLTRB(w * 0.06, topPad + w * 0.03, w * 0.06, w * 0.02),
+              child: Row(children: [
+                if (Navigator.of(context).canPop())
+                  GestureDetector(
+                    onTap: () { if (Navigator.of(context).canPop()) Navigator.pop(context); },
+                    child: Container(
+                      padding: EdgeInsets.all(w * 0.02),
+                      margin: EdgeInsets.only(right: w * 0.03),
+                      decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(10)),
+                      child: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.splashSlate900, size: w * 0.045),
+                    ),
+                  ),
+                Text('Health', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.055, fontWeight: FontWeight.w700, color: AppColors.splashSlate900)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => _showGoalSettings(context),
+                  child: Icon(Icons.tune_rounded, color: AppColors.grey400, size: w * 0.05),
                 ),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                title: Text('Health Dashboard', style: AppTextStyles.headlineMedium.copyWith(color: AppColors.darkBlue900, fontSize: 18)),
-                centerTitle: false,
-                titlePadding: EdgeInsets.only(left: Navigator.of(context).canPop() ? 56 : 20, bottom: 14),
+              ]),
+            ),
+
+            // Steps row — live from pedometer
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: w * 0.06, vertical: w * 0.03),
+              child: StreamBuilder<StepCount>(
+                stream: Pedometer.stepCountStream.handleError((_) {}),
+                builder: (context, snapshot) {
+                  final steps = snapshot.hasData ? snapshot.data!.steps : 0;
+                  final progress = (steps / goal).clamp(0.0, 1.0);
+                  return Container(
+                    padding: EdgeInsets.all(w * 0.04),
+                    decoration: BoxDecoration(
+                      color: AppColors.splashSlate900,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: w * 0.14,
+                          height: w * 0.14,
+                          child: Stack(alignment: Alignment.center, children: [
+                            SizedBox(
+                              width: w * 0.13,
+                              height: w * 0.13,
+                              child: CircularProgressIndicator(
+                                value: progress,
+                                strokeWidth: w * 0.012,
+                                strokeCap: StrokeCap.round,
+                                backgroundColor: Colors.white.withOpacity(0.1),
+                                valueColor: const AlwaysStoppedAnimation(Colors.white),
+                              ),
+                            ),
+                            Icon(Icons.directions_walk_rounded, color: Colors.white, size: w * 0.05),
+                          ]),
+                        ),
+                        SizedBox(width: w * 0.035),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('$steps steps', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.045, fontWeight: FontWeight.w800, color: Colors.white)),
+                            Text('of $goal goal · ${(progress * 100).toInt()}%', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, color: Colors.white54)),
+                          ]),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-                child: Column(
+
+            SizedBox(height: w * 0.05),
+
+            // Measure heart rate CTA
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: w * 0.06),
+              child: GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HeartRateMeasureScreen())),
+                child: Container(
+                  padding: EdgeInsets.all(w * 0.04),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.grey200),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(w * 0.03),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.favorite_rounded, color: const Color(0xFFEF4444), size: w * 0.06),
+                      ),
+                      SizedBox(width: w * 0.035),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Measure Heart Rate', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.038, fontWeight: FontWeight.w700, color: AppColors.splashSlate900)),
+                            Text('Use your camera to scan vitals', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, color: AppColors.grey400)),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_ios_rounded, color: AppColors.grey400, size: w * 0.04),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            SizedBox(height: w * 0.05),
+
+            // Vitals + chart
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: w * 0.06),
+              child: summaryAsync.when(
+                loading: () => SizedBox(height: w * 0.3, child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.splashSlate900))),
+                error: (e, _) => _buildErrorCard(),
+                data: (data) => Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildStepCard(steps),
-                    const SizedBox(height: 20),
-                    summaryAsync.when(
-                      loading: () => const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 40),
-                        child: Center(child: CircularProgressIndicator(color: AppColors.sky500)),
-                      ),
-                      error: (e, _) => _buildErrorCard(),
-                      data: (data) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildVitalsGrid(context, data),
-                          const SizedBox(height: 24),
-                          _buildActivityChart(data),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 80),
+                    _buildVitalsGrid(context, data),
+                    SizedBox(height: w * 0.05),
+                    _buildActivityChart(data),
                   ],
                 ),
               ),
             ),
+            SizedBox(height: w * 0.15),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStepCard(int steps) {
-    final goal = _goalLoaded ? _stepGoal : 10000;
-    final double progress = (steps / goal).clamp(0.0, 1.0);
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.darkBlue800, AppColors.sky600],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: AppColors.sky500.withValues(alpha: 0.25), blurRadius: 20, offset: const Offset(0, 8))],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Daily Steps', style: AppTextStyles.caption.copyWith(color: AppColors.sky200, fontSize: 13, letterSpacing: 0.5)),
-                const SizedBox(height: 6),
-                Text('$steps', style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, fontFamily: 'Inter')),
-                const SizedBox(height: 4),
-                GestureDetector(
-                  onTap: () => _showGoalSettings(context),
-                  child: Row(
-                    children: [
-                      Text('Goal: $goal', style: AppTextStyles.caption.copyWith(color: Colors.white54, fontSize: 12)),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.edit_rounded, color: Colors.white38, size: 12),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 72,
-                height: 72,
-                child: CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 6,
-                  strokeCap: StrokeCap.round,
-                  backgroundColor: Colors.white12,
-                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-              Text('${(progress * 100).toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Inter')),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showGoalSettings(BuildContext context) {
     int tempStepGoal = _stepGoal;
@@ -299,7 +319,12 @@ class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen> {
 
   Widget _buildVitalsGrid(BuildContext context, Map<String, dynamic>? data) {
     final heartRate = data?['latest_heart_rate']?['bpm'];
-    final dist = data?['today_activity'] != null ? _asDouble(data!['today_activity']['distance_km']) : 0.0;
+    // Distance: server steps + local session steps
+    final backendDist = data?['today_activity'] != null ? _asDouble(data!['today_activity']['distance_km']) : 0.0;
+    final backendSteps = _asDouble(data?['today_activity']?['steps']);
+    final liveSteps = ref.watch(stepCountProvider).value?.toDouble() ?? 0;
+    final totalSteps = backendSteps + liveSteps;
+    final dist = backendDist > 0 ? backendDist : totalSteps * 0.0008;
     final hrv = data?['latest_heart_rate']?['hrv_ms'];
     final rr = data?['latest_heart_rate']?['respiratory_rate'];
 
@@ -458,21 +483,24 @@ class _VitalCard extends StatelessWidget {
   final String unit;
   final IconData icon;
   final Color color;
+  final String? subtitle;
   final VoidCallback? onTap;
 
-  const _VitalCard({required this.title, required this.value, required this.unit, required this.icon, required this.color, this.onTap});
+  const _VitalCard({required this.title, required this.value, required this.unit, required this.icon, required this.color, this.subtitle, this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    final isEmpty = value == '--' || value == '0' || value == '0.00';
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(18),
+        padding: EdgeInsets.all(w * 0.04),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.grey200),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -482,27 +510,30 @@ class _VitalCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                  child: Icon(icon, color: color, size: 20),
+                  padding: EdgeInsets.all(w * 0.02),
+                  decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(icon, color: color, size: w * 0.05),
                 ),
-                if (onTap != null) Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.grey400),
+                if (onTap != null) Icon(Icons.arrow_forward_ios_rounded, size: w * 0.03, color: AppColors.grey400),
               ],
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTextStyles.caption.copyWith(color: AppColors.grey500, fontSize: 12)),
-                const SizedBox(height: 2),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.darkBlue900, fontFamily: 'Inter')),
-                    const SizedBox(width: 4),
-                    Text(unit, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
-                  ],
-                ),
+                Text(title, style: TextStyle(fontFamily: 'Inter', color: AppColors.grey500, fontSize: w * 0.03)),
+                SizedBox(height: w * 0.005),
+                if (isEmpty)
+                  Text(onTap != null ? 'Tap to measure' : 'No data yet', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.03, color: AppColors.grey400))
+                else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Flexible(child: Text(value, style: TextStyle(fontSize: w * 0.058, fontWeight: FontWeight.w800, color: AppColors.splashSlate900, fontFamily: 'Inter'), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      SizedBox(width: w * 0.01),
+                      Text(unit, style: TextStyle(color: color, fontSize: w * 0.028, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
               ],
             ),
           ],
@@ -511,3 +542,4 @@ class _VitalCard extends StatelessWidget {
     );
   }
 }
+

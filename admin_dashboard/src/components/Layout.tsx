@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCheck, LogOut, Bell, Settings, HeartPulse, TrendingUp, FlaskConical } from 'lucide-react';
+import { LayoutDashboard, Users, UserCheck, LogOut, Bell, Settings, HeartPulse, TrendingUp, FlaskConical, Stethoscope } from 'lucide-react';
 
 const Layout = () => {
   const navigate = useNavigate();
@@ -15,6 +15,7 @@ const Layout = () => {
     { path: '/patients', icon: <HeartPulse size={18} />, label: 'Patients' },
     { path: '/users', icon: <Users size={18} />, label: 'Users' },
     { path: '/verifications', icon: <UserCheck size={18} />, label: 'Verifications' },
+    { path: '/specialties', icon: <Stethoscope size={18} />, label: 'Specialties' },
     { path: '/revenue', icon: <TrendingUp size={18} />, label: 'Finance' },
     { path: '/lab-tests', icon: <FlaskConical size={18} />, label: 'Lab Tests' },
   ];
@@ -26,8 +27,8 @@ const Layout = () => {
         {/* Logo */}
         <div className="px-6 py-6 border-b border-white/10">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center shadow-lg shadow-sky-500/40">
-              <span className="text-white text-lg">🏥</span>
+            <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center shadow-lg shadow-sky-500/40 overflow-hidden">
+              <img src="/clinix_logo.png" alt="Clinix" className="w-6 h-6 object-contain" />
             </div>
             <div>
               <h1 className="text-white font-bold text-lg tracking-tight leading-none">Clinix</h1>

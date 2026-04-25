@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:dio/dio.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/doctor_service.dart';
+import '../../../../core/constants/api_constants.dart';
 import '../widgets/map_location_picker_screen.dart';
 import '../widgets/places_autocomplete_field.dart';
 
@@ -19,10 +21,16 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
   int _currentStep = 0;
   bool _isLoading = false;
 
-  String _selectedSpecialty = 'Generalist';
+  // Provider role: generalist | specialist | nurse
+  String _providerRole = 'generalist';
+  // Selected admin-configured specialty (only relevant for specialist/nurse).
+  Map<String, dynamic>? _selectedSpecialty;
+  // Loaded list of available specialties for the current role.
+  List<Map<String, dynamic>> _specialties = const [];
+  bool _loadingSpecialties = false;
+
   final _bioCtrl = TextEditingController();
   final _expCtrl = TextEditingController();
-  final _otherSpecialtyCtrl = TextEditingController();
   final _licenseCtrl = TextEditingController();
   final _feeCtrl = TextEditingController();
 
@@ -51,11 +59,32 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
     }
   }
 
+  Future<void> _loadSpecialties(String role) async {
+    setState(() {
+      _loadingSpecialties = true;
+      _specialties = const [];
+      _selectedSpecialty = null;
+    });
+    try {
+      final res = await Dio().get(
+        '${ApiConstants.baseUrl}providers/specialties/',
+        queryParameters: {'role': role},
+      );
+      final data = res.data;
+      if (data is List) {
+        _specialties = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {
+      _specialties = const [];
+    } finally {
+      if (mounted) setState(() => _loadingSpecialties = false);
+    }
+  }
+
   @override
   void dispose() {
     _bioCtrl.dispose();
     _expCtrl.dispose();
-    _otherSpecialtyCtrl.dispose();
     _licenseCtrl.dispose();
     _feeCtrl.dispose();
     _residenceAddressCtrl.dispose();
@@ -73,6 +102,10 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
       }
       if (_bioCtrl.text.trim().isEmpty) {
         _toast('Please add a short professional bio or title.');
+        return;
+      }
+      if ((_providerRole == 'specialist' || _providerRole == 'nurse') && _selectedSpecialty == null) {
+        _toast('Please pick your ${_providerRole == 'nurse' ? 'nurse role' : 'specialty'} from the list.');
         return;
       }
     }
@@ -142,9 +175,15 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
   Future<void> _submitOnboarding() async {
     setState(() => _isLoading = true);
     try {
+      // Map our new role/specialty model into the legacy + new backend fields.
+      final legacySpecialty = _providerRole == 'generalist'
+          ? 'generalist'
+          : (_selectedSpecialty?['name']?.toString() ?? _providerRole);
       await DoctorService.updateProfile({
-        'specialty': _selectedSpecialty.toLowerCase(),
-        'other_specialty': _selectedSpecialty == 'Other' ? _otherSpecialtyCtrl.text : '',
+        'provider_role': _providerRole,
+        if (_selectedSpecialty != null) 'specialty_obj': _selectedSpecialty!['specialty_id'],
+        'specialty': _providerRole == 'generalist' ? 'generalist' : 'other',
+        'other_specialty': _providerRole == 'generalist' ? '' : legacySpecialty,
         'bio': _bioCtrl.text,
         'years_experience': int.tryParse(_expCtrl.text) ?? 1,
         'license_number': _licenseCtrl.text.trim(),
@@ -154,7 +193,7 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
 
       final scheduleList = _schedules.entries
           .map((e) => {
-                'day': e.key,
+                'day': e.key.toLowerCase(),
                 'start_time': e.value['start_time'],
                 'end_time': e.value['end_time'],
                 'is_working': e.value['is_working'],
@@ -308,11 +347,16 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, height: 1.4),
         ),
         const SizedBox(height: 24),
-        _fieldLabel('Specialty'),
-        _dropdown(),
-        if (_selectedSpecialty == 'Other') ...[
-          const SizedBox(height: 16),
-          _textField(_otherSpecialtyCtrl, 'Specify your specialty', lines: 1),
+        _fieldLabel('What are you?'),
+        const SizedBox(height: 6),
+        _roleSelector(),
+        if (_providerRole == 'specialist' || _providerRole == 'nurse') ...[
+          const SizedBox(height: 18),
+          _fieldLabel(_providerRole == 'nurse'
+              ? 'Pick your nursing role'
+              : 'Pick your specialty'),
+          const SizedBox(height: 6),
+          _specialtyDropdown(),
         ],
         const SizedBox(height: 20),
         _fieldLabel('Medical license number *'),
@@ -566,14 +610,134 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
     );
   }
 
-  Widget _dropdown() {
+  Widget _roleSelector() {
+    const roles = [
+      {'key': 'generalist', 'label': 'Generalist', 'sub': 'General medicine'},
+      {'key': 'specialist', 'label': 'Specialist', 'sub': 'Choose specialty'},
+      {'key': 'nurse', 'label': 'Nurse', 'sub': 'Choose role'},
+    ];
+    return Row(
+      children: roles.map((r) {
+        final selected = _providerRole == r['key'];
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _providerRole = r['key']!);
+                if (r['key'] != 'generalist') {
+                  _loadSpecialties(r['key']!);
+                } else {
+                  setState(() {
+                    _selectedSpecialty = null;
+                    _specialties = const [];
+                  });
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.darkBlue800 : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: selected ? AppColors.darkBlue800 : AppColors.grey200,
+                    width: selected ? 1.5 : 1,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      r['label']!,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: selected ? Colors.white : AppColors.darkBlue900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      r['sub']!,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        color: selected ? Colors.white.withOpacity(0.85) : AppColors.grey500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _specialtyDropdown() {
+    if (_loadingSpecialties) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.grey50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.grey200),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 18, height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Text('Loading…',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500)),
+          ],
+        ),
+      );
+    }
+    if (_specialties.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF7ED),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFFFEDD5)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded, color: Color(0xFFC2410C), size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'No options yet — please ask the admin to configure ${_providerRole == 'nurse' ? 'nursing roles' : 'specialties'}.',
+                style: AppTextStyles.caption.copyWith(color: const Color(0xFF9A3412)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return DropdownButtonFormField<String>(
-      value: _selectedSpecialty,
-      decoration: _decoration('Select'),
-      items: ['Generalist', 'Nurse', 'Midwife', 'Other']
-          .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+      value: _selectedSpecialty?['specialty_id']?.toString(),
+      decoration: _decoration(_providerRole == 'nurse' ? 'Pick a role' : 'Pick a specialty'),
+      items: _specialties
+          .map((s) => DropdownMenuItem<String>(
+                value: s['specialty_id']?.toString(),
+                child: Text(s['name']?.toString() ?? ''),
+              ))
           .toList(),
-      onChanged: (v) => setState(() => _selectedSpecialty = v ?? 'Generalist'),
+      onChanged: (v) {
+        setState(() {
+          _selectedSpecialty = _specialties.firstWhere(
+            (s) => s['specialty_id']?.toString() == v,
+            orElse: () => const {},
+          );
+          if (_selectedSpecialty?.isEmpty ?? true) _selectedSpecialty = null;
+        });
+      },
       style: TextStyle(color: AppColors.splashSlate900, fontWeight: FontWeight.w600),
       dropdownColor: Colors.white,
       iconEnabledColor: AppColors.grey500,

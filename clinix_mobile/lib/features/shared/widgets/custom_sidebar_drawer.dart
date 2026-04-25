@@ -35,133 +35,86 @@ class _CustomSidebarDrawerState extends State<CustomSidebarDrawer> {
 
   @override
   Widget build(BuildContext context) {
-    final roleLabel = widget.isProvider ? 'Healthcare provider' : 'Verified patient';
+    final w = MediaQuery.of(context).size.width;
+    final roleLabel = widget.isProvider ? 'Healthcare Provider' : 'Patient';
+    final initial = _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U';
+
     return Drawer(
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topRight: Radius.circular(36),
-          bottomRight: Radius.circular(36),
-        ),
+        borderRadius: BorderRadius.only(topRight: Radius.circular(28), bottomRight: Radius.circular(28)),
       ),
       child: SafeArea(
         child: Column(
           children: [
+            // Header
+            Container(
+              padding: EdgeInsets.fromLTRB(w * 0.06, w * 0.08, w * 0.06, w * 0.06),
+              child: Row(
+                children: [
+                  Container(
+                    width: w * 0.13,
+                    height: w * 0.13,
+                    decoration: BoxDecoration(
+                      color: AppColors.splashSlate900.withOpacity(0.06),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(child: Text(initial, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.05, fontWeight: FontWeight.w700, color: AppColors.splashSlate900))),
+                  ),
+                  SizedBox(width: w * 0.035),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_userName, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.042, fontWeight: FontWeight.w700, color: AppColors.splashSlate900), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        SizedBox(height: w * 0.005),
+                        Text(roleLabel, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.03, color: AppColors.grey500)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Divider(height: 1, color: AppColors.grey100),
+
+            // Menu items
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
+                padding: EdgeInsets.symmetric(horizontal: w * 0.04, vertical: w * 0.04),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: AppColors.sky100,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.sky200, width: 1.5),
-                          ),
-                          child: const Center(child: Icon(Icons.person_rounded, color: AppColors.sky600, size: 32)),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _userName,
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.darkBlue900,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                roleLabel,
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.grey500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    _SideItem(icon: Icons.home_rounded, label: 'Home', selected: widget.currentIndex == 0, onTap: () { Navigator.pop(context); widget.onTabSelected(0); }),
+                    _SideItem(
+                      icon: widget.isProvider ? Icons.calendar_month_rounded : Icons.search_rounded,
+                      label: widget.isProvider ? 'Schedule' : 'Find Doctors',
+                      selected: widget.currentIndex == 1,
+                      onTap: () { Navigator.pop(context); widget.onTabSelected(1); },
                     ),
-                    const SizedBox(height: 48),
-                    _DrawerItem(
-                      icon: Icons.home_rounded,
-                      label: 'Dashboard',
-                      isSelected: widget.currentIndex == 0,
-                      onTap: () {
-                        Navigator.pop(context);
-                        widget.onTabSelected(0);
-                      },
-                    ),
-                    _DrawerItem(
-                      icon: widget.isProvider ? Icons.calendar_month_rounded : Icons.medical_services_rounded,
-                      label: widget.isProvider ? 'Schedule' : 'Top Doctors',
-                      isSelected: widget.currentIndex == 1,
-                      onTap: () {
-                        Navigator.pop(context);
-                        widget.onTabSelected(1);
-                      },
-                    ),
-                    _DrawerItem(
-                      icon: Icons.psychology_rounded,
-                      label: 'Clinix AI',
-                      isSelected: false,
-                      onTap: () {
-                        Navigator.pop(context);
-                        context.push('/ai-consult');
-                      },
-                    ),
-                    _DrawerItem(
-                      icon: Icons.event_note_rounded,
-                      label: 'Appointments',
-                      isSelected: false,
-                      onTap: () {
-                        Navigator.pop(context);
-                        context.push(widget.isProvider ? '/provider/appointments' : '/patient/appointments');
-                      },
-                    ),
-                    _DrawerItem(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: 'Messages',
-                      isSelected: false,
-                      onTap: () {
-                        Navigator.pop(context);
-                        context.push(widget.isProvider ? '/provider/messages' : '/patient/messages');
-                      },
-                    ),
-                    _DrawerItem(
+                    _SideItem(icon: Icons.spa_rounded, label: 'Clinix AI', onTap: () { Navigator.pop(context); context.push('/ai-consult'); }),
+                    _SideItem(icon: Icons.event_note_rounded, label: 'Appointments', onTap: () { Navigator.pop(context); context.push(widget.isProvider ? '/provider/appointments' : '/patient/appointments'); }),
+                    _SideItem(icon: Icons.chat_rounded, label: 'Messages', onTap: () { Navigator.pop(context); context.push(widget.isProvider ? '/provider/messages' : '/patient/messages'); }),
+                    if (!widget.isProvider)
+                      _SideItem(icon: Icons.science_rounded, label: 'Lab Tests', onTap: () { Navigator.pop(context); context.push('/homecare/lab-tests'); }),
+                    _SideItem(
                       icon: Icons.person_rounded,
-                      label: 'My Profile',
-                      isSelected: widget.currentIndex == (widget.isProvider ? 3 : 4),
-                      onTap: () {
-                        Navigator.pop(context);
-                        widget.onTabSelected(widget.isProvider ? 3 : 4);
-                      },
+                      label: 'Profile',
+                      selected: widget.currentIndex == (widget.isProvider ? 3 : 4),
+                      onTap: () { Navigator.pop(context); widget.onTabSelected(widget.isProvider ? 3 : 4); },
                     ),
                   ],
                 ),
               ),
             ),
+
+            // Sign out
             Padding(
-              padding: const EdgeInsets.all(24),
-              child: _DrawerItem(
+              padding: EdgeInsets.fromLTRB(w * 0.04, 0, w * 0.04, w * 0.06),
+              child: _SideItem(
                 icon: Icons.logout_rounded,
                 label: 'Sign Out',
-                isSelected: false,
-                color: AppColors.error,
+                isDestructive: true,
                 onTap: () async {
                   final confirmed = await showDialog<bool>(
                     context: context,
@@ -170,10 +123,7 @@ class _CustomSidebarDrawerState extends State<CustomSidebarDrawer> {
                       content: const Text('Are you sure you want to log out?'),
                       actions: [
                         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Logout', style: TextStyle(color: AppColors.error)),
-                        ),
+                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Sign Out', style: TextStyle(color: AppColors.error))),
                       ],
                     ),
                   );
@@ -191,55 +141,37 @@ class _CustomSidebarDrawerState extends State<CustomSidebarDrawer> {
   }
 }
 
-class _DrawerItem extends StatelessWidget {
+class _SideItem extends StatelessWidget {
   final IconData icon;
   final String label;
-  final bool isSelected;
+  final bool selected;
+  final bool isDestructive;
   final VoidCallback onTap;
-  final Color? color;
 
-  const _DrawerItem({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-    this.color,
-  });
+  const _SideItem({required this.icon, required this.label, required this.onTap, this.selected = false, this.isDestructive = false});
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = color ?? AppColors.sky600;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: isSelected ? activeColor.withOpacity(0.08) : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 24,
-                color: isSelected ? activeColor : (color ?? AppColors.grey500),
-              ),
-              const SizedBox(width: 16),
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 15,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                  color: isSelected ? activeColor : (color ?? AppColors.darkBlue900.withOpacity(0.8)),
-                ),
-              ),
-            ],
-          ),
+    final w = MediaQuery.of(context).size.width;
+    final iconColor = isDestructive ? AppColors.error : (selected ? AppColors.darkBlue500 : AppColors.grey400);
+    final textColor = isDestructive ? AppColors.error : (selected ? AppColors.darkBlue800 : AppColors.grey700);
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: w * 0.04, vertical: w * 0.035),
+        margin: EdgeInsets.only(bottom: w * 0.01),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.darkBlue500.withOpacity(0.06) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: w * 0.055, color: iconColor),
+            SizedBox(width: w * 0.035),
+            Text(label, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.038, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: textColor)),
+          ],
         ),
       ),
     );

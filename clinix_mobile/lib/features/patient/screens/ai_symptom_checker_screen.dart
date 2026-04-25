@@ -8,10 +8,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
 // ─── Primary accent used throughout the AI screen ───────────────────────────
-const Color _kAccent = Color(0xFF0EA5E9);      // sky blue accent
-const Color _kAccentLight = Color(0xFFE0F4FF); // very light sky
-const Color _kAccentDark = Color(0xFF0A1628);  // darkBlue for text only
-const Color _kBg = Colors.white;               // mostly white
+const Color _kAccent = Color(0xFF1B4080);      // bright dark blue (matches home icons)
+const Color _kAccentLight = Color(0xFFEDF2F7); // soft blue-grey
+const Color _kAccentDark = Color(0xFF0F172A);  // text color
+const Color _kBg = Colors.white;
 const Color _kCardBg = Colors.white;
 
 class AiConsultScreen extends StatefulWidget {
@@ -312,19 +312,20 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
           const Spacer(flex: 3),
           // Start button
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
             child: SizedBox(
               width: double.infinity,
               height: 56,
-              child: FilledButton(
+              child: ElevatedButton.icon(
                 onPressed: _startNewChat,
-                style: FilledButton.styleFrom(
+                icon: const Icon(Icons.add_rounded, size: 20),
+                label: Text('Start New Chat', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w700, fontSize: 15, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
                   backgroundColor: _kAccent,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
-                child: Text('Start New Chat', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w800, fontSize: 16)),
               ),
             ),
           ),
@@ -334,14 +335,15 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
             child: SizedBox(
               width: double.infinity,
               height: 56,
-              child: OutlinedButton(
+              child: OutlinedButton.icon(
                 onPressed: _showHistorySheet,
+                icon: Icon(Icons.history_rounded, size: 20, color: _kAccent),
+                label: Text('View Chat History', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600, fontSize: 15, color: _kAccent)),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.grey200),
-                  foregroundColor: _kAccentDark,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  side: BorderSide(color: _kAccent.withOpacity(0.2)),
+                  foregroundColor: _kAccent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: Text('View Chat History', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w700, fontSize: 16, color: _kAccentDark)),
               ),
             ),
           ),
@@ -977,6 +979,14 @@ class ChatMessage extends StatelessWidget {
           _summaryRow('Triage Priority', assessment!['triage_priority'] ?? 'Standard', Icons.flag_rounded,
               (assessment!['triage_priority']?.toString().toLowerCase().contains('high') ?? false) ? Colors.red : AppColors.accentGreen),
           _summaryRow('Recommended Care', assessment!['recommended_specialization'] ?? 'General Consultation', Icons.medical_services_rounded, _kAccent),
+          // ── Smart doctor recommendations: matches the AI's suggested
+          //    specialty against verified doctors and surfaces the best 3.
+          if ((assessment!['recommended_specialization'] ?? '').toString().trim().isNotEmpty) ...[
+            const SizedBox(height: 18),
+            _RecommendedDoctorsCard(
+              specialty: assessment!['recommended_specialization'].toString(),
+            ),
+          ],
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
@@ -989,7 +999,7 @@ class ChatMessage extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
-              child: Text('Book recommended care', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w800, fontSize: 14)),
+              child: Text('See all matching doctors', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w800, fontSize: 14)),
             ),
           ),
         ],
@@ -1094,6 +1104,221 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator> with SingleTicke
                   },
                 );
               }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Inline doctor-recommendation card rendered after the AI's final assessment.
+///
+/// Reads the AI's `recommended_specialization`, fetches verified doctors that
+/// match (by `specialty` query), and shows up to three ranked picks. Tapping
+/// "Book" jumps straight into the booking flow for that doctor.
+class _RecommendedDoctorsCard extends StatefulWidget {
+  final String specialty;
+  const _RecommendedDoctorsCard({required this.specialty});
+
+  @override
+  State<_RecommendedDoctorsCard> createState() => _RecommendedDoctorsCardState();
+}
+
+class _RecommendedDoctorsCardState extends State<_RecommendedDoctorsCard> {
+  bool _loading = true;
+  List<Map<String, dynamic>> _doctors = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await Dio().get(
+        '${ApiConstants.baseUrl}providers/nearby/',
+        queryParameters: {
+          'specialty': widget.specialty,
+          'available': 'true',
+        },
+      );
+      final data = res.data;
+      List items = data is List ? data : (data is Map ? data['results'] ?? [] : []);
+      var raw = items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      raw.sort((a, b) => _score(b).compareTo(_score(a)));
+      if (mounted) {
+        setState(() {
+          _doctors = raw.take(3).toList();
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  double _score(Map<String, dynamic> d) {
+    final rating = double.tryParse(d['rating']?.toString() ?? '0') ?? 0.0;
+    final consults = double.tryParse(d['total_consultations']?.toString() ?? '0') ?? 0.0;
+    final online = (d['status']?.toString() ?? '').toLowerCase() == 'online' ? 1.0 : 0.0;
+    return rating * 2 + consults * 0.05 + online;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _kAccentLight,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded, color: _kAccent, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Recommended doctors for your case',
+                  style: AppTextStyles.caption.copyWith(
+                    color: _kAccent,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Center(child: CircularProgressIndicator(color: _kAccent, strokeWidth: 2)),
+            )
+          else if (_doctors.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'No verified ${widget.specialty} doctors are online right now. Try again shortly or browse the directory.',
+                style: AppTextStyles.caption.copyWith(color: AppColors.grey500),
+              ),
+            )
+          else
+            ..._doctors.map((d) => _doctorTile(context, d)),
+        ],
+      ),
+    );
+  }
+
+  Widget _doctorTile(BuildContext context, Map<String, dynamic> d) {
+    final name = d['full_name']?.toString() ?? 'Doctor';
+    final specialty = (d['specialty_name'] ??
+            d['other_specialty'] ??
+            d['specialty'] ??
+            'General')
+        .toString();
+    final rating = (double.tryParse(d['rating']?.toString() ?? '0') ?? 0.0)
+        .toStringAsFixed(1);
+    final feeRaw = d['consultation_fee']?.toString() ?? '0';
+    final fee = double.tryParse(feeRaw)?.toInt() ?? 0;
+    final isOnline = (d['status']?.toString() ?? '').toLowerCase() == 'online';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF38BDF8), _kAccent],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 18),
+              ),
+              if (isOnline)
+                Positioned(
+                  right: -2, bottom: -2,
+                  child: Container(
+                    width: 12, height: 12,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: _kAccentDark,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  specialty,
+                  style: AppTextStyles.caption.copyWith(color: AppColors.grey500, fontSize: 11),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 12),
+                    const SizedBox(width: 2),
+                    Text(rating,
+                        style: AppTextStyles.caption.copyWith(
+                            color: _kAccentDark, fontWeight: FontWeight.w700, fontSize: 11)),
+                    if (fee > 0) ...[
+                      const SizedBox(width: 8),
+                      Text('· $fee XAF',
+                          style: AppTextStyles.caption.copyWith(
+                              color: AppColors.grey500, fontSize: 11)),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => context.push(
+              '/patient/doctor-profile/${d['provider_id']}',
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: _kAccent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Book',
+                style: AppTextStyles.caption.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
             ),
           ),
         ],

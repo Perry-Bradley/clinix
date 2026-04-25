@@ -3,6 +3,33 @@ from apps.accounts.models import User
 from apps.patients.models import Patient
 import uuid
 
+
+class Specialty(models.Model):
+    """Admin-configured catalogue of medical specialties / nurse roles.
+
+    Used to populate the provider signup dropdown and to filter doctor lookups
+    when the AI recommends a doctor for a patient's case.
+    """
+    ROLE_CHOICES = (
+        ('specialist', 'Specialist'),
+        ('nurse', 'Nurse'),
+    )
+
+    specialty_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=120, unique=True)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='specialist')
+    description = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'specialties'
+        ordering = ['role', 'name']
+
+    def __str__(self):
+        return f'{self.name} ({self.role})'
+
+
 class HealthcareProvider(models.Model):
     VERIFICATION_CHOICES = (
         ('pending', 'Pending'),
@@ -18,9 +45,20 @@ class HealthcareProvider(models.Model):
         ('other', 'Other'),
     )
 
+    PROVIDER_ROLE_CHOICES = (
+        ('generalist', 'Generalist'),
+        ('specialist', 'Specialist'),
+        ('nurse', 'Nurse'),
+    )
+
     provider_id = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True, db_column='provider_id')
     specialty = models.CharField(max_length=50, choices=SPECIALTY_CHOICES, default='generalist')
     other_specialty = models.CharField(max_length=200, blank=True, null=True)
+    # New: structured role + admin-configured specialty
+    provider_role = models.CharField(max_length=20, choices=PROVIDER_ROLE_CHOICES, default='generalist')
+    specialty_obj = models.ForeignKey(
+        Specialty, on_delete=models.SET_NULL, null=True, blank=True, related_name='providers',
+    )
     license_number = models.CharField(max_length=100, unique=True)
     years_experience = models.IntegerField(default=0)
     bio = models.TextField(blank=True, null=True)

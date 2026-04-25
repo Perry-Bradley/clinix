@@ -4,6 +4,8 @@ from .views import (
     ConsultationPrescriptionView, ConsultationTranscriptView, WebRTCSignalEndpointView,
     AgoraTokenView, ChatFileUploadView, ChatMessageListView,
     PatientRemindersView, ReminderLogView, ReminderAdherenceView,
+    MedicalRecordListCreateView, MedicalRecordDetailView, MedicalRecordShareView,
+    ReferralListCreateView, ReferralDetailView,
 )
 
 urlpatterns = [
@@ -19,4 +21,11 @@ urlpatterns = [
     path('reminders/', PatientRemindersView.as_view(), name='patient_reminders'),
     path('reminders/<uuid:reminder_id>/log/', ReminderLogView.as_view(), name='reminder_log'),
     path('reminders/adherence/', ReminderAdherenceView.as_view(), name='reminder_adherence'),
+    # Medical records
+    path('records/', MedicalRecordListCreateView.as_view(), name='medical_records'),
+    path('records/<uuid:record_id>/', MedicalRecordDetailView.as_view(), name='medical_record_detail'),
+    path('records/<uuid:record_id>/share/', MedicalRecordShareView.as_view(), name='medical_record_share'),
+    # Referrals
+    path('referrals/', ReferralListCreateView.as_view(), name='referrals'),
+    path('referrals/<uuid:referral_id>/', ReferralDetailView.as_view(), name='referral_detail'),
 ]

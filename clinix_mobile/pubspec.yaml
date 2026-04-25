@@ -89,8 +89,8 @@ flutter:
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
-  image_path: "assets/icons/app_icon.png"
+  image_path: "assets/icons/clinix_logo.png"
   adaptive_icon_background: "#0F172A"
-  adaptive_icon_foreground: "assets/icons/app_icon_foreground.png"
+  adaptive_icon_foreground: "assets/icons/clinix_logo.png"
   min_sdk_android: 21
   remove_alpha_ios: true

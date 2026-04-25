@@ -5,13 +5,13 @@ logger = logging.getLogger(__name__)
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Sum, Count, Avg
+from django.db.models import Sum, Count, Avg, Q
 from django.utils import timezone
 from django.conf import settings
 from django.core.files.storage import default_storage
 import os
-from .models import HealthcareProvider, ProviderCredential, ProviderReview
-from .serializers import ProviderProfileSerializer, ProviderCredentialSerializer, ProviderPublicSerializer, ProviderReviewSerializer, ProviderReviewCreateSerializer
+from .models import HealthcareProvider, ProviderCredential, ProviderReview, Specialty
+from .serializers import ProviderProfileSerializer, ProviderCredentialSerializer, ProviderPublicSerializer, ProviderReviewSerializer, ProviderReviewCreateSerializer, SpecialtySerializer
 from apps.payments.models import ProviderWallet, WalletTransaction, WithdrawalRequest
 from apps.patients.models import Patient
 from apps.locations.models import Location
@@ -223,16 +223,48 @@ class ProviderDashboardView(APIView):
             'total_consultations': provider.total_consultations
         })
 
+class SpecialtyListView(generics.ListAPIView):
+    """Public list of admin-configured specialties / nurse roles.
+
+    Used by the mobile provider signup screen to populate the dropdown,
+    and by the AI doctor-recommendation flow to map AI-detected specialty
+    keywords to a real Specialty record.
+    """
+    serializer_class = SpecialtySerializer
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get_queryset(self):
+        qs = Specialty.objects.filter(is_active=True)
+        role = self.request.query_params.get('role')
+        if role:
+            qs = qs.filter(role=role)
+        return qs
+
+
 class ProviderNearbyView(generics.ListAPIView):
     serializer_class = ProviderPublicSerializer
     permission_classes = [permissions.AllowAny]
     authentication_classes = []  # Allow requests with expired/no tokens
-    
+
     def get_queryset(self):
         queryset = HealthcareProvider.objects.filter(verification_status='approved')
         specialization = self.request.query_params.get('specialization')
+        provider_role = self.request.query_params.get('role')
+        specialty_id = self.request.query_params.get('specialty_id')
+        specialty_name = self.request.query_params.get('specialty')
         is_available = self.request.query_params.get('available')
-        
+
+        if specialty_id:
+            queryset = queryset.filter(specialty_obj_id=specialty_id)
+        elif specialty_name:
+            # Match either the legacy `specialty` field or the related Specialty.name.
+            queryset = queryset.filter(
+                Q(specialty__icontains=specialty_name) |
+                Q(specialty_obj__name__icontains=specialty_name)
+            )
+        if provider_role:
+            queryset = queryset.filter(provider_role=provider_role)
         if specialization:
             queryset = queryset.filter(specialty__icontains=specialization)
         if is_available == 'true':

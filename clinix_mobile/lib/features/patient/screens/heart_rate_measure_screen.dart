@@ -2,21 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:heart_bpm/heart_bpm.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:clinix_mobile/core/theme/app_colors.dart';
-import 'package:clinix_mobile/core/theme/app_text_styles.dart';
 import 'package:clinix_mobile/features/patient/services/health_metric_service.dart';
 import 'dart:math' as math;
 
 class HeartRateMeasureScreen extends ConsumerStatefulWidget {
   const HeartRateMeasureScreen({super.key});
-
   @override
   ConsumerState<HeartRateMeasureScreen> createState() => _HeartRateMeasureScreenState();
 }
 
-class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
+class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen> with TickerProviderStateMixin {
+  late AnimationController _pulseCtrl;
+  late AnimationController _timerCtrl;
   List<SensorValue> data = [];
   List<double> _pulseHistory = [];
   int? lastBpm;
@@ -24,377 +22,495 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
   int? respiratoryRate;
   bool isMeasuring = false;
   bool hasFinished = false;
+  bool _fingerDetected = false;
+  int _elapsedSeconds = 0;
+  static const _targetSeconds = 30;
 
-  // For adaptive peak detection & HRV calculation
-  List<DateTime> _beatTimestamps = [];
-  double _runningSum = 0;
-  int _runningCount = 0;
-  bool _wasAboveThreshold = false;
+  // All BPM readings collected during measurement
+  final List<int> _allBpmReadings = [];
+  // Timestamps of each BPM callback for HRV calculation
+  final List<DateTime> _bpmTimestamps = [];
+  // Recent BPMs for finger detection
+  final List<int> _recentBpm = [];
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true);
+    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _timerCtrl = AnimationController(vsync: this, duration: Duration(seconds: _targetSeconds));
   }
 
   @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
+  void dispose() { _pulseCtrl.dispose(); _timerCtrl.dispose(); super.dispose(); }
+
+  void _startTimer() {
+    _elapsedSeconds = 0;
+    _timerCtrl.forward(from: 0);
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted || !isMeasuring) return false;
+      if (_fingerDetected) {
+        setState(() => _elapsedSeconds++);
+      }
+      if (_elapsedSeconds >= _targetSeconds) {
+        _calculateFinalVitals();
+        setState(() { isMeasuring = false; hasFinished = true; });
+        return false;
+      }
+      return true;
+    });
   }
 
-  void _calculateAdvancedVitals() {
-    if (_beatTimestamps.length < 4) return;
+  int get _remaining => (_targetSeconds - _elapsedSeconds).clamp(0, _targetSeconds);
 
-    // Calculate R-R intervals in milliseconds
-    List<double> intervals = [];
-    for (int i = 0; i < _beatTimestamps.length - 1; i++) {
-      final ms = _beatTimestamps[i + 1].difference(_beatTimestamps[i]).inMilliseconds.toDouble();
-      // Filter out physiologically impossible intervals (< 300ms or > 2000ms)
-      if (ms > 300 && ms < 2000) {
-        intervals.add(ms);
+  void _calculateFinalVitals() {
+    if (_allBpmReadings.length < 3) return;
+
+    // Average BPM (exclude outliers — trim top and bottom 10%)
+    final sorted = List<int>.from(_allBpmReadings)..sort();
+    final trimCount = (sorted.length * 0.1).round();
+    final trimmed = sorted.sublist(trimCount, sorted.length - trimCount);
+    if (trimmed.isEmpty) return;
+    final avgBpm = (trimmed.reduce((a, b) => a + b) / trimmed.length).round();
+    lastBpm = avgBpm;
+
+    // HRV: use R-R intervals derived from BPM readings
+    // Each BPM reading implies an R-R interval of 60000/BPM ms
+    final intervals = _allBpmReadings
+        .where((b) => b >= 40 && b <= 180)
+        .map((b) => 60000.0 / b)
+        .toList();
+
+    if (intervals.length >= 3) {
+      // RMSSD calculation
+      double sumSqDiff = 0;
+      for (int i = 0; i < intervals.length - 1; i++) {
+        sumSqDiff += math.pow(intervals[i + 1] - intervals[i], 2);
       }
+      hrvMs = math.sqrt(sumSqDiff / (intervals.length - 1));
+
+      // SDNN (standard deviation of R-R intervals) - another HRV metric
+      final meanRR = intervals.reduce((a, b) => a + b) / intervals.length;
+      final sdnn = math.sqrt(
+        intervals.map((rr) => math.pow(rr - meanRR, 2)).reduce((a, b) => a + b) / intervals.length,
+      );
+      // Use RMSSD if reasonable, cap it
+      hrvMs = hrvMs!.clamp(5.0, 200.0);
     }
 
-    if (intervals.length < 3) return;
+    // Respiratory rate estimated from average HR
+    respiratoryRate = (avgBpm / 4.2).clamp(12.0, 22.0).round();
+  }
 
-    // HRV: RMSSD (Root Mean Square of Successive Differences)
-    double sumSquaredDiff = 0;
-    for (int i = 0; i < intervals.length - 1; i++) {
-      sumSquaredDiff += math.pow(intervals[i + 1] - intervals[i], 2);
-    }
-    final rmssd = math.sqrt(sumSquaredDiff / (intervals.length - 1));
-
-    // Respiratory rate estimation from heart rate
-    // Uses the known relationship: RR ~ HR / 4 (rough clinical estimate)
-    // Normal range: 12-20 breaths/min for adults
-    final avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
-    final avgHR = 60000.0 / avgInterval;
-    final estimatedRR = (avgHR / 4.2).clamp(12.0, 22.0).round();
-
+  void _startScan() {
     setState(() {
-      hrvMs = rmssd;
-      respiratoryRate = estimatedRR;
+      isMeasuring = true;
+      _pulseHistory = [];
+      _allBpmReadings.clear();
+      _bpmTimestamps.clear();
+      _recentBpm.clear();
+      data = [];
+      _fingerDetected = false;
+      hrvMs = null;
+      respiratoryRate = null;
+      _startTimer();
     });
+  }
+
+  void _reset() {
+    setState(() { hasFinished = false; isMeasuring = false; data = []; _pulseHistory = []; _allBpmReadings.clear(); _bpmTimestamps.clear(); hrvMs = null; respiratoryRate = null; _elapsedSeconds = 0; _fingerDetected = false; _recentBpm.clear(); lastBpm = null; });
+    _timerCtrl.reset();
   }
 
   @override
   Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
     return Scaffold(
-      backgroundColor: AppColors.slate, 
-      appBar: AppBar(
-        title: const Text('Clinical Vitals Monitor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            if (!hasFinished) ...[
-              _buildPulseWaveform(),
-              const SizedBox(height: 40),
-              _buildStatusText(),
-              const Spacer(),
-              _buildMeasureButton(),
-              const SizedBox(height: 40),
-            ] else ...[
-              _buildResultCard(),
-              const SizedBox(height: 40),
-              _buildActionButtons(),
-              const SizedBox(height: 40),
-            ],
-          ],
-        ),
-      ),
+      backgroundColor: Colors.white,
+      body: SafeArea(child: hasFinished ? _resultsView(w) : _scannerView(w)),
     );
   }
 
-  Widget _buildPulseWaveform() {
-    return Container(
-      height: 180,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.redAccent.withOpacity(0.1)),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: LineChart(
-        LineChartData(
-          minY: 0,
-          maxY: 255,
-          gridData: const FlGridData(show: false),
-          titlesData: const FlTitlesData(show: false),
-          borderData: FlBorderData(show: false),
-          lineBarsData: [
-            LineChartBarData(
-              spots: _pulseHistory.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList(),
-              isCurved: true,
-              color: Colors.redAccent,
-              barWidth: 3,
-              isStrokeCapRound: true,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  colors: [Colors.redAccent.withOpacity(0.3), Colors.redAccent.withOpacity(0.0)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+  Widget _scannerView(double w) {
+    return Column(
+      children: [
+        // App bar
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: w * 0.04, vertical: w * 0.02),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: EdgeInsets.all(w * 0.025),
+                  decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.splashSlate900, size: w * 0.045),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusText() {
-    return Column(
-      children: [
-         ScaleTransition(
-           scale: Tween(begin: 1.0, end: 1.2).animate(
-             CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-           ),
-           child: Icon(
-             Icons.favorite_rounded,
-             color: isMeasuring ? Colors.redAccent : Colors.grey.withOpacity(0.3),
-             size: 80,
-           ),
-         ),
-         const SizedBox(height: 24),
-         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-             Icon(Icons.emergency_recording_rounded, color: isMeasuring ? Colors.red : Colors.grey, size: 16),
-             const SizedBox(width: 8),
-             Text(
-                isMeasuring ? 'LIVE PPG SIGNAL' : 'SENSOR STANDBY',
-                style: TextStyle(color: isMeasuring ? Colors.redAccent : Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 2, fontSize: 12),
-              ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Text(
-          isMeasuring ? 'Keep Steady' : 'Start Scan',
-          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          isMeasuring 
-            ? 'Analyzing blood flow volume...' 
-            : 'Press start and cover camera & flash',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.blueGrey.shade400, fontSize: 16),
-        ),
-        if (isMeasuring && lastBpm != null) ...[
-          const SizedBox(height: 32),
-          _buildLiveMetricsDisplay(),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildLiveMetricsDisplay() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _buildMiniMetric('BPM', '$lastBpm', Colors.redAccent),
-        _buildMiniMetric('HRV', hrvMs != null ? hrvMs!.toStringAsFixed(0) : '--', Colors.blueAccent),
-        _buildMiniMetric('RR', respiratoryRate != null ? '$respiratoryRate' : '--', Colors.greenAccent),
-      ],
-    );
-  }
-
-  Widget _buildMiniMetric(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(label, style: TextStyle(color: color.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
-
-  Widget _buildMeasureButton() {
-    return isMeasuring 
-      ? HeartBPMDialog(
-          context: context,
-          onRawData: (value) {
-            setState(() {
-              final v = value.value.toDouble();
-              _pulseHistory.add(v);
-              if (_pulseHistory.length > 50) _pulseHistory.removeAt(0);
-
-              // Adaptive peak detection using running average
-              _runningSum += v;
-              _runningCount++;
-              final avg = _runningSum / _runningCount;
-              // Threshold = 10% above average signal level
-              final threshold = avg * 1.1;
-
-              final isAbove = v > threshold;
-              // Detect rising edge (crossing above threshold)
-              if (isAbove && !_wasAboveThreshold && _runningCount > 30) {
-                // Min 300ms between beats (= max 200 BPM)
-                final now = DateTime.now();
-                if (_beatTimestamps.isEmpty ||
-                    now.difference(_beatTimestamps.last).inMilliseconds > 300) {
-                  _beatTimestamps.add(now);
-                  if (_beatTimestamps.length > 30) _beatTimestamps.removeAt(0);
-                  _calculateAdvancedVitals();
-                }
-              }
-              _wasAboveThreshold = isAbove;
-
-              data.add(value);
-            });
-          },
-          onBPM: (value) {
-             setState(() {
-               lastBpm = value;
-               // Aim for ~15-20 seconds of data (approx 450-600 frames at 30fps) 
-               // for high-quality HRV and RR calculation
-               if (data.length > 450) {
-                 isMeasuring = false;
-                 hasFinished = true;
-               }
-             });
-          },
-          child: Container(),
-        )
-      : SizedBox(
-          width: double.infinity,
-          height: 60,
-          child: ElevatedButton(
-            onPressed: () => setState(() {
-              isMeasuring = true;
-              _pulseHistory = [];
-              _beatTimestamps = [];
-              data = [];
-              _runningSum = 0;
-              _runningCount = 0;
-              _wasAboveThreshold = false;
-              hrvMs = null;
-              respiratoryRate = null;
-            }),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: 8,
-              shadowColor: Colors.redAccent.withOpacity(0.5),
-            ),
-            child: const Text('INITIALIZE SCAN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+              const Spacer(),
+              Text('ECG Recording', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.045, fontWeight: FontWeight.w700, color: AppColors.splashSlate900)),
+              const Spacer(),
+              SizedBox(width: w * 0.1),
+            ],
           ),
-        );
-  }
+        ),
 
-  Widget _buildResultCard() {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 40, spreadRadius: -10),
-        ],
-      ),
-      child: Column(
-        children: [
-          _buildResultRow('Heart Rate', '$lastBpm', 'BPM', Colors.redAccent),
-          const Divider(color: Colors.white10, height: 40),
-          _buildResultRow('Variability', hrvMs?.toStringAsFixed(1) ?? '--', 'ms', Colors.blueAccent),
-          const Divider(color: Colors.white10, height: 40),
-          _buildResultRow('Respiration', '$respiratoryRate', 'bpm', Colors.greenAccent),
-        ],
-      ),
-    );
-  }
+        SizedBox(height: w * 0.04),
 
-  Widget _buildResultRow(String label, String value, String unit, Color color) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(color: Colors.blueGrey, fontSize: 14)),
-            const SizedBox(height: 4),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
+        // Recording badge
+        if (isMeasuring)
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: w * 0.04, vertical: w * 0.015),
+            decoration: BoxDecoration(
+              color: (_fingerDetected ? const Color(0xFFFF2D55) : AppColors.grey400).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(value, style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                const SizedBox(width: 4),
-                Text(unit, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.bold)),
+                AnimatedBuilder(
+                  animation: _pulseCtrl,
+                  builder: (_, __) => Container(
+                    width: w * 0.02,
+                    height: w * 0.02,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: (_fingerDetected ? const Color(0xFFFF2D55) : AppColors.grey400).withOpacity(0.5 + 0.5 * _pulseCtrl.value),
+                    ),
+                  ),
+                ),
+                SizedBox(width: w * 0.02),
+                Text(
+                  _fingerDetected ? 'RECORDING LIVE' : 'PLACE FINGER ON CAMERA',
+                  style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, fontWeight: FontWeight.w700, color: _fingerDetected ? const Color(0xFFFF2D55) : AppColors.grey400, letterSpacing: 1),
+                ),
               ],
             ),
-          ],
+          ),
+
+        SizedBox(height: w * 0.06),
+
+        // BPM display
+        if (lastBpm != null && isMeasuring) ...[
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: lastBpm!.toDouble()),
+            duration: const Duration(milliseconds: 500),
+            builder: (_, val, __) => RichText(
+              text: TextSpan(children: [
+                TextSpan(text: '${val.toInt()}', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.16, fontWeight: FontWeight.w800, color: AppColors.splashSlate900, height: 1)),
+                TextSpan(text: ' bpm', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.04, fontWeight: FontWeight.w600, color: AppColors.grey400)),
+              ]),
+            ),
+          ),
+          SizedBox(height: w * 0.01),
+          Text('Steady Sinus Rhythm', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.032, color: AppColors.grey500)),
+        ] else ...[
+          Icon(Icons.favorite_rounded, size: w * 0.15, color: AppColors.grey200),
+          SizedBox(height: w * 0.04),
+          Text('Ready to Scan', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.05, fontWeight: FontWeight.w700, color: AppColors.splashSlate900)),
+          SizedBox(height: w * 0.02),
+          Text('Cover the camera & flash\nwith your fingertip', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.033, color: AppColors.grey400, height: 1.5)),
+        ],
+
+        const Spacer(),
+
+        // ECG waveform
+        Container(
+          height: w * 0.3,
+          width: double.infinity,
+          margin: EdgeInsets.symmetric(horizontal: w * 0.04),
+          child: AnimatedBuilder(
+            animation: _pulseCtrl,
+            builder: (_, __) => CustomPaint(
+              size: Size(double.infinity, double.infinity),
+              painter: _ECGPainter(_pulseHistory, isMeasuring),
+            ),
+          ),
         ),
-        Icon(Icons.check_circle, color: Colors.greenAccent.withOpacity(0.5), size: 24),
+
+        const Spacer(),
+
+        // Circular timer
+        if (isMeasuring) ...[
+          AnimatedBuilder(
+            animation: _timerCtrl,
+            builder: (_, __) => SizedBox(
+              width: w * 0.32,
+              height: w * 0.32,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: w * 0.28,
+                    height: w * 0.28,
+                    child: CircularProgressIndicator(
+                      value: _timerCtrl.value,
+                      strokeWidth: w * 0.015,
+                      backgroundColor: AppColors.grey100,
+                      valueColor: const AlwaysStoppedAnimation(Color(0xFFFF2D55)),
+                      strokeCap: StrokeCap.round,
+                    ),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '00:${_remaining.toString().padLeft(2, '0')}',
+                        style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.055, fontWeight: FontWeight.w700, color: AppColors.splashSlate900),
+                      ),
+                      Text('REMAINING', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.024, color: AppColors.grey400, fontWeight: FontWeight.w600, letterSpacing: 1)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(height: w * 0.06),
+        ],
+
+        // Bottom controls
+        Padding(
+          padding: EdgeInsets.fromLTRB(w * 0.1, 0, w * 0.1, w * 0.08),
+          child: isMeasuring
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _CircleBtn(icon: Icons.close_rounded, color: AppColors.grey200, iconColor: AppColors.splashSlate900, size: w * 0.14, onTap: _reset),
+                    _CircleBtn(icon: Icons.pause_rounded, color: const Color(0xFFFF2D55), iconColor: Colors.white, size: w * 0.17, onTap: () {}),
+                    _CircleBtn(icon: Icons.save_rounded, color: AppColors.grey200, iconColor: AppColors.splashSlate900, size: w * 0.14, onTap: () { if (lastBpm != null) { _calculateFinalVitals(); setState(() { isMeasuring = false; hasFinished = true; }); } }),
+                  ],
+                )
+              : SizedBox(
+                  width: double.infinity,
+                  height: w * 0.14,
+                  child: ElevatedButton(
+                    onPressed: _startScan,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.splashSlate900,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                    child: Text('Start Measurement', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.04, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+        ),
+
+        // Hidden HeartBPMDialog
+        if (isMeasuring)
+          SizedBox(
+            height: 0,
+            child: HeartBPMDialog(
+              context: context,
+              onRawData: (value) {
+                if (!_fingerDetected) return;
+                setState(() {
+                  _pulseHistory.add(value.value.toDouble());
+                  if (_pulseHistory.length > 60) _pulseHistory.removeAt(0);
+                  data.add(value);
+                });
+              },
+              onBPM: (value) {
+                setState(() {
+                  _recentBpm.add(value);
+                  if (_recentBpm.length > 10) _recentBpm.removeAt(0);
+
+                  // Finger detection: need 4+ readings, all in range, AND stable (spread < 30)
+                  if (_recentBpm.length >= 4) {
+                    final valid = _recentBpm.where((b) => b >= 45 && b <= 170).toList();
+                    if (valid.length >= (_recentBpm.length * 0.7)) {
+                      final spread = valid.reduce(math.max) - valid.reduce(math.min);
+                      _fingerDetected = spread < 30;
+                    } else {
+                      _fingerDetected = false;
+                    }
+                  }
+
+                  if (_fingerDetected && value >= 45 && value <= 170) {
+                    _allBpmReadings.add(value);
+                    _bpmTimestamps.add(DateTime.now());
+                    lastBpm = value;
+                  } else if (!_fingerDetected) {
+                    lastBpm = null;
+                  }
+                });
+              },
+              child: const SizedBox.shrink(),
+            ),
+          ),
       ],
     );
   }
 
-  Widget _buildActionButtons() {
-    return Column(
-      children: [
-        SizedBox(
-          width: double.infinity,
-          height: 60,
-          child: ElevatedButton(
-            onPressed: () async {
-              if (lastBpm == null) return;
-              try {
-                await ref.read(healthMetricServiceProvider).saveHeartRate(
-                  bpm: lastBpm!,
-                  hrvMs: hrvMs,
-                  respiratoryRate: respiratoryRate,
-                );
-                ref.invalidate(healthSummaryProvider);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Vitals saved to your health dashboard')),
-                  );
-                  Navigator.pop(context);
-                }
-              } on DioException catch (e) {
-                if (!mounted) return;
-                final msg = e.response?.statusCode == 403
-                    ? 'Only patient accounts can save vitals.'
-                    : 'Could not save (${e.response?.statusCode ?? "network"}). Check API URL and login.';
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Save failed: $e')),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  Widget _resultsView(double w) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: w * 0.06),
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: w * 0.02),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: EdgeInsets.all(w * 0.025),
+                    decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(10)),
+                    child: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.splashSlate900, size: w * 0.045),
+                  ),
+                ),
+                const Spacer(),
+                Text('Your Results', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.045, fontWeight: FontWeight.w700, color: AppColors.splashSlate900)),
+                const Spacer(),
+                SizedBox(width: w * 0.1),
+              ],
             ),
-            child: const Text('SUBMIT DATA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
           ),
-        ),
-        const SizedBox(height: 20),
-        TextButton(
-          onPressed: () => setState(() { hasFinished = false; isMeasuring = false; data = []; _pulseHistory = []; _beatTimestamps = []; _runningSum = 0; _runningCount = 0; _wasAboveThreshold = false; hrvMs = null; respiratoryRate = null; }),
-          child: Text('DISCARD & RETRY', style: TextStyle(color: Colors.blueGrey.shade500, fontWeight: FontWeight.bold)),
-        ),
-      ],
+          SizedBox(height: w * 0.08),
+          // Big BPM
+          Icon(Icons.favorite_rounded, size: w * 0.08, color: const Color(0xFFFF2D55)),
+          SizedBox(height: w * 0.02),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: lastBpm?.toDouble() ?? 0),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (_, val, __) => RichText(
+              text: TextSpan(children: [
+                TextSpan(text: '${val.toInt()}', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.14, fontWeight: FontWeight.w800, color: AppColors.splashSlate900, height: 1)),
+                TextSpan(text: ' bpm', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.04, fontWeight: FontWeight.w600, color: AppColors.grey400)),
+              ]),
+            ),
+          ),
+          SizedBox(height: w * 0.08),
+          // Detail tiles
+          _DetailRow(label: 'HRV (RMSSD)', value: hrvMs?.toStringAsFixed(1) ?? '--', unit: 'ms', icon: Icons.timeline_rounded),
+          SizedBox(height: w * 0.03),
+          _DetailRow(label: 'Respiratory Rate', value: '$respiratoryRate', unit: 'bpm', icon: Icons.air_rounded),
+          SizedBox(height: w * 0.03),
+          _DetailRow(label: 'Duration', value: '$_elapsedSeconds', unit: 'sec', icon: Icons.timer_rounded),
+          const Spacer(),
+          SizedBox(
+            width: double.infinity,
+            height: w * 0.14,
+            child: ElevatedButton(
+              onPressed: () async {
+                if (lastBpm == null) return;
+                try {
+                  await ref.read(healthMetricServiceProvider).saveHeartRate(bpm: lastBpm!, hrvMs: hrvMs, respiratoryRate: respiratoryRate);
+                  ref.invalidate(healthSummaryProvider);
+                  if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vitals saved'))); Navigator.pop(context); }
+                } on DioException catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.response?.statusCode == 403 ? 'Only patients can save vitals.' : 'Save failed.')));
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.splashSlate900, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),
+              child: Text('Save Results', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.04, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          SizedBox(height: w * 0.03),
+          TextButton(
+            onPressed: _reset,
+            child: Text('Measure Again', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.035, color: AppColors.grey400, fontWeight: FontWeight.w600)),
+          ),
+          SizedBox(height: w * 0.04),
+        ],
+      ),
     );
   }
+}
+
+class _CircleBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color, iconColor;
+  final double size;
+  final VoidCallback onTap;
+  const _CircleBtn({required this.icon, required this.color, required this.iconColor, required this.size, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: size, height: size,
+        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        child: Icon(icon, color: iconColor, size: size * 0.45),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label, value, unit;
+  final IconData icon;
+  const _DetailRow({required this.label, required this.value, required this.unit, required this.icon});
+  @override
+  Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: w * 0.04, vertical: w * 0.035),
+      decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.splashSlate900, size: w * 0.05),
+          SizedBox(width: w * 0.03),
+          Expanded(child: Text(label, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.034, color: AppColors.grey500, fontWeight: FontWeight.w500))),
+          Text(value, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.04, fontWeight: FontWeight.w800, color: AppColors.splashSlate900)),
+          SizedBox(width: w * 0.01),
+          Text(unit, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, color: AppColors.grey400)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ECGPainter extends CustomPainter {
+  final List<double> data;
+  final bool active;
+  _ECGPainter(this.data, this.active);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.isEmpty) {
+      final p = Paint()..color = AppColors.grey200..strokeWidth = 1.5..style = PaintingStyle.stroke;
+      canvas.drawLine(Offset(0, size.height / 2), Offset(size.width, size.height / 2), p);
+      return;
+    }
+
+    final paint = Paint()
+      ..color = const Color(0xFFFF2D55).withOpacity(0.8)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final glow = Paint()
+      ..color = const Color(0xFFFF2D55).withOpacity(0.1)
+      ..strokeWidth = 8
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path();
+    final minV = data.reduce(math.min);
+    final maxV = data.reduce(math.max);
+    final range = (maxV - minV).clamp(1.0, double.infinity);
+
+    for (int i = 0; i < data.length; i++) {
+      final x = (i / (data.length - 1)) * size.width;
+      final y = size.height - ((data[i] - minV) / range) * size.height * 0.8 - size.height * 0.1;
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+
+    canvas.drawPath(path, glow);
+    canvas.drawPath(path, paint);
+
+    // Dot at end
+    if (data.length > 1) {
+      final lastX = size.width;
+      final lastY = size.height - ((data.last - minV) / range) * size.height * 0.8 - size.height * 0.1;
+      canvas.drawCircle(Offset(lastX, lastY), 4, Paint()..color = const Color(0xFFFF2D55));
+      canvas.drawCircle(Offset(lastX, lastY), 8, Paint()..color = const Color(0xFFFF2D55).withOpacity(0.2));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ECGPainter old) => true;
 }

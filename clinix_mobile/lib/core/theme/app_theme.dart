@@ -27,15 +27,16 @@ class AppTheme {
         surface: AppColors.white,
         onSurface: AppColors.grey900,
       ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.darkBlue900,
-        foregroundColor: AppColors.white,
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.splashSlate900,
         elevation: 0,
         centerTitle: false,
-        iconTheme: IconThemeData(color: AppColors.white),
-        systemOverlayStyle: SystemUiOverlayStyle(
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: AppColors.splashSlate900),
+        systemOverlayStyle: const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.light,
+          statusBarIconBrightness: Brightness.dark,
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(

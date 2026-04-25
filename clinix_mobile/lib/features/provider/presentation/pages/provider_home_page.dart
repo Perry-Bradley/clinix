@@ -18,10 +18,29 @@ class _ProviderApi {
     baseUrl: ApiConstants.baseUrl,
     connectTimeout: const Duration(seconds: 20),
     receiveTimeout: const Duration(seconds: 20),
+  ))..interceptors.add(InterceptorsWrapper(
+    onError: (error, handler) async {
+      if (error.response?.statusCode == 401) {
+        final newToken = await AuthService.refreshAccessToken();
+        if (newToken != null) {
+          error.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+          try {
+            final retryResponse = await Dio().fetch(error.requestOptions);
+            return handler.resolve(retryResponse);
+          } catch (e) {
+            return handler.next(error);
+          }
+        }
+      }
+      return handler.next(error);
+    },
   ));
 
   static Future<Options> _authOptions() async {
-    final token = await AuthService.getAccessToken();
+    var token = await AuthService.getAccessToken();
+    if (token == null || token.isEmpty) {
+      token = await AuthService.refreshAccessToken();
+    }
     return Options(headers: {'Authorization': 'Bearer $token'});
   }
 
@@ -92,20 +111,15 @@ class _ProviderApi {
     required String documentType,
     required XFile file,
   }) async {
-    final extension = file.name.contains('.') ? file.name.split('.').last : 'jpg';
-    final storageRef = FirebaseStorage.instance.ref().child(
-      'provider_kyc/$documentType/${DateTime.now().millisecondsSinceEpoch}_${file.name}',
-    );
-    await storageRef.putFile(File(file.path));
-    final downloadUrl = await storageRef.getDownloadURL();
+    final formData = FormData.fromMap({
+      'document_type': documentType,
+      'document': await MultipartFile.fromFile(file.path, filename: file.name),
+    });
+    final authOpts = await _authOptions();
     await _dio.post(
       '${ApiConstants.providers}credentials/',
-      data: {
-        'document_type': documentType,
-        'document_url': downloadUrl,
-        'file_extension': extension,
-      },
-      options: await _authOptions(),
+      data: formData,
+      options: authOpts.copyWith(contentType: 'multipart/form-data'),
     );
   }
 }
@@ -308,8 +322,10 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
           child: Container(
             padding: const EdgeInsets.fromLTRB(24, 60, 24, 30),
             decoration: const BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.only(bottomLeft: Radius.circular(32), bottomRight: Radius.circular(32)),
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: AppColors.grey200, width: 1),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,11 +336,11 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Doctor Portal 🩺', style: AppTextStyles.caption.copyWith(color: AppColors.sky300, fontSize: 13)),
+                          Text('Doctor Portal', style: AppTextStyles.caption.copyWith(color: AppColors.grey500, fontSize: 13, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 4),
-                          Text(_providerName, style: AppTextStyles.displayLarge.copyWith(fontSize: 22)),
+                          Text(_providerName, style: AppTextStyles.displayLarge.copyWith(fontSize: 22, color: AppColors.darkBlue900)),
                           const SizedBox(height: 2),
-                          Text('Healthcare Provider', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
+                          Text('Healthcare Provider', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500)),
                         ],
                       ),
                     ),
@@ -334,10 +350,11 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
                         padding: const EdgeInsets.all(10),
                         margin: const EdgeInsets.only(right: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
+                          color: AppColors.grey50,
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.grey200),
                         ),
-                        child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 22),
+                        child: const Icon(Icons.notifications_none_rounded, color: AppColors.darkBlue800, size: 22),
                       ),
                     ),
                     GestureDetector(
@@ -346,10 +363,11 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
                         padding: const EdgeInsets.all(10),
                         margin: const EdgeInsets.only(right: 10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
+                          color: AppColors.grey50,
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.grey200),
                         ),
-                        child: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 22),
+                        child: const Icon(Icons.chat_bubble_rounded, color: AppColors.darkBlue800, size: 22),
                       ),
                     ),
                     _AvailabilityToggle(),
@@ -489,16 +507,16 @@ class _StatChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.12),
+          color: AppColors.grey50,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
+          border: Border.all(color: AppColors.grey200),
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.sky300, size: 18),
+            Icon(icon, color: AppColors.darkBlue600, size: 18),
             const SizedBox(height: 6),
-            Text(value, style: AppTextStyles.headlineMedium.copyWith(color: AppColors.white, fontSize: 20)),
-            Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.sky200, fontSize: 11)),
+            Text(value, style: AppTextStyles.headlineMedium.copyWith(color: AppColors.darkBlue900, fontSize: 20)),
+            Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.grey500, fontSize: 11)),
           ],
         ),
       ),
@@ -1085,6 +1103,7 @@ class _ProviderEarningsTabState extends State<_ProviderEarningsTab> {
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('[Wallet] Load failed: $e');
       if (!mounted) return;
       setState(() {
         _error = 'Could not load wallet data.';
@@ -1292,7 +1311,10 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
   Future<void> _loadProfile() async {
     try {
       final profile = await _ProviderApi.fetchProfile();
-      final credentials = await _ProviderApi.fetchCredentials();
+      List<Map<String, dynamic>> credentials = [];
+      try {
+        credentials = await _ProviderApi.fetchCredentials();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _profile = profile;
@@ -1300,9 +1322,10 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('[ProviderProfile] Load failed: $e');
       if (!mounted) return;
       setState(() {
-        _error = 'Could not load provider profile.';
+        _error = 'Could not load profile. Check connection.';
         _isLoading = false;
       });
     }
@@ -1340,9 +1363,8 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
       return Center(child: Text(_error!, style: AppTextStyles.bodyMedium));
     }
 
-    final user = (_profile?['user'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
-    final providerName = user['full_name']?.toString() ?? 'Provider';
-    final profilePhoto = user['profile_photo']?.toString() ?? '';
+    final providerName = _profile?['full_name']?.toString() ?? 'Provider';
+    final profilePhoto = _profile?['user_photo']?.toString() ?? '';
     final verificationStatus = (_profile?['verification_status'] ?? 'pending').toString();
     final specialty = (_profile?['other_specialty']?.toString().trim().isNotEmpty ?? false)
         ? _profile!['other_specialty'].toString()
@@ -1462,8 +1484,9 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
                 ),
               ),
               const SizedBox(height: 20),
-              // Show verify card ONLY if not yet approved
-              if (verificationStatus != 'approved') ...[
+              // Show verify CTA only if the doctor hasn't uploaded anything yet
+              // (once credentials are submitted, everything verification-related disappears).
+              if (_credentials.isEmpty && verificationStatus != 'approved') ...[
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(

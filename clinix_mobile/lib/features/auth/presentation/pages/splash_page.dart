@@ -142,11 +142,12 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                               ),
                             ],
                           ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.spa_rounded, // Premium health/wellness icon
-                              color: Colors.white,
-                              size: 60,
+                          child: Center(
+                            child: Image.asset(
+                              'assets/icons/clinix_logo.png',
+                              width: 70,
+                              height: 70,
+                              fit: BoxFit.contain,
                             ),
                           ),
                         ),

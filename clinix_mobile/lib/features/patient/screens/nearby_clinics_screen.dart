@@ -29,11 +29,16 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
 
   final List<Map<String, dynamic>> _clinics = [];
   String _searchQuery = '';
+  String _placeFilter = 'all'; // 'all', 'hospital', 'pharmacy'
 
   List<Map<String, dynamic>> get _filteredClinics {
-    if (_searchQuery.trim().isEmpty) return _clinics;
+    var list = _clinics;
+    if (_placeFilter != 'all') {
+      list = list.where((c) => c['type'] == _placeFilter).toList();
+    }
+    if (_searchQuery.trim().isEmpty) return list;
     final q = _searchQuery.trim().toLowerCase();
-    return _clinics.where((c) {
+    return list.where((c) {
       final name = c['name']?.toString().toLowerCase() ?? '';
       final addr = c['address']?.toString().toLowerCase() ?? '';
       return name.contains(q) || addr.contains(q);
@@ -160,20 +165,19 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
 
   Future<void> _searchNearbyClinics(Position position) async {
     setState(() => _isSearching = true);
-    
-    try {
-      final url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-          '?location=${position.latitude},${position.longitude}'
-          '&radius=5000'
-          '&type=hospital'
-          '&key=$_apiKey';
 
-      final response = await _dio.get(url);
-      
-      if (response.data['status'] == 'OK') {
-        final List results = response.data['results'];
-        setState(() {
-          _clinics.clear();
+    try {
+      _clinics.clear();
+      // Fetch hospitals/clinics AND pharmacies in parallel
+      final futures = ['hospital', 'pharmacy'].map((type) async {
+        final url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+            '?location=${position.latitude},${position.longitude}'
+            '&radius=5000'
+            '&type=$type'
+            '&key=$_apiKey';
+        final response = await _dio.get(url);
+        if (response.data['status'] == 'OK') {
+          final List results = response.data['results'];
           for (var result in results) {
             _clinics.add({
               'id': result['place_id'],
@@ -184,16 +188,102 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
               'rating': result['rating']?.toString() ?? '0',
               'total_ratings': result['user_ratings_total']?.toString() ?? '0',
               'open_now': result['opening_hours']?['open_now'] ?? false,
+              'type': type,
             });
           }
-          _rebuildMarkers();
-        });
-      }
+        }
+      });
+      await Future.wait(futures);
+      setState(() => _rebuildMarkers());
     } catch (e) {
-      print('Error searching clinics: $e');
+      print('Error searching places: $e');
     } finally {
       setState(() => _isSearching = false);
     }
+  }
+
+  void _showPlaceFilterSheet() {
+    const options = [
+      {'key': 'all', 'label': 'All places'},
+      {'key': 'hospital', 'label': 'Hospitals only'},
+      {'key': 'pharmacy', 'label': 'Pharmacies only'},
+    ];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.grey200,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              Text(
+                'Filter Places',
+                style: AppTextStyles.headlineSmall.copyWith(
+                  color: AppColors.splashSlate900,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...options.map((opt) {
+                final selected = _placeFilter == opt['key'];
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _placeFilter = opt['key']!;
+                      _rebuildMarkers();
+                    });
+                    Navigator.pop(ctx);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: selected ? AppColors.darkBlue800 : AppColors.grey50,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: selected ? AppColors.darkBlue800 : AppColors.grey200,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                          color: selected ? Colors.white : AppColors.grey400,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          opt['label']!,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: selected ? Colors.white : AppColors.splashSlate900,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _rebuildMarkers() {
@@ -201,21 +291,25 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
 
     setState(() {
       _markers.clear();
-      for (var clinic in _clinics) {
+      final visiblePlaces = _placeFilter == 'all' ? _clinics : _clinics.where((c) => c['type'] == _placeFilter).toList();
+      for (var clinic in visiblePlaces) {
         final isSelected = _selectedClinic != null && _selectedClinic!['id'] == clinic['id'];
-        
+        final isPharmacy = clinic['type'] == 'pharmacy';
+
         _markers.add(
           Marker(
             markerId: MarkerId(clinic['id']),
             position: LatLng(clinic['lat'], clinic['lng']),
-            infoWindow: InfoWindow(title: clinic['name']),
-            icon: _customMarkerIcon!,
-            alpha: (_selectedClinic == null || isSelected) ? 1.0 : 0.2, // Subtle fading for others
+            infoWindow: InfoWindow(title: '${isPharmacy ? "💊 " : "🏥 "}${clinic['name']}'),
+            icon: isPharmacy
+                ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
+                : _customMarkerIcon!,
+            alpha: (_selectedClinic == null || isSelected) ? 1.0 : 0.3,
             onTap: () {
               setState(() {
                 _selectedClinic = clinic;
-                _polylines.clear(); // Clear old polylines when selecting new marker
-                _rebuildMarkers(); // Refresh opacities
+                _polylines.clear();
+                _rebuildMarkers();
               });
               _mapController?.animateCamera(CameraUpdate.newLatLng(LatLng(clinic['lat'], clinic['lng'])));
             },
@@ -389,39 +483,44 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
                   ],
                 ),
               ),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Material(
-                      elevation: 4,
-                      color: Colors.white,
-                      shadowColor: Colors.black26,
-                      borderRadius: BorderRadius.circular(15),
-                      child: TextField(
-                        onChanged: (v) => setState(() => _searchQuery = v),
-                        cursorColor: AppColors.sky500,
-                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.darkBlue900, fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: 'Search clinics nearby...',
-                          hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
-                          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.grey400, size: 20),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Material(
+                          elevation: 4,
+                          color: Colors.white,
+                          shadowColor: Colors.black26,
+                          borderRadius: BorderRadius.circular(15),
+                          child: TextField(
+                            onChanged: (v) => setState(() => _searchQuery = v),
+                            cursorColor: AppColors.sky500,
+                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.darkBlue900, fontSize: 14),
+                            decoration: InputDecoration(
+                              hintText: 'Search clinics & pharmacies...',
+                              hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
+                              prefixIcon: const Icon(Icons.search_rounded, color: AppColors.grey400, size: 20),
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      _buildIconButton(
+                        _showListView ? Icons.map_rounded : Icons.list_rounded,
+                        () => setState(() => _showListView = !_showListView),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildIconButton(Icons.tune_rounded, () => _showPlaceFilterSheet()),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  _buildIconButton(
-                    _showListView ? Icons.map_rounded : Icons.list_rounded,
-                    () => setState(() => _showListView = !_showListView),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildIconButton(Icons.tune_rounded, () {}),
                 ],
               ),
             ),
@@ -780,4 +879,28 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
     );
   }
 
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _FilterChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.darkBlue500 : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? AppColors.darkBlue500 : AppColors.grey200),
+          boxShadow: selected ? [BoxShadow(color: AppColors.darkBlue500.withOpacity(0.2), blurRadius: 6)] : [],
+        ),
+        child: Text(label, style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : AppColors.grey500)),
+      ),
+    );
+  }
 }

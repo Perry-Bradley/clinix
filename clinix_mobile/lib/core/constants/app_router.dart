@@ -9,6 +9,8 @@ import '../../features/auth/presentation/pages/otp_page.dart';
 import '../../features/patient/presentation/pages/patient_home_page.dart';
 import '../../features/provider/presentation/pages/provider_home_page.dart';
 import '../../features/provider/presentation/pages/write_prescription_page.dart';
+import '../../features/provider/presentation/pages/medical_record_form_page.dart';
+import '../../features/provider/presentation/pages/referral_form_page.dart';
 import '../../features/patient/screens/book_appointment_screen.dart';
 import '../../features/appointments/presentation/pages/appointment_detail_page.dart';
 import '../../features/patient/screens/ai_symptom_checker_screen.dart';
@@ -29,6 +31,11 @@ import '../../features/patient/screens/medical_records_screen.dart';
 import '../../features/patient/screens/payment_history_screen.dart';
 import '../../features/patient/screens/direct_chat_screen.dart';
 import '../../features/patient/screens/direct_chat_launcher.dart';
+import '../../features/patient/screens/homecare_landing_screen.dart';
+import '../../features/patient/screens/lab_tests_screen.dart';
+import '../../features/patient/screens/book_lab_test_screen.dart';
+import '../../features/patient/screens/home_treatment_screen.dart';
+import '../../features/patient/screens/medication_reminders_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -113,6 +120,31 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/about', builder: (c, s) => const AboutScreen()),
     GoRoute(path: '/patient/prescriptions', builder: (c, s) => const PrescriptionsScreen()),
     GoRoute(path: '/patient/medical-records', builder: (c, s) => const MedicalRecordsScreen()),
+    GoRoute(path: '/homecare', builder: (c, s) => const HomeCareLandingScreen()),
+    GoRoute(path: '/homecare/lab-tests', builder: (c, s) => const LabTestsScreen()),
+    GoRoute(path: '/homecare/book-test', builder: (c, s) => BookLabTestScreen(test: s.extra as Map<String, dynamic>)),
+    GoRoute(path: '/homecare/treatments', builder: (c, s) => const HomeTreatmentScreen()),
+    GoRoute(path: '/patient/medication-reminders', builder: (c, s) => const MedicationRemindersScreen()),
+    GoRoute(
+      path: '/provider/medical-record/new',
+      builder: (c, s) {
+        final extra = s.extra as Map<String, dynamic>? ?? {};
+        return MedicalRecordFormPage(
+          consultationId: extra['consultationId']?.toString(),
+          patientId: extra['patientId']?.toString(),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/provider/refer',
+      builder: (c, s) {
+        final extra = s.extra as Map<String, dynamic>? ?? {};
+        return ReferralFormPage(
+          patientId: extra['patientId']?.toString() ?? '',
+          medicalRecordId: extra['medicalRecordId']?.toString(),
+        );
+      },
+    ),
     GoRoute(path: '/patient/payment-history', builder: (c, s) => const PaymentHistoryScreen()),
     // Direct messaging (open-to-any-doctor)
     GoRoute(

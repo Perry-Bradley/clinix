@@ -86,7 +86,8 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
 
     setState(() { _isLoading = true; _errorMessage = null; });
 
-    int platformFee = num.tryParse((widget.doctor['consultation_fee'] ?? 15000).toString())?.round() ?? 15000;
+    // Doctor's own consultation fee is the source of truth.
+    int consultationFee = num.tryParse((widget.doctor['consultation_fee'] ?? 0).toString())?.round() ?? 0;
     int serviceCharge = 500;
 
     try {
@@ -97,9 +98,12 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       );
       if (feeResp.data != null && feeResp.data is Map) {
         final m = feeResp.data as Map<String, dynamic>;
-        final cf = m['consultation_fee'];
+        // Only fall back to platform default if this doctor has no fee set.
+        if (consultationFee <= 0) {
+          final cf = m['consultation_fee'];
+          if (cf != null) consultationFee = num.tryParse(cf.toString())?.round() ?? consultationFee;
+        }
         final sc = m['service_charge'];
-        if (cf != null) platformFee = num.tryParse(cf.toString())?.round() ?? platformFee;
         if (sc != null) serviceCharge = num.tryParse(sc.toString())?.round() ?? serviceCharge;
       }
     } catch (e) {
@@ -156,7 +160,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         '/patient/payment',
         extra: {
           'appointmentId': appointmentId,
-          'consultationFee': platformFee,
+          'consultationFee': consultationFee,
           'serviceCharge': serviceCharge,
         },
       );

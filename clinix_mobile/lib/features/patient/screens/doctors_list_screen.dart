@@ -122,112 +122,251 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.grey50,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            automaticallyImplyLeading: false,
-            expandedHeight: 130,
-            backgroundColor: AppColors.darkBlue900,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                padding: const EdgeInsets.fromLTRB(24, 60, 24, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Find a Doctor', style: AppTextStyles.headlineLarge.copyWith(color: AppColors.white, fontSize: 22)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text('Browse verified healthcare providers', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
-                  ],
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _DoctorsHeader(
+              searchQuery: _searchQuery,
+              selectedSpecialty: _selectedSpecialty,
+              onSearchChanged: (v) => setState(() => _searchQuery = v),
+              onSpecialtyChanged: (v) => setState(() => _selectedSpecialty = v),
+            ),
+            Expanded(
+              child: _buildBody(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(_error!, textAlign: TextAlign.center, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400)),
+        ),
+      );
+    }
+    if (_filteredDoctors.isEmpty) {
+      return Center(
+        child: Text('No doctors match your search', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400)),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+      itemCount: _filteredDoctors.length,
+      itemBuilder: (ctx, i) => _DoctorCard(doctor: _filteredDoctors[i]),
+    );
+  }
+}
+
+class _DoctorsHeader extends StatelessWidget {
+  final String searchQuery;
+  final String selectedSpecialty;
+  final ValueChanged<String> onSearchChanged;
+  final ValueChanged<String> onSpecialtyChanged;
+
+  const _DoctorsHeader({
+    required this.searchQuery,
+    required this.selectedSpecialty,
+    required this.onSearchChanged,
+    required this.onSpecialtyChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasActiveFilter = selectedSpecialty != 'All';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: AppColors.grey200, width: 1)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top app-bar row: title + filter action
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Find a Doctor',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.darkBlue900,
+                  ),
                 ),
+              ),
+              _HeaderIconButton(
+                icon: Icons.tune_rounded,
+                showDot: hasActiveFilter,
+                onTap: () => _showFilterSheet(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Search bar
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.grey50,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.grey200),
+            ),
+            child: TextField(
+              onChanged: onSearchChanged,
+              style: const TextStyle(fontFamily: 'Inter', fontSize: 14, color: AppColors.darkBlue900),
+              decoration: const InputDecoration(
+                isDense: true,
+                hintText: 'Search doctors, specialty...',
+                hintStyle: TextStyle(fontFamily: 'Inter', fontSize: 14, color: AppColors.grey400),
+                prefixIcon: Icon(Icons.search_rounded, color: AppColors.grey400, size: 20),
+                filled: false,
+                contentPadding: EdgeInsets.symmetric(vertical: 14),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
               ),
             ),
           ),
-          // Search bar and specialty filter chips
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Column(
-                children: [
-                  TextField(
-                    onChanged: (value) => setState(() => _searchQuery = value),
-                    decoration: InputDecoration(
-                      hintText: 'Search by name or specialty...',
-                      hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400),
-                      prefixIcon: const Icon(Icons.search_rounded, color: AppColors.grey400),
-                      filled: true,
-                      fillColor: AppColors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: AppColors.grey200),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: AppColors.grey200),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: AppColors.sky500, width: 1.5),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 38,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: ['All', 'Generalist', 'Nurse', 'Midwife', 'Specialist'].map((specialty) {
-                        final isSelected = _selectedSpecialty == specialty;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text(specialty),
-                            selected: isSelected,
-                            onSelected: (_) => setState(() => _selectedSpecialty = specialty),
-                            selectedColor: AppColors.sky500,
-                            backgroundColor: AppColors.white,
-                            labelStyle: AppTextStyles.caption.copyWith(
-                              color: isSelected ? AppColors.white : AppColors.grey500,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              side: BorderSide(color: isSelected ? AppColors.sky500 : AppColors.grey200),
-                            ),
-                            showCheckmark: false,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_isLoading)
-            const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
-          else if (_error != null)
-            SliverFillRemaining(child: Center(child: Text(_error!, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400))))
-          else if (_filteredDoctors.isEmpty)
-            SliverFillRemaining(child: Center(child: Text('No doctors match your search', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400))))
-          else
-            SliverPadding(
-              padding: const EdgeInsets.all(20),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (ctx, i) => _DoctorCard(doctor: _filteredDoctors[i]),
-                  childCount: _filteredDoctors.length,
+        ],
+      ),
+    );
+  }
+
+  void _showFilterSheet(BuildContext context) {
+    const specs = ['All', 'Generalist', 'Nurse', 'Midwife', 'Specialist'];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.grey200,
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ),
-            )
+              const Text(
+                'Filter Doctors',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.darkBlue900,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Specialty',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.grey700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: specs.map((s) {
+                  final sel = s == selectedSpecialty;
+                  return GestureDetector(
+                    onTap: () {
+                      onSpecialtyChanged(s);
+                      Navigator.pop(ctx);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: sel ? AppColors.darkBlue800 : AppColors.grey50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: sel ? AppColors.darkBlue800 : AppColors.grey200),
+                      ),
+                      child: Text(
+                        s,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: sel ? Colors.white : AppColors.grey700,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+}
+
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool showDot;
+  const _HeaderIconButton({
+    required this.icon,
+    required this.onTap,
+    this.showDot = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.darkBlue800,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+          if (showDot)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: AppColors.accentOrange,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -360,13 +499,12 @@ class _DoctorCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push('/patient/doctor-profile/${doctor['provider_id']}'),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.grey200),
-          boxShadow: [BoxShadow(color: AppColors.darkBlue900.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3))],
         ),
         child: Row(
           children: [

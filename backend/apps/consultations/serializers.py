@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Consultation, Prescription, MedicalRecord, ChatMessage, MedicationReminder, MedicationLog
+from .models import Consultation, Prescription, MedicalRecord, ChatMessage, MedicationReminder, MedicationLog, Referral
 from apps.providers.models import HealthcareProvider
 
 class PrescriptionSerializer(serializers.ModelSerializer):
@@ -10,9 +10,42 @@ class PrescriptionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class MedicalRecordSerializer(serializers.ModelSerializer):
+    authored_by_name = serializers.CharField(source='authored_by.provider_id.full_name', read_only=True)
+    authored_by_specialty = serializers.SerializerMethodField()
+    patient_name = serializers.CharField(source='patient.patient_id.full_name', read_only=True)
+    shared_with_ids = serializers.PrimaryKeyRelatedField(
+        many=True, read_only=True, source='shared_with',
+    )
+
+    def get_authored_by_specialty(self, obj):
+        if not obj.authored_by:
+            return None
+        if obj.authored_by.specialty_obj:
+            return obj.authored_by.specialty_obj.name
+        return obj.authored_by.other_specialty or obj.authored_by.specialty
+
     class Meta:
         model = MedicalRecord
         fields = '__all__'
+        read_only_fields = ('record_id', 'created_at', 'updated_at', 'shared_with')
+
+
+class MedicalRecordShareSerializer(serializers.Serializer):
+    """Patient-controlled grant: share record X with provider Y."""
+    provider_id = serializers.UUIDField()
+    revoke = serializers.BooleanField(default=False, required=False)
+
+
+class ReferralSerializer(serializers.ModelSerializer):
+    referred_by_name = serializers.CharField(source='referred_by.provider_id.full_name', read_only=True)
+    referred_to_name = serializers.CharField(source='referred_to.provider_id.full_name', read_only=True)
+    referred_to_specialty = serializers.CharField(source='referred_to.specialty_obj.name', read_only=True)
+    patient_name = serializers.CharField(source='patient.patient_id.full_name', read_only=True)
+
+    class Meta:
+        model = Referral
+        fields = '__all__'
+        read_only_fields = ('referral_id', 'referred_by', 'created_at', 'updated_at')
 
 class ConsultationSerializer(serializers.ModelSerializer):
     class Meta:

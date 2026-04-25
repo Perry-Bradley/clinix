@@ -6,7 +6,8 @@ from django.utils import timezone
 from .permissions import IsSuperAdminUser
 from apps.accounts.models import User
 from apps.patients.models import Patient
-from apps.providers.models import HealthcareProvider, ProviderCredential
+from apps.providers.models import HealthcareProvider, ProviderCredential, Specialty
+from apps.providers.serializers import SpecialtySerializer
 from apps.appointments.models import Appointment
 from apps.consultations.models import Consultation
 from apps.payments.models import Payment
@@ -61,6 +62,21 @@ class AdminPatientDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AdminPatientSerializer
     permission_classes = [IsSuperAdminUser]
     queryset = Patient.objects.all()
+
+class AdminSpecialtyListCreateView(generics.ListCreateAPIView):
+    """Admin-only catalogue management: list and create specialties."""
+    serializer_class = SpecialtySerializer
+    permission_classes = [IsSuperAdminUser]
+    queryset = Specialty.objects.all()
+
+
+class AdminSpecialtyDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Admin-only: edit / deactivate / delete a specialty."""
+    serializer_class = SpecialtySerializer
+    permission_classes = [IsSuperAdminUser]
+    queryset = Specialty.objects.all()
+    lookup_field = 'specialty_id'
+
 
 class VerificationListView(APIView):
     permission_classes = [IsSuperAdminUser]

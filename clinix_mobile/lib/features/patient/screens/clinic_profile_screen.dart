@@ -31,7 +31,7 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
     try {
       final url = 'https://maps.googleapis.com/maps/api/place/details/json'
           '?place_id=${widget.placeId}'
-          '&fields=name,rating,formatted_phone_number,vicinity,opening_hours,website,photos,reviews,user_ratings_total'
+          '&fields=name,rating,formatted_phone_number,international_phone_number,vicinity,opening_hours,website,photos,reviews,user_ratings_total'
           '&key=$_apiKey';
 
       final response = await _dio.get(url);
@@ -52,7 +52,8 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
   }
 
   Future<void> _call() async {
-    final phone = _clinicDetails?['formatted_phone_number']?.toString();
+    final phone = _clinicDetails?['formatted_phone_number']?.toString()
+        ?? _clinicDetails?['international_phone_number']?.toString();
     if (phone == null || phone.isEmpty) {
       _toast('No phone number available for this clinic');
       return;

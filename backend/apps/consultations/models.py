@@ -79,19 +79,81 @@ class MedicationLog(models.Model):
 
 
 class MedicalRecord(models.Model):
+    """Doctor-authored consultation report. Belongs to the patient and can be
+    shared with other providers when the patient is referred elsewhere."""
     record_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='medical_records')
     consultation = models.ForeignKey(Consultation, on_delete=models.SET_NULL, null=True, blank=True, related_name='medical_records')
+    authored_by = models.ForeignKey(
+        HealthcareProvider, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='authored_records',
+    )
+    title = models.CharField(max_length=200, blank=True, null=True)
+    chief_complaint = models.TextField(blank=True, null=True)
     symptoms = ArrayField(models.TextField(), blank=True, default=list)
     symptom_duration = models.CharField(max_length=100, blank=True, null=True)
+    examination_findings = models.TextField(blank=True, null=True)
     diagnosis = models.TextField(blank=True, null=True)
     treatment_plan = models.TextField(blank=True, null=True)
+    medications_summary = models.TextField(blank=True, null=True)
     follow_up_date = models.DateField(null=True, blank=True)
     attachments = ArrayField(models.TextField(), blank=True, default=list) # S3/Cloudinary URLs
+    # Patient-controlled sharing — doctors that the patient has granted view access.
+    shared_with = models.ManyToManyField(
+        HealthcareProvider, blank=True, related_name='shared_records',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'medical_records'
+        ordering = ['-created_at']
+
+
+class Referral(models.Model):
+    """A referral issued by a doctor — either to another specialist on the
+    platform, or to a specific hospital for a lab test / procedure."""
+    KIND_CHOICES = (
+        ('specialist', 'Specialist'),
+        ('lab_test', 'Lab Test'),
+    )
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    )
+
+    referral_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='referrals')
+    referred_by = models.ForeignKey(
+        HealthcareProvider, on_delete=models.SET_NULL, null=True,
+        related_name='outgoing_referrals',
+    )
+    referred_to = models.ForeignKey(
+        HealthcareProvider, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='incoming_referrals',
+    )
+    target_hospital_name = models.CharField(max_length=200, blank=True, null=True)
+    target_hospital_address = models.CharField(max_length=300, blank=True, null=True)
+    target_hospital_place_id = models.CharField(max_length=200, blank=True, null=True)
+    test_name = models.CharField(max_length=200, blank=True, null=True)
+    reason = models.TextField()
+    medical_record = models.ForeignKey(
+        MedicalRecord, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='referrals',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'referrals'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.kind} referral for {self.patient} ({self.status})'
 
 
 class ChatMessage(models.Model):
