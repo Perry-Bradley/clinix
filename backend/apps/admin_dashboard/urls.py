@@ -6,12 +6,14 @@ from .views import (
     AdminPatientListView, AdminPatientDetailView,
     AdminWithdrawalListView, AdminWithdrawalActionView, AdminRevenueStatsView,
     AdminSpecialtyListCreateView, AdminSpecialtyDetailView,
+    UserResetPasswordView,
 )
 
 urlpatterns = [
     path('dashboard/', PlatformDashboardView.as_view(), name='admin_dashboard'),
     path('users/', UserListView.as_view(), name='admin_users'),
     path('users/<uuid:pk>/', UserDetailView.as_view(), name='admin_user_detail'),
+    path('users/<uuid:pk>/reset-password/', UserResetPasswordView.as_view(), name='admin_user_reset_password'),
     path('specialties/', AdminSpecialtyListCreateView.as_view(), name='admin_specialties'),
     path('specialties/<uuid:specialty_id>/', AdminSpecialtyDetailView.as_view(), name='admin_specialty_detail'),
     path('verifications/', VerificationListView.as_view(), name='admin_verifications'),

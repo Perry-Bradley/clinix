@@ -9,7 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 def _send_fcm_push(fcm_token, title, body, data=None):
-    """Send a push notification via Firebase Cloud Messaging."""
+    """Send a push notification via Firebase Cloud Messaging.
+
+    Uses the Clinix launcher icon (`@mipmap/ic_launcher`) on Android so the
+    notification shade matches the app brand.
+    """
     try:
         from firebase_admin import messaging
 
@@ -17,6 +21,19 @@ def _send_fcm_push(fcm_token, title, body, data=None):
             notification=messaging.Notification(title=title, body=body),
             data={k: str(v) for k, v in (data or {}).items()},
             token=fcm_token,
+            android=messaging.AndroidConfig(
+                priority='high',
+                notification=messaging.AndroidNotification(
+                    icon='ic_launcher',
+                    color='#1B4080',
+                    channel_id='clinix_default',
+                ),
+            ),
+            apns=messaging.APNSConfig(
+                payload=messaging.APNSPayload(
+                    aps=messaging.Aps(sound='default'),
+                ),
+            ),
         )
         response = messaging.send(message)
         logger.info(f"FCM sent: {response}")

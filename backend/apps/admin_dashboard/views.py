@@ -2,6 +2,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Sum, Count
+from django.db import models
 from django.utils import timezone
 from .permissions import IsSuperAdminUser
 from apps.accounts.models import User
@@ -44,14 +45,84 @@ class PlatformDashboardView(APIView):
         })
 
 class UserListView(generics.ListAPIView):
+    """Admin user directory with provider/specialty enrichment."""
     serializer_class = UserSerializer
     permission_classes = [IsSuperAdminUser]
-    queryset = User.objects.all().order_by('-created_at')
 
-class UserDetailView(generics.RetrieveUpdateAPIView):
+    def get_queryset(self):
+        qs = User.objects.all().order_by('-created_at')
+        user_type = self.request.query_params.get('user_type')
+        search = self.request.query_params.get('search')
+        if user_type and user_type != 'all':
+            qs = qs.filter(user_type=user_type)
+        if search:
+            qs = qs.filter(
+                models.Q(full_name__icontains=search) |
+                models.Q(email__icontains=search) |
+                models.Q(phone_number__icontains=search)
+            )
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        qs = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(qs)
+        users = page if page is not None else qs
+
+        # Pre-fetch provider rows for the users on this page so we can
+        # surface specialty / role / verification in a single response.
+        user_ids = [u.user_id for u in users]
+        providers = {
+            p.provider_id_id: p
+            for p in HealthcareProvider.objects.filter(provider_id__in=user_ids)
+                .select_related('specialty_obj')
+        }
+
+        data = []
+        for u in users:
+            base = UserSerializer(u).data
+            prov = providers.get(u.user_id)
+            base['provider'] = None
+            if prov is not None:
+                base['provider'] = {
+                    'provider_role': prov.provider_role,
+                    'specialty': prov.specialty,
+                    'specialty_name': prov.specialty_obj.name if prov.specialty_obj else None,
+                    'verification_status': prov.verification_status,
+                    'license_number': prov.license_number,
+                    'consultation_fee': str(prov.consultation_fee),
+                }
+            data.append(base)
+
+        if page is not None:
+            return self.get_paginated_response(data)
+        return Response(data)
+
+
+class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Admin user CRUD — view, edit, or delete."""
     serializer_class = UserSerializer
     permission_classes = [IsSuperAdminUser]
     queryset = User.objects.all()
+
+
+class UserResetPasswordView(APIView):
+    """Admin-only: force-set a user's password."""
+    permission_classes = [IsSuperAdminUser]
+
+    def post(self, request, pk):
+        new_password = request.data.get('password')
+        if not new_password or len(new_password) < 6:
+            return Response(
+                {'error': 'Password must be at least 6 characters.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            user = User.objects.get(user_id=pk)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        user.set_password(new_password)
+        user.save()
+        return Response({'status': 'password updated', 'user_id': str(user.user_id)})
 
 class AdminPatientListView(generics.ListCreateAPIView):
     serializer_class = AdminPatientSerializer
