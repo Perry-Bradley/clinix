@@ -38,6 +38,7 @@ import '../../features/patient/screens/home_treatment_screen.dart';
 import '../../features/patient/screens/medication_reminders_screen.dart';
 import '../../features/patient/screens/nurses_list_screen.dart';
 import '../../features/appointments/screens/incoming_call_screen.dart';
+import '../../features/appointments/screens/call_history_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -108,6 +109,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/patient/nurses',
       builder: (c, s) => const NursesListScreen(),
+    ),
+    GoRoute(
+      path: '/calls',
+      builder: (c, s) => const CallHistoryScreen(),
     ),
     GoRoute(
       path: '/incoming-call',

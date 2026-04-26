@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import '../../../../core/services/appointment_service.dart';
 import '../../services/activity_service.dart';
+import '../../../../core/services/call_reliability.dart';
 import 'package:pedometer/pedometer.dart';
 
 class PatientHomePage extends StatefulWidget {
@@ -33,6 +34,17 @@ class _PatientHomePageState extends State<PatientHomePage> {
     HealthDashboardScreen(),
     _PatientProfileTab(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // First-launch check that asks the user to whitelist Clinix from battery
+    // optimisation so calls ring even when the phone is locked. Skipped on
+    // iOS and after the first time it's been shown.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) CallReliability.ensureCallReliable(context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

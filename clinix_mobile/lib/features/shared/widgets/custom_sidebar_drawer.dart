@@ -95,6 +95,7 @@ class _CustomSidebarDrawerState extends State<CustomSidebarDrawer> {
                     _SideItem(icon: Icons.spa_rounded, label: 'Clinix AI', onTap: () { Navigator.pop(context); context.push('/ai-consult'); }),
                     _SideItem(icon: Icons.event_note_rounded, label: 'Appointments', onTap: () { Navigator.pop(context); context.push(widget.isProvider ? '/provider/appointments' : '/patient/appointments'); }),
                     _SideItem(icon: Icons.chat_rounded, label: 'Messages', onTap: () { Navigator.pop(context); context.push(widget.isProvider ? '/provider/messages' : '/patient/messages'); }),
+                    _SideItem(icon: Icons.call_rounded, label: 'Calls', onTap: () { Navigator.pop(context); context.push('/calls'); }),
                     if (!widget.isProvider)
                       _SideItem(icon: Icons.science_rounded, label: 'Lab Tests', onTap: () { Navigator.pop(context); context.push('/homecare/lab-tests'); }),
                     _SideItem(

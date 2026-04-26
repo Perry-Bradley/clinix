@@ -358,6 +358,39 @@ class ConsultationRingView(APIView):
         return Response({'status': 'ringing'}, status=status.HTTP_202_ACCEPTED)
 
 
+class CallHistoryView(APIView):
+    """Both sides' call log. Backed by Notification rows tagged with a
+    `data.direction` key (incoming / outgoing), which is set by the missed-
+    call view and could be set by future answered-call hooks too. Returns a
+    flat list newest-first so the mobile can render a WhatsApp-style log.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from apps.notifications.models import Notification
+        items = (
+            Notification.objects
+            .filter(user=request.user, data__direction__isnull=False)
+            .order_by('-sent_at')[:100]
+        )
+        out = []
+        for n in items:
+            data = n.data or {}
+            out.append({
+                'id': str(n.notification_id),
+                'title': n.title,
+                'body': n.body,
+                'direction': data.get('direction'),
+                'reason': data.get('reason'),
+                'caller_name': data.get('caller_name'),
+                'consultation_id': data.get('consultation_id'),
+                'appointment_id': data.get('appointment_id'),
+                'sent_at': n.sent_at.isoformat() if n.sent_at else None,
+                'is_read': n.is_read,
+            })
+        return Response(out)
+
+
 class ConsultationMissedCallView(APIView):
     """Caller fires this when the 45-second no-answer timer expires so we can
     record the missed call on both sides. The receiver's CallKit already

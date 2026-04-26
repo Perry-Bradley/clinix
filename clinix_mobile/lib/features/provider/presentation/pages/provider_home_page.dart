@@ -12,6 +12,7 @@ import '../../../../core/constants/api_constants.dart';
 import '../../../shared/widgets/custom_sidebar_drawer.dart';
 import '../../../shared/widgets/bubble_bottom_bar.dart';
 import '../../../appointments/screens/video_consultation_screen.dart';
+import '../../../../core/services/call_reliability.dart';
 
 class _ProviderApi {
   static final Dio _dio = Dio(BaseOptions(
@@ -140,6 +141,14 @@ class _ProviderHomePageState extends State<ProviderHomePage> {
     _ProviderEarningsTab(),
     _ProviderProfileTab(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) CallReliability.ensureCallReliable(context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
