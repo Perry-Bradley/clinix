@@ -118,7 +118,9 @@ def _create_reminders_from_prescription(prescription):
 
 
 def _notify_patient_of_prescription(prescription):
-    """Push + WS notification to the patient when a doctor issues a prescription."""
+    """Push + WS notification to the patient when a doctor issues a prescription,
+    plus inject an inline chat message so the patient sees the prescription
+    in their conversation with the doctor."""
     try:
         from apps.notifications.tasks import send_notification
         provider_name = (
@@ -138,7 +140,25 @@ def _notify_patient_of_prescription(prescription):
             {'prescription_id': str(prescription.prescription_id)},
         )
     except Exception:
-        # Notifications are best-effort; never fail the write because of them.
+        pass
+
+    # Drop a clinical chat message into the doctor↔patient conversation.
+    try:
+        from apps.direct_chat.clinical import post_clinical_message
+        first_meds = [m.get('name', '') for m in (prescription.medications or [])][:2]
+        summary = ', '.join([m for m in first_meds if m])
+        post_clinical_message(
+            doctor_user=prescription.provider.provider_id,
+            patient_user=prescription.patient.patient_id,
+            message_type='prescription',
+            content=summary or 'New prescription',
+            metadata={
+                'prescription_id': str(prescription.prescription_id),
+                'medication_count': len(prescription.medications or []),
+                'instructions': (prescription.instructions or '')[:200],
+            },
+        )
+    except Exception:
         pass
 
 
@@ -481,19 +501,36 @@ class MedicalRecordListCreateView(generics.ListCreateAPIView):
 
         record = serializer.save(authored_by=provider)
 
-        # Notify the patient.
+        provider_name = (
+            getattr(provider.provider_id, 'full_name', None) or 'Your doctor'
+        )
+        title_part = record.title or record.diagnosis or 'a new medical record'
+
+        # FCM + in-app notification.
         try:
             from apps.notifications.tasks import send_notification
-            provider_name = (
-                getattr(provider.provider_id, 'full_name', None) or 'Your doctor'
-            )
-            title_part = record.title or record.diagnosis or 'a new medical record'
             send_notification.delay(
                 record.patient.patient_id.user_id,
                 'New medical record',
                 f'{provider_name} added {title_part} to your medical records.',
                 'medical_record',
                 {'record_id': str(record.record_id)},
+            )
+        except Exception:
+            pass
+
+        # Inline chat message so the patient sees the record in chat too.
+        try:
+            from apps.direct_chat.clinical import post_clinical_message
+            post_clinical_message(
+                doctor_user=provider.provider_id,
+                patient_user=record.patient.patient_id,
+                message_type='medical_record',
+                content=record.title or record.diagnosis or 'New medical record',
+                metadata={
+                    'record_id': str(record.record_id),
+                    'diagnosis': (record.diagnosis or '')[:200],
+                },
             )
         except Exception:
             pass
@@ -581,7 +618,51 @@ class ReferralListCreateView(generics.ListCreateAPIView):
         provider = _provider_for_user(self.request.user)
         if not provider:
             raise serializers.ValidationError('Only providers can issue referrals.')
-        serializer.save(referred_by=provider)
+        referral = serializer.save(referred_by=provider)
+
+        provider_name = (
+            getattr(provider.provider_id, 'full_name', None) or 'Your doctor'
+        )
+        if referral.kind == 'lab_test':
+            target = referral.test_name or 'a lab test'
+            body = f'{provider_name} referred you for {target}.'
+        else:
+            target = (
+                getattr(getattr(referral.referred_to, 'provider_id', None), 'full_name', None)
+                or referral.target_hospital_name
+                or 'a specialist'
+            )
+            body = f'{provider_name} referred you to {target}.'
+
+        # FCM + in-app notification.
+        try:
+            from apps.notifications.tasks import send_notification
+            send_notification.delay(
+                referral.patient.patient_id.user_id,
+                'New referral',
+                body,
+                'referral',
+                {'referral_id': str(referral.referral_id)},
+            )
+        except Exception:
+            pass
+
+        # Inline chat message.
+        try:
+            from apps.direct_chat.clinical import post_clinical_message
+            post_clinical_message(
+                doctor_user=provider.provider_id,
+                patient_user=referral.patient.patient_id,
+                message_type='referral',
+                content=body,
+                metadata={
+                    'referral_id': str(referral.referral_id),
+                    'kind': referral.kind,
+                    'reason': (referral.reason or '')[:200],
+                },
+            )
+        except Exception:
+            pass
 
 
 class ReferralDetailView(generics.RetrieveUpdateAPIView):

@@ -34,6 +34,11 @@ class DirectMessage(models.Model):
         ('text', 'Text'),
         ('image', 'Image'),
         ('file', 'File'),
+        # Doctor-issued clinical messages — appear inline in the chat AND
+        # link back to the full record on the patient side.
+        ('prescription', 'Prescription'),
+        ('medical_record', 'Medical Record'),
+        ('referral', 'Referral'),
     )
 
     message_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -43,6 +48,11 @@ class DirectMessage(models.Model):
     message_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='text')
     file_url = models.URLField(max_length=1024, blank=True, null=True)
     file_name = models.CharField(max_length=255, blank=True, null=True)
+    # Structured payload for clinical messages, e.g.
+    #   {"prescription_id": "...", "medication_count": 3}
+    #   {"record_id": "...", "diagnosis": "..."}
+    #   {"referral_id": "...", "kind": "specialist", "specialist_name": "..."}
+    metadata = models.JSONField(blank=True, null=True)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -225,6 +225,24 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
     return null;
   }
 
+  String? _patientUserId() {
+    final p = (_appointment ?? {})['patient'];
+    if (p is String) return p;
+    if (p is Map) {
+      final id = p['user']?['user_id'] ?? p['patient_id'] ?? p['id'];
+      if (id != null) return id.toString();
+    }
+    return null;
+  }
+
+  String _patientName() {
+    final p = (_appointment ?? {})['patient'];
+    if (p is Map) {
+      return p['user']?['full_name']?.toString() ?? p['full_name']?.toString() ?? 'Patient';
+    }
+    return 'Patient';
+  }
+
   String _initialsFromName(String name) {
     final cleaned = name
         .replaceAll(RegExp(r'^(Dr\.?|Doctor|Mr\.?|Mrs\.?|Ms\.?)\s+', caseSensitive: false), '')
@@ -236,15 +254,16 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
   }
 
   void _openChat() {
-    final pid = _providerId();
-    final name = _peerName();
-    if (pid == null) {
+    // Doctor chats with the patient; patient chats with the provider.
+    final peerId = _isProvider ? _patientUserId() : _providerId();
+    final peerName = _isProvider ? _patientName() : _peerName();
+    if (peerId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not identify the provider for chat.')),
+        const SnackBar(content: Text('Could not identify the other person for chat.')),
       );
       return;
     }
-    context.push('/dchat/launch/$pid?name=${Uri.encodeComponent(name)}');
+    context.push('/dchat/launch/$peerId?name=${Uri.encodeComponent(peerName)}');
   }
 
   String _peerName() {
@@ -309,8 +328,10 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
     final fee = double.tryParse(feeRaw?.toString() ?? '') ?? 0;
 
     final canJoin = (status == 'confirmed' || status == 'pending') && type == 'virtual';
-    final canCancel = status == 'pending' || status == 'confirmed';
-    final canMessage = !_isProvider && status != 'cancelled';
+    // Cancellation is patient-side only; the doctor doesn't cancel from this view.
+    final canCancel = !_isProvider && (status == 'pending' || status == 'confirmed');
+    // Both sides can open the chat once the appointment is live.
+    final canMessage = status != 'cancelled';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -492,7 +513,7 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Message ${_peerName()}',
+                            'Message ${_isProvider ? _patientName() : _peerName()}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.bodyMedium.copyWith(

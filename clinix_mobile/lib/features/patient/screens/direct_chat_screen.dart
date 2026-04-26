@@ -309,6 +309,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                             type: (m['message_type'] ?? 'text').toString(),
                             fileUrl: m['file_url']?.toString(),
                             fileName: m['file_name']?.toString(),
+                            metadata: m['metadata'] is Map ? Map<String, dynamic>.from(m['metadata'] as Map) : null,
                             isMe: isMe,
                             time: _formatTime(m['created_at']?.toString()),
                             senderName: m['sender_name']?.toString() ?? '',
@@ -436,6 +437,7 @@ class _Bubble extends StatelessWidget {
   final String type;
   final String? fileUrl;
   final String? fileName;
+  final Map<String, dynamic>? metadata;
   final bool isMe;
   final String time;
   final String senderName;
@@ -447,7 +449,10 @@ class _Bubble extends StatelessWidget {
     required this.senderName,
     this.fileUrl,
     this.fileName,
+    this.metadata,
   });
+
+  bool get _isClinical => type == 'prescription' || type == 'medical_record' || type == 'referral';
 
   @override
   Widget build(BuildContext context) {
@@ -461,39 +466,42 @@ class _Bubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isMe ? AppColors.sky500 : Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(18),
-                    topRight: const Radius.circular(18),
-                    bottomLeft: Radius.circular(isMe ? 18 : 4),
-                    bottomRight: Radius.circular(isMe ? 4 : 18),
+              if (_isClinical)
+                _ClinicalCard(type: type, content: content, metadata: metadata, isMe: isMe)
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isMe ? AppColors.darkBlue500 : Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(18),
+                      topRight: const Radius.circular(18),
+                      bottomLeft: Radius.circular(isMe ? 18 : 4),
+                      bottomRight: Radius.circular(isMe ? 4 : 18),
+                    ),
+                    border: Border.all(color: isMe ? Colors.transparent : AppColors.grey200),
                   ),
-                  border: Border.all(color: isMe ? Colors.transparent : AppColors.grey200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (type == 'image' && fileUrl != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.network(fileUrl!, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined)),
-                      ),
-                    if (type == 'file' && fileUrl != null)
-                      Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.insert_drive_file_outlined, color: isMe ? Colors.white : AppColors.grey500, size: 20),
-                        const SizedBox(width: 8),
-                        Flexible(child: Text(fileName ?? 'Document', style: TextStyle(color: isMe ? Colors.white : AppColors.darkBlue900, fontSize: 13))),
-                      ]),
-                    if (content.isNotEmpty) ...[
-                      if (type == 'image' && fileUrl != null) const SizedBox(height: 8),
-                      Text(content, style: TextStyle(color: isMe ? Colors.white : AppColors.darkBlue900, fontSize: 15, height: 1.35)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (type == 'image' && fileUrl != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(fileUrl!, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined)),
+                        ),
+                      if (type == 'file' && fileUrl != null)
+                        Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.insert_drive_file_outlined, color: isMe ? Colors.white : AppColors.grey500, size: 20),
+                          const SizedBox(width: 8),
+                          Flexible(child: Text(fileName ?? 'Document', style: TextStyle(color: isMe ? Colors.white : AppColors.darkBlue900, fontSize: 13))),
+                        ]),
+                      if (content.isNotEmpty) ...[
+                        if (type == 'image' && fileUrl != null) const SizedBox(height: 8),
+                        Text(content, style: TextStyle(color: isMe ? Colors.white : AppColors.darkBlue900, fontSize: 15, height: 1.35)),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
               if (time.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 4, left: 6, right: 6),
@@ -501,6 +509,128 @@ class _Bubble extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClinicalCard extends StatelessWidget {
+  final String type;
+  final String content;
+  final Map<String, dynamic>? metadata;
+  final bool isMe;
+  const _ClinicalCard({
+    required this.type,
+    required this.content,
+    required this.metadata,
+    required this.isMe,
+  });
+
+  IconData get _icon {
+    switch (type) {
+      case 'prescription': return Icons.medication_rounded;
+      case 'medical_record': return Icons.description_rounded;
+      case 'referral': return Icons.swap_horiz_rounded;
+      default: return Icons.medical_services_rounded;
+    }
+  }
+
+  String get _label {
+    switch (type) {
+      case 'prescription': return 'Prescription';
+      case 'medical_record': return 'Medical Record';
+      case 'referral': return 'Referral';
+      default: return 'Update';
+    }
+  }
+
+  String get _route {
+    switch (type) {
+      case 'prescription': return '/patient/prescriptions';
+      case 'medical_record': return '/patient/medical-records';
+      case 'referral': return '/patient/medical-records';
+      default: return '/';
+    }
+  }
+
+  String _subtitle() {
+    final m = metadata ?? const {};
+    if (type == 'prescription') {
+      final n = m['medication_count'];
+      if (n is num && n > 0) return '$n medication${n == 1 ? '' : 's'} prescribed';
+      return content.isEmpty ? 'Open prescription' : content;
+    }
+    if (type == 'medical_record') {
+      final dx = m['diagnosis']?.toString() ?? '';
+      if (dx.isNotEmpty) return dx;
+      return content.isEmpty ? 'Open record' : content;
+    }
+    if (type == 'referral') {
+      final reason = m['reason']?.toString() ?? '';
+      if (reason.isNotEmpty) return reason;
+      return content.isEmpty ? 'Open referral' : content;
+    }
+    return content;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push(_route),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.all(Radius.circular(16)),
+          border: Border.all(color: AppColors.grey200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.darkBlue500.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(_icon, color: AppColors.darkBlue500, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.darkBlue900,
+                      fontSize: 13.5,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: AppColors.grey400, size: 18),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _subtitle(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.darkBlue900,
+                fontSize: 13.5,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tap to open',
+              style: const TextStyle(color: AppColors.darkBlue500, fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ],
         ),
       ),
     );

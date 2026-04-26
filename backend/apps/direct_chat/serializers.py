@@ -11,7 +11,7 @@ class DirectMessageSerializer(serializers.ModelSerializer):
         fields = (
             'message_id', 'conversation', 'sender_id', 'sender_name',
             'content', 'message_type', 'file_url', 'file_name',
-            'is_read', 'created_at',
+            'metadata', 'is_read', 'created_at',
         )
         read_only_fields = ('message_id', 'sender_id', 'sender_name', 'is_read', 'created_at')
 
