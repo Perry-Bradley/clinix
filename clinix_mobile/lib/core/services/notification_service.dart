@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'auth_service.dart';
+import 'call_handler.dart';
 import '../constants/app_router.dart';
 
 class NotificationService {
@@ -83,10 +84,15 @@ class NotificationService {
 
   /// Show a visible notification banner when a message arrives while app is open
   static Future<void> _showForegroundNotification(RemoteMessage message) async {
-    // Incoming call: push the full-screen call UI immediately instead of a
-    // tray banner — that's the only way to actually "ring" the user.
+    // Incoming call: hand straight to CallKit so the device rings + the
+    // user sees the native call UI even if the app is in foreground.
     if (message.data['type']?.toString() == 'incoming_call') {
-      _routeFromData(message.data);
+      await CallHandler.showIncomingCall(
+        consultationId: message.data['consultation_id']?.toString() ?? '',
+        callerName: message.data['caller_name']?.toString() ?? 'Caller',
+        callerPhoto: message.data['caller_photo']?.toString(),
+        audioOnly: message.data['audio_only']?.toString().toLowerCase() == 'true',
+      );
       return;
     }
     final notification = message.notification;

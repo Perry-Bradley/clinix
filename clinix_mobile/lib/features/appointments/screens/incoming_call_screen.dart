@@ -16,6 +16,10 @@ class IncomingCallScreen extends StatefulWidget {
   final String callerName;
   final String? callerPhoto;
   final bool audioOnly;
+  // When true the screen skips its in-app ringing UI and goes straight to
+  // the video screen — used when the user already accepted via the native
+  // CallKit notification on Android/iOS.
+  final bool autoAccept;
 
   const IncomingCallScreen({
     super.key,
@@ -23,6 +27,7 @@ class IncomingCallScreen extends StatefulWidget {
     required this.callerName,
     this.callerPhoto,
     this.audioOnly = false,
+    this.autoAccept = false,
   });
 
   @override
@@ -41,6 +46,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
+    if (widget.autoAccept) {
+      // Native CallKit already accepted — jump straight to the call.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _accept();
+      });
+      return;
+    }
     _startRinging();
     // Auto-dismiss after 30s if neither party acts.
     _autoDismiss = Timer(const Duration(seconds: 30), () {

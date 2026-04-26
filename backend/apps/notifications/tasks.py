@@ -13,28 +13,59 @@ def _send_fcm_push(fcm_token, title, body, data=None):
 
     Uses the Clinix launcher icon (`@mipmap/ic_launcher`) on Android so the
     notification shade matches the app brand.
+
+    Special case: when `data['type'] == 'incoming_call'` we send a DATA-ONLY
+    high-priority message — no `notification` field. That guarantees the
+    receiver app's FirebaseMessaging.onBackgroundMessage handler runs, which
+    in turn triggers the native CallKit UI so the device wakes + rings even
+    when locked. Including a `notification` field would let Android display
+    a tray banner without ever calling our handler, which is the wrong UX
+    for a call.
     """
     try:
         from firebase_admin import messaging
 
-        message = messaging.Message(
-            notification=messaging.Notification(title=title, body=body),
-            data={k: str(v) for k, v in (data or {}).items()},
-            token=fcm_token,
-            android=messaging.AndroidConfig(
-                priority='high',
-                notification=messaging.AndroidNotification(
-                    icon='ic_launcher',
-                    color='#1B4080',
-                    channel_id='clinix_default',
+        data_dict = {k: str(v) for k, v in (data or {}).items()}
+        is_call = data_dict.get('type') == 'incoming_call'
+
+        if is_call:
+            message = messaging.Message(
+                data=data_dict,
+                token=fcm_token,
+                android=messaging.AndroidConfig(
+                    priority='high',
+                    # No `notification` block — keeps it data-only so the
+                    # background isolate handler on the device runs.
                 ),
-            ),
-            apns=messaging.APNSConfig(
-                payload=messaging.APNSPayload(
-                    aps=messaging.Aps(sound='default'),
+                apns=messaging.APNSConfig(
+                    headers={
+                        'apns-push-type': 'voip',
+                        'apns-priority': '10',
+                    },
+                    payload=messaging.APNSPayload(
+                        aps=messaging.Aps(content_available=True),
+                    ),
                 ),
-            ),
-        )
+            )
+        else:
+            message = messaging.Message(
+                notification=messaging.Notification(title=title, body=body),
+                data=data_dict,
+                token=fcm_token,
+                android=messaging.AndroidConfig(
+                    priority='high',
+                    notification=messaging.AndroidNotification(
+                        icon='ic_launcher',
+                        color='#1B4080',
+                        channel_id='clinix_default',
+                    ),
+                ),
+                apns=messaging.APNSConfig(
+                    payload=messaging.APNSPayload(
+                        aps=messaging.Aps(sound='default'),
+                    ),
+                ),
+            )
         response = messaging.send(message)
         logger.info(f"FCM sent: {response}")
         return True

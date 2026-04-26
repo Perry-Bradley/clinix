@@ -57,6 +57,7 @@ dependencies:
   printing: ^5.13.0
   flutter_ringtone_player: ^4.0.0+3
   vibration: ^2.0.0
+  flutter_callkit_incoming: ^2.5.4
 
   # Communication & Video Call
   agora_rtc_engine: ^6.3.2

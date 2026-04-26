@@ -125,6 +125,8 @@ final GoRouter appRouter = GoRouter(
           audioOnly: (extra['audioOnly'] is bool)
               ? extra['audioOnly'] as bool
               : (q['audio_only']?.toLowerCase() == 'true'),
+          autoAccept: q['auto_accept'] == '1' ||
+              q['auto_accept']?.toLowerCase() == 'true',
         );
       },
     ),
