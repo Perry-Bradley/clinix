@@ -11,7 +11,9 @@ import '../../../../core/services/auth_service.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../shared/widgets/custom_sidebar_drawer.dart';
 import '../../../shared/widgets/bubble_bottom_bar.dart';
+import '../../../shared/widgets/swipe_to_delete.dart';
 import '../../../appointments/screens/video_consultation_screen.dart';
+import '../../../../core/services/appointment_service.dart';
 
 class _ProviderApi {
   static final Dio _dio = Dio(BaseOptions(
@@ -251,7 +253,6 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
   double _rating = 0.0;
   List<Map<String, dynamic>> _appointments = [];
   bool _loadingDashboard = true;
-  bool _isAvailable = true;
 
   @override
   void initState() {
@@ -457,86 +458,10 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
               ],
             ),
           ),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(70),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
-              child: GestureDetector(
-                onTap: () => setState(() => _isAvailable = !_isAvailable),
-                child: Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.grey200),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 32, height: 32,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: (_isAvailable ? AppColors.accentGreen : AppColors.grey400).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Container(
-                          width: 8, height: 8,
-                          decoration: BoxDecoration(
-                            color: _isAvailable ? AppColors.accentGreen : AppColors.grey400,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _isAvailable ? 'Online · accepting consults' : 'Offline · paused',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w800,
-                                color: _isAvailable ? AppColors.darkBlue900 : AppColors.grey500,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              'Tap to toggle',
-                              style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.grey500),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        width: 36, height: 22,
-                        decoration: BoxDecoration(
-                          color: _isAvailable ? AppColors.darkBlue500 : AppColors.grey200,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: AnimatedAlign(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOut,
-                          alignment: _isAvailable ? Alignment.centerRight : Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.all(2),
-                            child: Container(
-                              width: 18, height: 18,
-                              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          // Presence is auto-derived from the doctor's last seen timestamp on
+          // the server (LastSeenMiddleware refreshes it on every request, and
+          // the patient-facing list reads back "Online" / "Away" / "Offline"
+          // from that). No manual toggle.
         ),
         SliverPadding(
           padding: EdgeInsets.fromLTRB(hp, w * 0.05, hp, mq.padding.bottom + 24),
@@ -595,7 +520,31 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
                   ),
                 )
               else
-                ..._appointments.map((a) => _ProviderApptCard(appointment: a)),
+                ..._appointments.map((a) {
+                  final apptId = a['appointment_id']?.toString() ?? '';
+                  final status = a['status']?.toString() ?? '';
+                  final canCancel = status == 'pending' || status == 'confirmed';
+                  if (!canCancel) {
+                    return _ProviderApptCard(appointment: a);
+                  }
+                  return SwipeToDeleteCard(
+                    dismissibleKey: 'doctor-appt-$apptId',
+                    deleteLabel: 'Cancel',
+                    deletedSnack: 'Appointment cancelled',
+                    confirmTitle: 'Cancel appointment?',
+                    confirmBody: 'The patient will be notified.',
+                    onDelete: () async {
+                      try {
+                        await AppointmentService.cancelAppointment(apptId);
+                        if (mounted) setState(() => _appointments.removeWhere((x) => x['appointment_id']?.toString() == apptId));
+                        return true;
+                      } catch (_) {
+                        return false;
+                      }
+                    },
+                    child: _ProviderApptCard(appointment: a),
+                  );
+                }),
               SizedBox(height: w * 0.05),
               Row(
                 children: [
@@ -1488,12 +1437,30 @@ class _ProviderEarningsTabState extends State<_ProviderEarningsTab> {
               child: Text('No transactions yet', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500)),
             )
           else
-            ...transactions.map((tx) => _buildTxItem(
-              (tx['type']?.toString() == 'credit') ? 'Consultation Payout' : 'Withdrawal',
-              tx['date']?.toString() ?? '',
-              tx['amount']?.toString() ?? '0',
-              tx['type']?.toString() == 'credit',
-            )),
+            ...transactions.asMap().entries.map((entry) {
+              final i = entry.key;
+              final tx = entry.value;
+              final ref = tx['reference']?.toString() ?? tx['id']?.toString() ?? '$i';
+              return SwipeToDeleteCard(
+                dismissibleKey: 'tx-$ref',
+                deleteLabel: 'Hide',
+                deletedSnack: 'Hidden from your history',
+                onDelete: () async {
+                  if (mounted) {
+                    setState(() {
+                      (_earnings?['recent_transactions'] as List?)?.removeAt(i);
+                    });
+                  }
+                  return true;
+                },
+                child: _buildTxItem(
+                  (tx['type']?.toString() == 'credit') ? 'Consultation Payout' : 'Withdrawal',
+                  tx['date']?.toString() ?? '',
+                  tx['amount']?.toString() ?? '0',
+                  tx['type']?.toString() == 'credit',
+                ),
+              );
+            }),
           const SizedBox(height: 100), // Space for bottom bar
         ],
       ),
