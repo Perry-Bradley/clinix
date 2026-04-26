@@ -33,6 +33,13 @@ class Payment(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     platform_fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     provider_payout = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # Booking data held during a "pay-first" service flow (lab tests / home
+    # treatments). When the Campay charge succeeds we materialise the
+    # Appointment from this payload — the patient never has a phantom pending
+    # appointment hanging around if they abandon checkout.
+    # Shape: {provider_id, scheduled_at, appointment_type, address,
+    #         service_name, duration_minutes}
+    pending_booking = models.JSONField(blank=True, null=True)
 
     class Meta:
         db_table = 'payments'

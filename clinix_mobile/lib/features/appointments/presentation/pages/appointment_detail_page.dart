@@ -195,6 +195,9 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
     final a = _appointment!;
     final status = a['status']?.toString() ?? 'pending';
     final type = a['appointment_type']?.toString() ?? 'virtual';
+    final isLabTest = type == 'lab_test';
+    final isHomeTreatment = type == 'home_treatment';
+    final isService = isLabTest || isHomeTreatment;
     final scheduledAtStr = a['scheduled_at']?.toString();
     final scheduledAt = scheduledAtStr != null ? DateTime.tryParse(scheduledAtStr)?.toLocal() : null;
     final duration = a['duration_minutes'] ?? 30;
@@ -202,12 +205,26 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
     final reason = (a['cancellation_reason'] ?? '').toString();
     final feeRaw = (a['provider'] is Map) ? a['provider']['consultation_fee'] : null;
     final fee = double.tryParse(feeRaw?.toString() ?? '') ?? 0;
+    final address = a['address']?.toString() ?? '';
+    final serviceName = a['service_name']?.toString() ?? '';
 
     final canJoin = (status == 'confirmed' || status == 'pending') && type == 'virtual';
     // Cancellation is patient-side only; the doctor doesn't cancel from this view.
     final canCancel = !_isProvider && (status == 'pending' || status == 'confirmed');
     // Both sides can open the chat once the appointment is live.
     final canMessage = status != 'cancelled';
+
+    String typeLabel() {
+      if (isLabTest) return 'Lab Test';
+      if (isHomeTreatment) return 'Home Treatment';
+      return type == 'virtual' ? 'Video Consult' : 'In-Person';
+    }
+
+    IconData typeIcon() {
+      if (isLabTest) return Icons.biotech_rounded;
+      if (isHomeTreatment) return Icons.home_filled;
+      return type == 'virtual' ? Icons.videocam_rounded : Icons.local_hospital_rounded;
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -303,13 +320,10 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
                   ),
                 ),
                 const Spacer(),
-                Icon(
-                  type == 'virtual' ? Icons.videocam_rounded : Icons.local_hospital_rounded,
-                  color: AppColors.grey500, size: 16,
-                ),
+                Icon(typeIcon(), color: AppColors.grey500, size: 16),
                 const SizedBox(width: 6),
                 Text(
-                  type == 'virtual' ? 'Video Consult' : 'In-Person',
+                  typeLabel(),
                   style: AppTextStyles.caption.copyWith(
                     color: AppColors.grey500,
                     fontWeight: FontWeight.w600,
@@ -320,6 +334,14 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
           ),
           const SizedBox(height: 14),
 
+          if (isService && serviceName.isNotEmpty) ...[
+            _InfoRow(
+              icon: isLabTest ? Icons.biotech_rounded : Icons.healing_rounded,
+              label: 'Service',
+              value: serviceName,
+            ),
+            const SizedBox(height: 10),
+          ],
           _InfoRow(
             icon: Icons.calendar_today_rounded,
             label: 'Date',
@@ -333,6 +355,10 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
                 ? '${DateFormat('HH:mm').format(scheduledAt)} – ${DateFormat('HH:mm').format(endAt ?? scheduledAt)}'
                 : '—',
           ),
+          if (isService && address.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _InfoRow(icon: Icons.location_on_rounded, label: 'Address', value: address),
+          ],
           const SizedBox(height: 10),
           _InfoRow(icon: Icons.payments_rounded, label: 'Fee', value: 'XAF ${fee.toInt()}'),
 

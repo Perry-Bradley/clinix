@@ -7,6 +7,9 @@ class Appointment(models.Model):
     TYPE_CHOICES = (
         ('virtual', 'Virtual'),
         ('in-person', 'In-Person'),
+        # Nurse-driven services — the nurse travels to the patient.
+        ('lab_test', 'Lab Test'),
+        ('home_treatment', 'Home Treatment'),
     )
 
     STATUS_CHOICES = (
@@ -26,6 +29,12 @@ class Appointment(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     cancellation_reason = models.TextField(blank=True, null=True)
     reminder_sent = models.BooleanField(default=False)
+    # Used for lab-test / home-treatment visits — the address the nurse should
+    # travel to. Empty for virtual / in-person doctor consults.
+    address = models.TextField(blank=True, default='')
+    # Human-readable name of the test or treatment requested (e.g. "Wound
+    # Treatment", "Malaria Rapid Test"). Empty for normal consults.
+    service_name = models.CharField(max_length=200, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

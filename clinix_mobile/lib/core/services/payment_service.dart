@@ -10,8 +10,12 @@ class PaymentService {
     headers: {'Content-Type': 'application/json'},
   ));
 
+  /// Pass either [appointmentId] (existing booking, e.g. doctor consult) OR
+  /// [pendingBooking] (pay-first service flow — server materialises the
+  /// Appointment when the Campay charge succeeds).
   static Future<Map<String, dynamic>> initiate({
-    required String appointmentId,
+    String? appointmentId,
+    Map<String, dynamic>? pendingBooking,
     required String paymentMethod,
     required double amount,
     required String payerPhone,
@@ -20,14 +24,20 @@ class PaymentService {
     if (token == null || token.isEmpty) {
       throw Exception('Not signed in');
     }
+    final body = <String, dynamic>{
+      'payment_method': paymentMethod,
+      'amount': amount.toStringAsFixed(2),
+      'payer_phone': payerPhone,
+    };
+    if (appointmentId != null && appointmentId.isNotEmpty) {
+      body['appointment'] = appointmentId;
+    }
+    if (pendingBooking != null && pendingBooking.isNotEmpty) {
+      body['pending_booking'] = pendingBooking;
+    }
     final response = await _dio.post(
       'initiate/',
-      data: {
-        'appointment': appointmentId,
-        'payment_method': paymentMethod,
-        'amount': amount.toStringAsFixed(2),
-        'payer_phone': payerPhone,
-      },
+      data: body,
       options: Options(headers: {'Authorization': 'Bearer $token'}),
     );
     return Map<String, dynamic>.from(response.data as Map);

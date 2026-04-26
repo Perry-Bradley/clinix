@@ -223,15 +223,11 @@ class _BookLabTestScreenState extends State<BookLabTestScreen> {
                     width: double.infinity,
                     height: w * 0.14,
                     child: ElevatedButton(
-                      onPressed: (_selectedNurse != null && _address.isNotEmpty) ? () {
-                        context.push('/patient/payment', extra: {
-                          'amount': price + 2000,
-                          'description': 'Lab Test: $testName',
-                          'provider': _selectedNurse,
-                        });
-                      } : null,
+                      onPressed: (_selectedNurse != null && _address.isNotEmpty)
+                          ? () => _bookAndPay(testName: testName, totalAmount: price + 2000)
+                          : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.splashSlate900,
+                        backgroundColor: AppColors.darkBlue500,
                         foregroundColor: Colors.white,
                         disabledBackgroundColor: AppColors.grey200,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -247,7 +243,37 @@ class _BookLabTestScreenState extends State<BookLabTestScreen> {
     );
   }
 
-  Widget _sectionTitle(String text, double w) => Text(text, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.04, fontWeight: FontWeight.w700, color: AppColors.splashSlate900));
+  void _bookAndPay({required String testName, required int totalAmount}) {
+    final nurseId = _selectedNurse?['provider_id']?.toString();
+    if (nurseId == null || nurseId.isEmpty) return;
+
+    // Combine date + selected time slot into a single DateTime (UTC ISO).
+    final timeParts = _selectedTime.split(':');
+    final scheduledAt = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      int.tryParse(timeParts[0]) ?? 9,
+      timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0,
+    );
+
+    // Pay-first flow: hand the booking metadata to the payment screen and let
+    // the backend create the Appointment only after the Campay charge succeeds.
+    context.push('/patient/payment', extra: {
+      'consultationFee': totalAmount,
+      'summaryLabel': 'Lab Test: $testName',
+      'pendingBooking': {
+        'provider_id': nurseId,
+        'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+        'appointment_type': 'lab_test',
+        'address': _address,
+        'service_name': testName,
+        'duration_minutes': 60,
+      },
+    });
+  }
+
+  Widget _sectionTitle(String text, double w) => Text(text, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.04, fontWeight: FontWeight.w700, color: AppColors.darkBlue900));
 
   Widget _summaryRow(String label, String value, double w, {bool bold = false}) {
     return Row(

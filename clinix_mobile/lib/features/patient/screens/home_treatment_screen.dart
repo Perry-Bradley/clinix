@@ -143,6 +143,19 @@ class _TreatmentDetailSheet extends StatefulWidget {
 class _TreatmentDetailSheetState extends State<_TreatmentDetailSheet> {
   List<dynamic> _nurses = [];
   bool _loading = true;
+  bool _submitting = false;
+  Map<String, dynamic>? _selectedNurse;
+  DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
+  String _selectedTime = '09:00';
+  final TextEditingController _addressCtrl = TextEditingController();
+
+  static const _timeSlots = ['07:00', '08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00'];
+
+  @override
+  void dispose() {
+    _addressCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -179,6 +192,39 @@ class _TreatmentDetailSheetState extends State<_TreatmentDetailSheet> {
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  bool _canBook() {
+    final nurseId = _selectedNurse?['provider_id']?.toString() ?? '';
+    return nurseId.isNotEmpty && _addressCtrl.text.trim().isNotEmpty;
+  }
+
+  void _payAndBook(int price) {
+    final nurseId = _selectedNurse!['provider_id'].toString();
+    final timeParts = _selectedTime.split(':');
+    final scheduledAt = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      int.tryParse(timeParts[0]) ?? 9,
+      timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0,
+    );
+    final title = widget.treatment['title'] as String;
+    final address = _addressCtrl.text.trim();
+
+    Navigator.pop(context);
+    context.push('/patient/payment', extra: {
+      'consultationFee': price,
+      'summaryLabel': title,
+      'pendingBooking': {
+        'provider_id': nurseId,
+        'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+        'appointment_type': 'home_treatment',
+        'address': address,
+        'service_name': title,
+        'duration_minutes': 60,
+      },
+    });
   }
 
   String _nurseLocation(dynamic n) {
@@ -251,22 +297,33 @@ class _TreatmentDetailSheetState extends State<_TreatmentDetailSheet> {
                 final distance = n['distance_km'];
                 final location = _nurseLocation(n);
                 final isOnline = (n['status']?.toString() ?? '').toLowerCase() == 'online';
+                final isSelected = _selectedNurse?['provider_id']?.toString() == nurseId;
 
                 return GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                    if (nurseId.isNotEmpty) context.push('/patient/doctor-profile/$nurseId');
-                  },
+                  onTap: () => setState(() => _selectedNurse = Map<String, dynamic>.from(n)),
                   child: Container(
                     margin: EdgeInsets.only(bottom: w * 0.025),
                     padding: EdgeInsets.all(w * 0.035),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.grey200),
+                      border: Border.all(
+                        color: isSelected ? AppColors.darkBlue500 : AppColors.grey200,
+                        width: isSelected ? 1.5 : 1,
+                      ),
                     ),
                     child: Row(
                       children: [
+                        if (isSelected)
+                          Padding(
+                            padding: EdgeInsets.only(right: w * 0.025),
+                            child: Container(
+                              width: 18, height: 18,
+                              alignment: Alignment.center,
+                              decoration: const BoxDecoration(color: AppColors.darkBlue500, shape: BoxShape.circle),
+                              child: const Icon(Icons.check_rounded, color: Colors.white, size: 12),
+                            ),
+                          ),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -304,17 +361,6 @@ class _TreatmentDetailSheetState extends State<_TreatmentDetailSheet> {
                             ],
                           ),
                         ),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context);
-                            context.push('/dchat/launch/$nurseId?name=${Uri.encodeComponent(name)}');
-                          },
-                          child: Container(
-                            padding: EdgeInsets.all(w * 0.022),
-                            decoration: BoxDecoration(color: AppColors.darkBlue500, borderRadius: BorderRadius.circular(10)),
-                            child: Icon(Icons.chat_rounded, color: Colors.white, size: w * 0.04),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -340,23 +386,86 @@ class _TreatmentDetailSheetState extends State<_TreatmentDetailSheet> {
                 ),
               ),
             ],
+
+            SizedBox(height: w * 0.05),
+            // ── Schedule + address ──
+            Text('Your Address', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.038, fontWeight: FontWeight.w700, color: AppColors.darkBlue900)),
+            SizedBox(height: w * 0.02),
+            TextField(
+              controller: _addressCtrl,
+              style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.034),
+              decoration: InputDecoration(
+                hintText: 'Where should the nurse come?',
+                hintStyle: TextStyle(fontFamily: 'Inter', fontSize: w * 0.034, color: AppColors.grey400),
+                filled: true,
+                fillColor: AppColors.grey50,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              ),
+            ),
+
             SizedBox(height: w * 0.04),
+            Text('Preferred Date', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.038, fontWeight: FontWeight.w700, color: AppColors.darkBlue900)),
+            SizedBox(height: w * 0.02),
+            GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _selectedDate,
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 30)),
+                );
+                if (picked != null) setState(() => _selectedDate = picked);
+              },
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: w * 0.04, vertical: w * 0.035),
+                decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(14)),
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today_rounded, color: AppColors.darkBlue500, size: w * 0.05),
+                    SizedBox(width: w * 0.03),
+                    Text('${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.036, fontWeight: FontWeight.w600, color: AppColors.darkBlue900)),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: w * 0.04),
+            Text('Preferred Time', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.038, fontWeight: FontWeight.w700, color: AppColors.darkBlue900)),
+            SizedBox(height: w * 0.02),
+            Wrap(
+              spacing: w * 0.025,
+              runSpacing: w * 0.025,
+              children: _timeSlots.map((t) {
+                final sel = t == _selectedTime;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedTime = t),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: w * 0.04, vertical: w * 0.025),
+                    decoration: BoxDecoration(
+                      color: sel ? AppColors.darkBlue500 : Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: sel ? AppColors.darkBlue500 : AppColors.grey200),
+                    ),
+                    child: Text(t, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.032, fontWeight: FontWeight.w700, color: sel ? Colors.white : AppColors.grey700)),
+                  ),
+                );
+              }).toList(),
+            ),
+
+            SizedBox(height: w * 0.06),
             SizedBox(
               width: double.infinity,
               height: w * 0.14,
               child: ElevatedButton(
-                onPressed: _nurses.isEmpty ? null : () {
-                  Navigator.pop(context);
-                  context.push('/dchat/launch/${_nurses.first['provider_id']}?name=${Uri.encodeComponent(_nurses.first['full_name'] ?? 'Nurse')}');
-                },
+                onPressed: _canBook() ? () => _payAndBook(price) : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.splashSlate900,
+                  backgroundColor: AppColors.darkBlue500,
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: AppColors.grey200,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
-                child: Text('Request This Service', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.038, fontWeight: FontWeight.w700)),
+                child: Text('Pay & Book ($price XAF)', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.038, fontWeight: FontWeight.w700)),
               ),
             ),
           ],

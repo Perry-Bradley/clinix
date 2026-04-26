@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/api_constants.dart';
@@ -66,6 +69,87 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
     );
   }
 
+  /// Format the record as a printable text document and hand it to the system
+  /// share sheet — the patient can save to Drive/Files or send to WhatsApp.
+  Future<void> _downloadRecord(Map<String, dynamic> record) async {
+    final title = (record['title']?.toString().trim().isNotEmpty == true)
+        ? record['title'].toString()
+        : (record['diagnosis']?.toString() ?? 'Medical Record');
+    final author = record['authored_by_name']?.toString() ?? 'Doctor';
+    final created = record['created_at']?.toString();
+    final dateStr = created != null && created.length >= 10
+        ? DateFormat('d MMM yyyy').format(DateTime.parse(created))
+        : '';
+    final symptoms = (record['symptoms'] as List?)?.join(', ') ?? '';
+
+    String section(String label, dynamic value) {
+      final v = (value ?? '').toString().trim();
+      if (v.isEmpty) return '';
+      return '$label\n$v\n\n';
+    }
+
+    final body = StringBuffer()
+      ..writeln('CLINIX — MEDICAL RECORD')
+      ..writeln('=' * 32)
+      ..writeln(title)
+      ..writeln('Authored by: $author')
+      ..writeln('Date: $dateStr')
+      ..writeln('')
+      ..write(section('Chief complaint', record['chief_complaint']))
+      ..write(section('Symptoms', symptoms))
+      ..write(section('Symptom duration', record['symptom_duration']))
+      ..write(section('Examination findings', record['examination_findings']))
+      ..write(section('Diagnosis', record['diagnosis']))
+      ..write(section('Treatment plan', record['treatment_plan']))
+      ..write(section('Medications', record['medications_summary']))
+      ..write(section('Follow-up', record['follow_up_date']));
+
+    try {
+      // Save the text into the app's documents dir, then hand the file off
+      // to the system share sheet so the user can pick "Save to disk".
+      final dir = await getApplicationDocumentsDirectory();
+      final safeTitle = title
+          .replaceAll(RegExp(r'[^a-zA-Z0-9_\- ]'), '')
+          .replaceAll(' ', '_');
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final file = File('${dir.path}/clinix_record_${safeTitle}_$ts.txt');
+      await file.writeAsString(body.toString());
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/plain')],
+        subject: 'Medical Record — $title',
+        text: 'Medical record from Clinix.',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not download the record. Please try again.')),
+        );
+      }
+    }
+  }
+
+  void _openRecord(Map<String, dynamic> record) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => _RecordDetailSheet(
+        record: record,
+        onShare: () {
+          Navigator.pop(ctx);
+          _shareRecord(record);
+        },
+        onDownload: () {
+          Navigator.pop(ctx);
+          _downloadRecord(record);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -121,7 +205,12 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                     itemCount: _records.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (context, index) =>
-                        _RecordCard(record: _records[index], onShare: _shareRecord),
+                        _RecordCard(
+                      record: _records[index],
+                      onShare: _shareRecord,
+                      onDownload: _downloadRecord,
+                      onOpen: _openRecord,
+                    ),
                   ),
                 ),
     );
@@ -131,7 +220,14 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
 class _RecordCard extends StatelessWidget {
   final Map<String, dynamic> record;
   final Future<void> Function(Map<String, dynamic>) onShare;
-  const _RecordCard({required this.record, required this.onShare});
+  final Future<void> Function(Map<String, dynamic>) onDownload;
+  final void Function(Map<String, dynamic>) onOpen;
+  const _RecordCard({
+    required this.record,
+    required this.onShare,
+    required this.onDownload,
+    required this.onOpen,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +243,9 @@ class _RecordCard extends StatelessWidget {
         : '';
     final sharedCount = (record['shared_with_ids'] as List?)?.length ?? 0;
 
-    return Container(
+    return GestureDetector(
+      onTap: () => onOpen(record),
+      child: Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -162,7 +260,7 @@ class _RecordCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.darkBlue900,
+                  color: AppColors.darkBlue500,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.description_rounded, color: Colors.white, size: 20),
@@ -234,11 +332,38 @@ class _RecordCard extends StatelessWidget {
                 ),
               const Spacer(),
               GestureDetector(
+                onTap: () => onDownload(record),
+                child: Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.grey200),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.download_rounded, color: AppColors.darkBlue500, size: 14),
+                      SizedBox(width: 6),
+                      Text(
+                        'Download',
+                        style: TextStyle(
+                          color: AppColors.darkBlue500,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              GestureDetector(
                 onTap: () => onShare(record),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: AppColors.darkBlue800,
+                    color: AppColors.darkBlue500,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
@@ -261,6 +386,179 @@ class _RecordCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+      ),
+    );
+  }
+}
+
+class _RecordDetailSheet extends StatelessWidget {
+  final Map<String, dynamic> record;
+  final VoidCallback onShare;
+  final VoidCallback onDownload;
+  const _RecordDetailSheet({
+    required this.record,
+    required this.onShare,
+    required this.onDownload,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = (record['title']?.toString().trim().isNotEmpty == true)
+        ? record['title'].toString()
+        : (record['diagnosis']?.toString() ?? 'Medical Record');
+    final author = record['authored_by_name']?.toString() ?? 'Doctor';
+    final authorSpecialty = record['authored_by_specialty']?.toString() ?? '';
+    final created = record['created_at']?.toString();
+    final dateStr = created != null && created.length >= 10
+        ? DateFormat('d MMM yyyy').format(DateTime.parse(created))
+        : '';
+    final symptoms = (record['symptoms'] as List?)?.join(', ') ?? '';
+
+    Widget section(String label, dynamic value) {
+      final v = (value ?? '').toString().trim();
+      if (v.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.grey500,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+                fontSize: 11,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              v,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.darkBlue900,
+                fontSize: 14,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(4)),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42, height: 42,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.darkBlue500,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.description_rounded, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            color: AppColors.darkBlue900,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          [author, if (authorSpecialty.isNotEmpty) authorSpecialty, if (dateStr.isNotEmpty) dateStr]
+                              .where((s) => s.isNotEmpty)
+                              .join(' · '),
+                          style: AppTextStyles.caption.copyWith(color: AppColors.grey500),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.grey200),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    section('Chief complaint', record['chief_complaint']),
+                    section('Symptoms', symptoms),
+                    section('Symptom duration', record['symptom_duration']),
+                    section('Examination findings', record['examination_findings']),
+                    section('Diagnosis', record['diagnosis']),
+                    section('Treatment plan', record['treatment_plan']),
+                    section('Medications', record['medications_summary']),
+                    section('Follow-up', record['follow_up_date']),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.grey200),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onDownload,
+                      icon: const Icon(Icons.download_rounded, size: 16),
+                      label: const Text('Download'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.darkBlue500,
+                        side: const BorderSide(color: AppColors.grey200),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: onShare,
+                      icon: const Icon(Icons.share_rounded, size: 16),
+                      label: const Text('Share'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.darkBlue500,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

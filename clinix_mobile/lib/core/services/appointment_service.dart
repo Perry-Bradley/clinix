@@ -47,6 +47,32 @@ class AppointmentService {
     return Map<String, dynamic>.from(response.data as Map);
   }
 
+  /// Books a nurse-driven service (lab test or home treatment). The nurse
+  /// travels to the patient, so we send the address + the human-readable
+  /// service name. Returns the created appointment so the caller can attach
+  /// it to a Campay payment.
+  static Future<Map<String, dynamic>> createServiceAppointment({
+    required String nurseId,
+    required DateTime scheduledAt,
+    required String appointmentType, // 'lab_test' | 'home_treatment'
+    required String address,
+    required String serviceName,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final response = await _dio.post(
+      '',
+      data: {
+        'provider': nurseId,
+        'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+        'appointment_type': appointmentType,
+        'address': address,
+        'service_name': serviceName,
+      },
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
   static Future<List<Map<String, dynamic>>> getMyAppointments() async {
     final token = await AuthService.getAccessToken();
     final response = await _dio.get(

@@ -17,6 +17,69 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def _materialise_pending_booking(payment):
+    """For pay-first service bookings: create the Appointment from
+    payment.pending_booking now that the Campay charge has succeeded.
+    Returns the Appointment, or None if there's nothing to create."""
+    booking = payment.pending_booking or {}
+    if not booking or payment.appointment_id is not None:
+        return None
+    try:
+        from apps.providers.models import HealthcareProvider
+        from datetime import datetime
+        provider = HealthcareProvider.objects.filter(
+            provider_id=booking.get('provider_id')
+        ).first()
+        if not provider or not payment.patient:
+            return None
+        scheduled_raw = booking.get('scheduled_at')
+        scheduled_at = None
+        if scheduled_raw:
+            try:
+                scheduled_at = datetime.fromisoformat(str(scheduled_raw).replace('Z', '+00:00'))
+            except Exception:
+                scheduled_at = None
+        if scheduled_at is None:
+            scheduled_at = timezone.now()
+
+        appointment = Appointment.objects.create(
+            patient=payment.patient,
+            provider=provider,
+            scheduled_at=scheduled_at,
+            duration_minutes=booking.get('duration_minutes', 60),
+            appointment_type=booking.get('appointment_type', 'home_treatment'),
+            status='confirmed',
+            address=booking.get('address', '') or '',
+            service_name=booking.get('service_name', '') or '',
+        )
+        payment.appointment = appointment
+        payment.provider = provider
+        payment.save(update_fields=['appointment', 'provider'])
+
+        # Notify the nurse so it lands in their notifications immediately.
+        try:
+            from apps.notifications.tasks import send_notification
+            patient_name = (
+                getattr(payment.patient.patient_id, 'full_name', None) or 'A patient'
+            )
+            label = 'home visit' if appointment.appointment_type == 'home_treatment' else 'lab test'
+            service = appointment.service_name or label
+            send_notification.delay(
+                str(provider.provider_id.user_id),
+                f'New {label} confirmed',
+                f'{patient_name} booked {service} — {scheduled_at.strftime("%b %d, %H:%M")}',
+                'appointment',
+                {'appointment_id': str(appointment.appointment_id)},
+            )
+        except Exception:
+            pass
+
+        return appointment
+    except Exception as e:
+        logger.warning(f'Could not materialise pending booking: {e}')
+        return None
+
+
 def _mark_payment_success(payment):
     if payment.status == 'success':
         return payment
@@ -25,6 +88,12 @@ def _mark_payment_success(payment):
         payment.status = 'success'
         payment.completed_at = timezone.now()
         payment.save(update_fields=['status', 'completed_at'])
+
+        # If this was a pay-first service booking, create the Appointment now.
+        if payment.appointment_id is None and payment.pending_booking:
+            _materialise_pending_booking(payment)
+            payment.refresh_from_db()
+
         if payment.appointment:
             payment.appointment.status = 'confirmed'
             payment.appointment.save(update_fields=['status'])
@@ -202,8 +271,13 @@ class PaymentInitiateView(APIView):
         serializer = PaymentSerializer(data=request.data)
         if serializer.is_valid():
             appointment = serializer.validated_data.get('appointment')
-            if not appointment:
-                return Response({'error': 'appointment is required'}, status=status.HTTP_400_BAD_REQUEST)
+            pending_booking = request.data.get('pending_booking')
+
+            if not appointment and not pending_booking:
+                return Response(
+                    {'error': 'appointment or pending_booking is required'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             amount = serializer.validated_data['amount']
             payment_method = serializer.validated_data['payment_method']
@@ -218,11 +292,21 @@ class PaymentInitiateView(APIView):
             except Patient.DoesNotExist:
                 return Response({'error': 'Only patients can initiate payments'}, status=status.HTTP_403_FORBIDDEN)
 
+            # For pay-first service bookings, look up the provider from the
+            # pending_booking payload so wallet credit + dashboards work right
+            # the moment the charge succeeds.
+            provider = appointment.provider if appointment else None
+            if provider is None and isinstance(pending_booking, dict):
+                from apps.providers.models import HealthcareProvider
+                provider = HealthcareProvider.objects.filter(
+                    provider_id=pending_booking.get('provider_id')
+                ).first()
+
             with transaction.atomic():
                 payment = Payment.objects.create(
                     appointment=appointment,
                     patient=patient,
-                    provider=appointment.provider if appointment else None,
+                    provider=provider,
                     amount=amount,
                     payment_method=payment_method,
                     transaction_ref=f"TXN-{uuid.uuid4().hex[:8].upper()}",
@@ -230,6 +314,7 @@ class PaymentInitiateView(APIView):
                     platform_fee=platform_fee,
                     provider_payout=provider_payout,
                     status='pending',
+                    pending_booking=pending_booking if isinstance(pending_booking, dict) else None,
                 )
 
             # Use CamPay for both MTN and Orange Money

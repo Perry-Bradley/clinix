@@ -7,11 +7,20 @@ import '../../../core/services/payment_service.dart';
 class PaymentScreen extends StatefulWidget {
   final String appointmentId;
   final int consultationFee;
+  // Pay-first service-booking flow: when present, the server materialises an
+  // Appointment from this map only after the Campay charge succeeds, so the
+  // patient never has a phantom pending appointment if they bail.
+  // Shape: {provider_id, scheduled_at (ISO8601 UTC), appointment_type,
+  //         address, service_name, duration_minutes}
+  final Map<String, dynamic>? pendingBooking;
+  final String? summaryLabel;
 
   const PaymentScreen({
     super.key,
     required this.appointmentId,
     this.consultationFee = 15000,
+    this.pendingBooking,
+    this.summaryLabel,
   });
 
   @override
@@ -25,8 +34,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
   final TextEditingController _phoneController = TextEditingController(text: '+237');
 
   Future<void> _processPayment() async {
-    if (widget.appointmentId.isEmpty) {
-      setState(() => _errorMessage = 'Missing appointment. Go back and try booking again.');
+    final hasAppointment = widget.appointmentId.isNotEmpty;
+    final hasBooking = widget.pendingBooking != null && widget.pendingBooking!.isNotEmpty;
+    if (!hasAppointment && !hasBooking) {
+      setState(() => _errorMessage = 'Missing booking details. Go back and try again.');
       return;
     }
     final phone = _phoneController.text.trim();
@@ -41,7 +52,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
     try {
       final total = widget.consultationFee;
       final payment = await PaymentService.initiate(
-        appointmentId: widget.appointmentId,
+        appointmentId: hasAppointment ? widget.appointmentId : null,
+        pendingBooking: hasBooking ? widget.pendingBooking : null,
         paymentMethod: _paymentMethod,
         amount: total.toDouble(),
         payerPhone: phone,
@@ -132,7 +144,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
               child: Column(
                 children: [
-                  _buildSummaryRow('Consultation Fee', '${widget.consultationFee} XAF', isTotal: true),
+                  _buildSummaryRow(widget.summaryLabel ?? 'Consultation Fee', '${widget.consultationFee} XAF', isTotal: true),
                 ],
               ),
             ),

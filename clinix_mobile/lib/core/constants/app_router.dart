@@ -75,9 +75,12 @@ final GoRouter appRouter = GoRouter(
           return int.tryParse('$v') ?? d;
         }
 
+        final pending = extra['pendingBooking'];
         return PaymentScreen(
           appointmentId: extra['appointmentId']?.toString() ?? '',
           consultationFee: asInt(extra['consultationFee'], 15000),
+          pendingBooking: pending is Map ? Map<String, dynamic>.from(pending) : null,
+          summaryLabel: extra['summaryLabel']?.toString(),
         );
       },
     ),

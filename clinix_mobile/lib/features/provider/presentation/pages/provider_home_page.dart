@@ -596,25 +596,13 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
                 )
               else
                 ..._appointments.map((a) => _ProviderApptCard(appointment: a)),
-              SizedBox(height: w * 0.07),
-
-              // Quick Actions — three white cards matching patient feature cards
-              Text(
-                'Quick Actions',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: w * 0.042,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkBlue900,
-                ),
-              ),
-              SizedBox(height: w * 0.03),
+              SizedBox(height: w * 0.05),
               Row(
                 children: [
                   Expanded(
                     child: _ProviderQuickCard(
                       icon: Icons.description_outlined,
-                      label: 'Write Prescription',
+                      label: 'Prescription',
                       onTap: () => context.push('/provider/prescription/new'),
                     ),
                   ),
@@ -720,12 +708,31 @@ class _ProviderApptCard extends StatelessWidget {
     final status = appointment['status']?.toString() ?? 'pending';
     final type = appointment['appointment_type']?.toString() ?? 'virtual';
     final isVideo = type == 'virtual';
+    final isLabTest = type == 'lab_test';
+    final isHomeTreatment = type == 'home_treatment';
+    final isService = isLabTest || isHomeTreatment;
     final dateStr = appointment['scheduled_at']?.toString();
     final date = dateStr != null ? DateTime.tryParse(dateStr)?.toLocal() : null;
     final time = date != null ? '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}' : '--:--';
     final apptId = appointment['appointment_id']?.toString() ?? '';
     final consultationId = appointment['consultation_id']?.toString() ?? apptId;
     final name = _patientName();
+    final address = appointment['address']?.toString() ?? '';
+    final serviceName = appointment['service_name']?.toString() ?? '';
+
+    String typeLabel() {
+      if (isLabTest) return serviceName.isNotEmpty ? 'Lab Test · $serviceName' : 'Lab Test';
+      if (isHomeTreatment) return serviceName.isNotEmpty ? serviceName : 'Home Treatment';
+      if (isVideo) return 'Video';
+      return 'In-Person';
+    }
+
+    IconData typeIcon() {
+      if (isLabTest) return Icons.biotech_rounded;
+      if (isHomeTreatment) return Icons.home_filled;
+      if (isVideo) return Icons.videocam_rounded;
+      return Icons.local_hospital_rounded;
+    }
 
     final isPending = status == 'pending';
     final isCompleted = status == 'completed';
@@ -790,14 +797,35 @@ class _ProviderApptCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Row(
                       children: [
-                        Icon(isVideo ? Icons.videocam_rounded : Icons.local_hospital_rounded, color: AppColors.darkBlue500, size: 13),
+                        Icon(typeIcon(), color: AppColors.darkBlue500, size: 13),
                         const SizedBox(width: 4),
-                        Text(
-                          '${isVideo ? "Video" : "In-Person"} · $time',
-                          style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.grey500, fontWeight: FontWeight.w600),
+                        Flexible(
+                          child: Text(
+                            '${typeLabel()} · $time',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.grey500, fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ],
                     ),
+                    if (isService && address.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_rounded, color: AppColors.grey400, size: 12),
+                          const SizedBox(width: 3),
+                          Flexible(
+                            child: Text(
+                              address,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontFamily: 'Inter', fontSize: 11.5, color: AppColors.grey500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -865,7 +893,7 @@ class _ProviderApptCard extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
                     ),
                     child: Text(
-                      isVideo ? 'Start Call' : 'Open Chat',
+                      isVideo ? 'Start Call' : (isService ? 'Message' : 'Open Chat'),
                       style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 12),
                     ),
                   ),
