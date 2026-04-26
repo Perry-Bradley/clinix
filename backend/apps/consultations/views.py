@@ -307,14 +307,17 @@ class AgoraTokenView(APIView):
 
 class ConsultationAudioUploadView(APIView):
     """Doctor-side audio upload after a consultation ends. The file is pushed
-    to Firebase Storage (which is GCS) and the gs:// URI is stashed on the
-    consultation; a Celery task then transcribes it via Google Cloud
-    Speech-to-Text and asks Gemini to draft a structured medical record.
-    Only the doctor on the appointment can upload."""
+    to a Cloud Storage bucket on the SAME GCP project as Speech-to-Text
+    (configured via GCP_AUDIO_BUCKET) using the same `clinix-stt` service
+    account, so STT can read it without any cross-project IAM. The gs:// URI
+    is stashed on the consultation; a Celery task then transcribes the
+    audio via Google STT and asks Gemini to draft a structured medical
+    record. Only the doctor on the appointment can upload."""
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [__import__('rest_framework.parsers', fromlist=['MultiPartParser']).MultiPartParser]
 
     def post(self, request, pk):
+        import os
         provider = _provider_for_user(request.user)
         if not provider:
             return Response({'error': 'Only providers can upload call audio.'}, status=status.HTTP_403_FORBIDDEN)
@@ -329,16 +332,27 @@ class ConsultationAudioUploadView(APIView):
         if not audio_file:
             return Response({'error': 'No audio file provided.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        bucket_name = os.environ.get('GCP_AUDIO_BUCKET')
+        if not bucket_name:
+            return Response(
+                {'error': 'GCP_AUDIO_BUCKET env var is not set on the server.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         try:
-            # Upload to Firebase Storage. The default bucket is also a GCS
-            # bucket, so we get a gs:// URI for free that Speech-to-Text can
-            # read directly.
-            from firebase_admin import storage as fb_storage
-            bucket = fb_storage.bucket()
+            from google.cloud import storage as gcs
+            from .tasks import _gcp_credentials  # reuses the STT service-account JSON
+            creds = _gcp_credentials()
+            client = gcs.Client(credentials=creds, project=getattr(creds, 'project_id', None)) if creds else gcs.Client()
+            bucket = client.bucket(bucket_name)
             blob_path = f'consultation_audio/{consultation.consultation_id}/{audio_file.name}'
             blob = bucket.blob(blob_path)
-            blob.upload_from_file(audio_file, content_type=audio_file.content_type or 'audio/wav')
-            gs_uri = f'gs://{bucket.name}/{blob_path}'
+            blob.upload_from_file(
+                audio_file,
+                content_type=audio_file.content_type or 'audio/wav',
+                rewind=True,
+            )
+            gs_uri = f'gs://{bucket_name}/{blob_path}'
         except Exception as e:
             return Response(
                 {'error': f'Audio upload failed: {e}'},
@@ -346,8 +360,7 @@ class ConsultationAudioUploadView(APIView):
             )
 
         consultation.audio_gs_uri = gs_uri
-        consultation.recording_url = blob.public_url if hasattr(blob, 'public_url') else ''
-        consultation.save(update_fields=['audio_gs_uri', 'recording_url'])
+        consultation.save(update_fields=['audio_gs_uri'])
 
         # Fire off the transcribe + draft job in the background.
         try:
