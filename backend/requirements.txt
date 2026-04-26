@@ -22,3 +22,4 @@ firebase-admin==6.5.0
 google-generativeai==0.7.2
 google-cloud-speech==2.27.0
 google-cloud-storage==2.18.2
+whitenoise==6.7.0
