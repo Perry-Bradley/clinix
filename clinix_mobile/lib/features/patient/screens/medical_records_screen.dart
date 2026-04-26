@@ -1,14 +1,12 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/clinical_pdf.dart';
 
 /// Patient view of their consultation reports.
 ///
@@ -69,56 +67,11 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
     );
   }
 
-  /// Format the record as a printable text document and hand it to the system
-  /// share sheet — the patient can save to Drive/Files or send to WhatsApp.
+  /// Build a clinic-style PDF for the record and hand it to the system share
+  /// sheet — patient can save to Files / Drive or send via WhatsApp.
   Future<void> _downloadRecord(Map<String, dynamic> record) async {
-    final title = (record['title']?.toString().trim().isNotEmpty == true)
-        ? record['title'].toString()
-        : (record['diagnosis']?.toString() ?? 'Medical Record');
-    final author = record['authored_by_name']?.toString() ?? 'Doctor';
-    final created = record['created_at']?.toString();
-    final dateStr = created != null && created.length >= 10
-        ? DateFormat('d MMM yyyy').format(DateTime.parse(created))
-        : '';
-    final symptoms = (record['symptoms'] as List?)?.join(', ') ?? '';
-
-    String section(String label, dynamic value) {
-      final v = (value ?? '').toString().trim();
-      if (v.isEmpty) return '';
-      return '$label\n$v\n\n';
-    }
-
-    final body = StringBuffer()
-      ..writeln('CLINIX — MEDICAL RECORD')
-      ..writeln('=' * 32)
-      ..writeln(title)
-      ..writeln('Authored by: $author')
-      ..writeln('Date: $dateStr')
-      ..writeln('')
-      ..write(section('Chief complaint', record['chief_complaint']))
-      ..write(section('Symptoms', symptoms))
-      ..write(section('Symptom duration', record['symptom_duration']))
-      ..write(section('Examination findings', record['examination_findings']))
-      ..write(section('Diagnosis', record['diagnosis']))
-      ..write(section('Treatment plan', record['treatment_plan']))
-      ..write(section('Medications', record['medications_summary']))
-      ..write(section('Follow-up', record['follow_up_date']));
-
     try {
-      // Save the text into the app's documents dir, then hand the file off
-      // to the system share sheet so the user can pick "Save to disk".
-      final dir = await getApplicationDocumentsDirectory();
-      final safeTitle = title
-          .replaceAll(RegExp(r'[^a-zA-Z0-9_\- ]'), '')
-          .replaceAll(' ', '_');
-      final ts = DateTime.now().millisecondsSinceEpoch;
-      final file = File('${dir.path}/clinix_record_${safeTitle}_$ts.txt');
-      await file.writeAsString(body.toString());
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'text/plain')],
-        subject: 'Medical Record — $title',
-        text: 'Medical record from Clinix.',
-      );
+      await ClinicalPdf.shareMedicalRecord(record);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

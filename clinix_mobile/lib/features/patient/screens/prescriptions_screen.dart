@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/clinical_pdf.dart';
 
 class PrescriptionsScreen extends StatefulWidget {
   const PrescriptionsScreen({super.key});
@@ -69,6 +70,18 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
 
   List<Map<String, dynamic>> _remindersForPrescription(String prescriptionId) {
     return _reminders.where((r) => r['prescription']?.toString() == prescriptionId).toList();
+  }
+
+  Future<void> _downloadPrescription(Map<String, dynamic> p) async {
+    try {
+      await ClinicalPdf.sharePrescription(p);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not download the prescription. Please try again.')),
+        );
+      }
+    }
   }
 
   @override
@@ -232,6 +245,39 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
             ]),
           ),
         ],
+
+        SizedBox(height: w * 0.03),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            GestureDetector(
+              onTap: () => _downloadPrescription(p),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: w * 0.035, vertical: w * 0.022),
+                decoration: BoxDecoration(
+                  color: AppColors.darkBlue500,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.download_rounded, color: Colors.white, size: w * 0.04),
+                    SizedBox(width: w * 0.015),
+                    Text(
+                      'Download',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: w * 0.03,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ]),
     );
   }
