@@ -7,6 +7,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/clinical_pdf.dart';
+import '../../shared/widgets/swipe_to_delete.dart';
 
 /// Patient view of their consultation reports.
 ///
@@ -157,13 +158,28 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                     padding: const EdgeInsets.all(16),
                     itemCount: _records.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) =>
-                        _RecordCard(
-                      record: _records[index],
-                      onShare: _shareRecord,
-                      onDownload: _downloadRecord,
-                      onOpen: _openRecord,
-                    ),
+                    itemBuilder: (context, index) {
+                      final rec = _records[index];
+                      final rid = rec['record_id']?.toString() ?? '$index';
+                      return SwipeToDeleteCard(
+                        dismissibleKey: 'rec-$rid',
+                        deleteLabel: 'Hide',
+                        deletedSnack: 'Record hidden from your list',
+                        onDelete: () async {
+                          // Server-side delete would purge the doctor's
+                          // record too — instead just hide from this user's
+                          // view. Pull-to-refresh restores it.
+                          if (mounted) setState(() => _records.removeAt(index));
+                          return true;
+                        },
+                        child: _RecordCard(
+                          record: rec,
+                          onShare: _shareRecord,
+                          onDownload: _downloadRecord,
+                          onOpen: _openRecord,
+                        ),
+                      );
+                    },
                   ),
                 ),
     );
@@ -404,6 +420,7 @@ class _RecordDetailSheet extends StatelessWidget {
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),

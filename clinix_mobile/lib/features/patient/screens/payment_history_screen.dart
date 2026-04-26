@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/auth_service.dart';
+import '../../shared/widgets/swipe_to_delete.dart';
 
 class PaymentHistoryScreen extends StatefulWidget {
   const PaymentHistoryScreen({super.key});
@@ -91,8 +92,19 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                       final method = p['payment_method']?.toString() ?? '';
                       final date = p['initiated_at']?.toString().substring(0, 16).replaceFirst('T', ' ') ?? '';
                       final ref = p['transaction_ref']?.toString() ?? '';
+                      final pid = p['payment_id']?.toString() ?? p['id']?.toString() ?? '$index';
 
-                      return Container(
+                      return SwipeToDeleteCard(
+                        dismissibleKey: 'pay-$pid',
+                        deletedSnack: 'Hidden from your history',
+                        deleteLabel: 'Hide',
+                        onDelete: () async {
+                          // Payments are financial records — we don't destroy
+                          // them on the server, just hide from the local list.
+                          if (mounted) setState(() => _payments.removeAt(index));
+                          return true;
+                        },
+                        child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white, borderRadius: BorderRadius.circular(18),
@@ -128,6 +140,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                             Text(date, style: AppTextStyles.caption.copyWith(color: AppColors.grey400, fontSize: 9)),
                           ]),
                         ]),
+                      ),
                       );
                     },
                   ),

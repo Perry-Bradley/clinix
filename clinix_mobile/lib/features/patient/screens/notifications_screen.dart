@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/auth_service.dart';
+import '../../shared/widgets/swipe_to_delete.dart';
 
 String _formatNotifTime(String? raw) {
   if (raw == null || raw.isEmpty) return '';
@@ -144,7 +145,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       final n = _notifications[index];
                       final type = n['type']?.toString() ?? 'system';
                       final isRead = n['is_read'] == true;
-                      return Container(
+                      final id = n['notification_id']?.toString() ?? n['id']?.toString() ?? '$index';
+                      return SwipeToDeleteCard(
+                        dismissibleKey: 'notif-$id',
+                        deletedSnack: 'Notification removed',
+                        onDelete: () async {
+                          try {
+                            final token = await AuthService.getAccessToken();
+                            await Dio().delete(
+                              '${ApiConstants.baseUrl}notifications/$id/',
+                              options: Options(headers: {'Authorization': 'Bearer $token'}),
+                            );
+                          } catch (_) {
+                            // Even if the server call fails, hide locally so the
+                            // user gets immediate feedback. A pull-to-refresh
+                            // brings it back if the delete didn't actually go.
+                          }
+                          if (mounted) setState(() => _notifications.removeAt(index));
+                          return true;
+                        },
+                        child: Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: isRead ? Colors.white : AppColors.sky100.withValues(alpha: 0.3),
@@ -179,6 +199,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.sky500, shape: BoxShape.circle)),
                           ],
                         ),
+                      ),
                       );
                     },
                   ),

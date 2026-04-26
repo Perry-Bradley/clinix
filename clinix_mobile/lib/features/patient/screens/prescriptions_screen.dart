@@ -6,6 +6,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/clinical_pdf.dart';
+import '../../shared/widgets/swipe_to_delete.dart';
 
 class PrescriptionsScreen extends StatefulWidget {
   const PrescriptionsScreen({super.key});
@@ -131,7 +132,20 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
                     padding: EdgeInsets.all(w * 0.04),
                     itemCount: _prescriptions.length,
                     separatorBuilder: (_, __) => SizedBox(height: w * 0.03),
-                    itemBuilder: (_, i) => _buildPrescriptionCard(_prescriptions[i], w),
+                    itemBuilder: (_, i) {
+                      final p = _prescriptions[i];
+                      final pid = p['prescription_id']?.toString() ?? '$i';
+                      return SwipeToDeleteCard(
+                        dismissibleKey: 'pres-$pid',
+                        deleteLabel: 'Hide',
+                        deletedSnack: 'Prescription hidden from your list',
+                        onDelete: () async {
+                          if (mounted) setState(() => _prescriptions.removeAt(i));
+                          return true;
+                        },
+                        child: _buildPrescriptionCard(p, w),
+                      );
+                    },
                   ),
                 ),
     );

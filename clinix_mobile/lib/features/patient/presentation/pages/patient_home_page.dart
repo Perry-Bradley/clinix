@@ -5,6 +5,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../shared/widgets/custom_sidebar_drawer.dart';
 import '../../../shared/widgets/bubble_bottom_bar.dart';
+import '../../../shared/widgets/swipe_to_delete.dart';
 import '../../screens/doctors_list_screen.dart';
 import '../../screens/nearby_clinics_screen.dart';
 import '../../screens/health_dashboard_screen.dart';
@@ -836,7 +837,23 @@ class _UpcomingList extends StatelessWidget {
           final type = a['appointment_type']?.toString() ?? 'virtual';
           final isPending = status == 'pending';
 
-          return GestureDetector(
+          final apptId = a['appointment_id']?.toString() ?? '';
+          return SwipeToDeleteCard(
+            dismissibleKey: 'appt-$apptId',
+            deleteLabel: 'Cancel',
+            deletedSnack: 'Appointment cancelled',
+            confirmTitle: 'Cancel appointment?',
+            confirmBody: 'You\'ll need to book again if you change your mind.',
+            onDelete: () async {
+              try {
+                await AppointmentService.cancelAppointment(apptId);
+                onChanged?.call();
+                return true;
+              } catch (_) {
+                return false;
+              }
+            },
+            child: GestureDetector(
             onTap: () async {
               final changed = await context.push<bool>('/appointments/${a['appointment_id']}');
               if (changed == true) onChanged?.call();
@@ -889,6 +906,7 @@ class _UpcomingList extends StatelessWidget {
                 ],
               ),
             ),
+          ),
           );
         }),
       ],
