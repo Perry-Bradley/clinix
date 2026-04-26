@@ -35,15 +35,22 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
           '&key=$_apiKey';
 
       final response = await _dio.get(url);
-      if (response.data['status'] == 'OK') {
+      final apiStatus = response.data['status']?.toString();
+      if (apiStatus == 'OK') {
+        if (!mounted) return;
         setState(() {
           _clinicDetails = response.data['result'];
           _isLoading = false;
         });
+      } else {
+        // Common: REQUEST_DENIED (Places Details billing not enabled),
+        // NOT_FOUND (stale place_id), OVER_QUERY_LIMIT.
+        debugPrint('Place Details API status=$apiStatus error=${response.data['error_message']}');
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
-      print('Error fetching place details: $e');
-      setState(() => _isLoading = false);
+      debugPrint('Error fetching place details: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -54,51 +61,117 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
   Future<void> _call() async {
     final phone = _clinicDetails?['formatted_phone_number']?.toString()
         ?? _clinicDetails?['international_phone_number']?.toString();
-    if (phone == null || phone.isEmpty) {
-      _toast('No phone number available for this clinic');
-      return;
-    }
+    final hasPhone = phone != null && phone.trim().isNotEmpty;
+    final clinicName = _clinicDetails?['name']?.toString() ?? 'Clinic';
     if (!mounted) return;
-    // Show a confirmation sheet with the number + Call button
+
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(4))),
-          const SizedBox(height: 20),
-          Container(
-            width: 60, height: 60,
-            decoration: BoxDecoration(color: AppColors.sky100, shape: BoxShape.circle),
-            child: const Icon(Icons.phone_rounded, color: AppColors.sky500, size: 28),
-          ),
-          const SizedBox(height: 12),
-          Text(_clinicDetails?['name']?.toString() ?? 'Clinic', style: AppTextStyles.headlineSmall),
-          const SizedBox(height: 4),
-          Text(phone, style: AppTextStyles.bodyLarge.copyWith(color: AppColors.darkBlue900, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton.icon(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                final uri = Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'\s+'), ''));
-                try {
-                  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  if (!ok) _toast('Could not open phone dialer');
-                } catch (e) {
-                  _toast('Could not open dialer: $e');
-                }
-              },
-              icon: const Icon(Icons.call_rounded, color: Colors.white),
-              label: Text('Call now', style: AppTextStyles.bodyLarge.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.sky500, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.grey200,
+                borderRadius: BorderRadius.circular(4),
+              ),
             ),
-          ),
-        ]),
+            const SizedBox(height: 20),
+            Container(
+              width: 60, height: 60,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.darkBlue500.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.phone_rounded,
+                color: AppColors.darkBlue500,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              clinicName,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.headlineSmall.copyWith(
+                color: AppColors.darkBlue900,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (hasPhone)
+              Text(
+                phone,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: AppColors.darkBlue500,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  letterSpacing: 0.3,
+                ),
+              )
+            else
+              Text(
+                'No phone number listed for this clinic on Google Maps.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.grey500,
+                  height: 1.4,
+                ),
+              ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  if (hasPhone) {
+                    final uri = Uri(
+                      scheme: 'tel',
+                      path: phone.replaceAll(RegExp(r'\s+'), ''),
+                    );
+                    try {
+                      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      if (!ok) _toast('Could not open phone dialer');
+                    } catch (e) {
+                      _toast('Could not open dialer: $e');
+                    }
+                  } else {
+                    // Fall back to Google Maps where the user can see all
+                    // the clinic's contact info / reviews / photos.
+                    _openDirections();
+                  }
+                },
+                icon: Icon(
+                  hasPhone ? Icons.call_rounded : Icons.map_rounded,
+                  color: Colors.white,
+                ),
+                label: Text(
+                  hasPhone ? 'Call now' : 'Open on Google Maps',
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.darkBlue500,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
