@@ -354,7 +354,7 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: AppColors.grey200),
                         ),
-                        child: const Icon(Icons.notifications_none_rounded, color: AppColors.darkBlue800, size: 22),
+                        child: const Icon(Icons.notifications_none_rounded, color: AppColors.darkBlue500, size: 22),
                       ),
                     ),
                     GestureDetector(
@@ -367,7 +367,7 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: AppColors.grey200),
                         ),
-                        child: const Icon(Icons.chat_bubble_rounded, color: AppColors.darkBlue800, size: 22),
+                        child: const Icon(Icons.chat_bubble_rounded, color: AppColors.darkBlue500, size: 22),
                       ),
                     ),
                     _AvailabilityToggle(),
@@ -513,9 +513,9 @@ class _StatChip extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.darkBlue600, size: 18),
+            Icon(icon, color: AppColors.darkBlue500, size: 18),
             const SizedBox(height: 6),
-            Text(value, style: AppTextStyles.headlineMedium.copyWith(color: AppColors.darkBlue900, fontSize: 20)),
+            Text(value, style: AppTextStyles.headlineMedium.copyWith(color: AppColors.darkBlue500, fontSize: 20, fontWeight: FontWeight.w800)),
             Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.grey500, fontSize: 11)),
           ],
         ),
@@ -1559,7 +1559,7 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
                 label: 'Log Out',
                 color: AppColors.error,
                 onTap: () async {
-                  await AuthService.logout();
+                  await AuthService.logoutAndClear(context);
                   if (context.mounted) context.go('/login');
                 },
               ),

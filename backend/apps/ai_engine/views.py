@@ -14,6 +14,36 @@ from .serializers import (
 from .medlm_client import medlm_client, MedLMNotConfigured, MedLMInferenceError
 
 
+def _patient_vitals_context(patient):
+    """Build a short hidden PATIENT CONTEXT line from the patient's recent
+    health-tracker readings (heart rate, HRV, respiratory rate, distance).
+    Steps are deliberately excluded. Returns an empty string when there's
+    no recent data so we don't pollute the prompt with noise.
+    """
+    try:
+        from apps.health_metrics.models import HeartRateReading, DailyActivity
+    except Exception:
+        return ''
+
+    parts = []
+    hr = HeartRateReading.objects.filter(patient=patient).order_by('-measured_at').first()
+    if hr:
+        parts.append(f'heart rate {hr.bpm} bpm')
+        if hr.hrv_ms:
+            parts.append(f'HRV {hr.hrv_ms:.0f} ms')
+        if hr.respiratory_rate:
+            parts.append(f'respiratory rate {hr.respiratory_rate}/min')
+        parts.append(f'measured {hr.measured_at.date().isoformat()}')
+
+    activity = DailyActivity.objects.filter(patient=patient).order_by('-date').first()
+    if activity and activity.distance_km:
+        parts.append(f'distance walked today {activity.distance_km:.1f} km')
+
+    if not parts:
+        return ''
+    return 'PATIENT CONTEXT (do not thank the patient for this — silent background data): ' + ', '.join(parts) + '.'
+
+
 class AIChatStartView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -28,7 +58,7 @@ class AIChatStartView(APIView):
 
         try:
             initial_greeting = medlm_client.get_opening_message()
-        except MedLMNotConfigured as e:
+        except MedLMNotConfigured as e:  # noqa: F841 — re-raised below
             return Response(
                 {'error': 'medlm_not_configured', 'detail': str(e)},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -40,8 +70,15 @@ class AIChatStartView(APIView):
             )
 
         session = AISymptomSession.objects.create(patient=patient)
-        AIChatMessage.objects.create(session=session, sender='ai', message=initial_greeting)
 
+        # Inject the patient's recent vitals as a hidden 'user' turn so the
+        # AI silently has them in context. We only persist the AI greeting
+        # in the DB so the patient never sees this.
+        vitals_line = _patient_vitals_context(patient)
+        if vitals_line:
+            session._initial_vitals = vitals_line  # in-memory only
+
+        AIChatMessage.objects.create(session=session, sender='ai', message=initial_greeting)
         return Response(
             {'session_id': session.session_id, 'message': initial_greeting},
             status=status.HTTP_201_CREATED,
@@ -98,9 +135,14 @@ class AIChatMessageView(APIView):
                     image=image_b64 if image_b64 else None,
                 )
 
-                # Build full multimodal history (excluding the just-saved message)
+                # Build full multimodal history (excluding the just-saved message).
+                # Prepend a hidden vitals snapshot so the AI silently knows the
+                # patient's current heart rate / HRV / respiratory rate.
+                vitals_line = _patient_vitals_context(session.patient)
                 db_messages = list(session.messages.all().order_by('timestamp'))
                 prior = []
+                if vitals_line:
+                    prior.append({'role': 'user', 'parts': [vitals_line]})
                 for msg in db_messages[:-1]:
                     parts = [msg.message]
                     if msg.image:

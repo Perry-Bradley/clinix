@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import '../../../../core/services/appointment_service.dart';
 import '../../services/activity_service.dart';
+import 'package:pedometer/pedometer.dart';
 
 class PatientHomePage extends StatefulWidget {
   const PatientHomePage({super.key});
@@ -134,93 +135,214 @@ class _PatientDashboardState extends State<_PatientDashboard> {
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     final w = mq.size.width;
-    final topPad = mq.padding.top;
-    final hp = w * 0.06;
+    final hp = w * 0.05;
 
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1E293B), Color(0xFF1B4080)],
-              ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(28),
-                bottomRight: Radius.circular(28),
-              ),
-            ),
-            padding: EdgeInsets.fromLTRB(hp, topPad + 16, hp, w * 0.06),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        SliverAppBar(
+          pinned: true,
+          backgroundColor: AppColors.grey50,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          automaticallyImplyLeading: false,
+          toolbarHeight: 80,
+          titleSpacing: 0,
+          title: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Scaffold.of(context).openDrawer(),
-                      child: Container(
-                        padding: EdgeInsets.all(w * 0.025),
+                GestureDetector(
+                  onTap: () => Scaffold.of(context).openDrawer(),
+                  behavior: HitTestBehavior.opaque,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
+                          color: AppColors.darkBlue500,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.darkBlue500.withOpacity(0.25),
+                              blurRadius: 14,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
                         ),
-                        child: Icon(Icons.menu_rounded, color: Colors.white, size: w * 0.055),
+                        child: Text(
+                          _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
-                    ),
-                    SizedBox(width: w * 0.035),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.grey200),
+                          ),
+                          child: const Icon(Icons.menu_rounded,
+                              color: AppColors.darkBlue900, size: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
                         children: [
-                          Text(_greeting, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.03, color: Colors.white54)),
-                          SizedBox(height: w * 0.005),
-                          Text(_userName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.052, fontWeight: FontWeight.w700, color: Colors.white)),
+                          Icon(_greetingIcon, size: 14, color: AppColors.darkBlue500),
+                          const SizedBox(width: 6),
+                          Text(
+                            _greeting,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              color: AppColors.grey500,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                    GestureDetector(
-                      onTap: () => context.push('/notifications'),
-                      child: Container(
-                        padding: EdgeInsets.all(w * 0.025),
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
-                        child: Icon(Icons.notifications_none_rounded, color: Colors.white, size: w * 0.055),
+                      const SizedBox(height: 3),
+                      Text(
+                        _userName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.darkBlue900,
+                          height: 1.1,
+                          letterSpacing: -0.3,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                SizedBox(height: w * 0.055),
                 GestureDetector(
-                  onTap: () {
-                    final state = context.findAncestorStateOfType<_PatientHomePageState>();
-                    state?.setState(() => state._selectedTab = 1);
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: w * 0.04, vertical: w * 0.032),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.07),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.search_rounded, color: Colors.white30, size: w * 0.048),
-                        SizedBox(width: w * 0.03),
-                        Text('Search doctors, services...', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.034, color: Colors.white30)),
-                      ],
-                    ),
+                  onTap: () => context.push('/notifications'),
+                  behavior: HitTestBehavior.opaque,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.grey200),
+                        ),
+                        child: const Icon(Icons.notifications_none_rounded,
+                            color: AppColors.darkBlue900, size: 22),
+                      ),
+                      Positioned(
+                        top: 9,
+                        right: 9,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: AppColors.accentOrange,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(76),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
+              child: GestureDetector(
+                onTap: () {
+                  final state = context.findAncestorStateOfType<_PatientHomePageState>();
+                  state?.setState(() => state._selectedTab = 1);
+                },
+                child: Container(
+                  height: 50,
+                  padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: AppColors.grey200),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.darkBlue500.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.search_rounded,
+                            color: AppColors.darkBlue500, size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Search doctors, services...',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            color: AppColors.grey500,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: 38,
+                        height: 38,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.darkBlue500,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.tune_rounded,
+                            color: Colors.white, size: 18),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
         SliverPadding(
-          padding: EdgeInsets.fromLTRB(hp, w * 0.05, hp, 28),
+          padding: EdgeInsets.fromLTRB(hp, w * 0.05, hp, 0),
           sliver: SliverList(
             delegate: SliverChildListDelegate([
-              // Feature Grid 2x2
               Row(
                 children: [
                   _FeatureCard(icon: Icons.spa_rounded, title: 'Clinix AI', subtitle: 'Health Assistant', onTap: () => context.push('/ai-consult')),
@@ -242,9 +364,9 @@ class _PatientDashboardState extends State<_PatientDashboard> {
                   }),
                 ],
               ),
-              SizedBox(height: w * 0.05),
+              SizedBox(height: w * 0.045),
               if (_loadedAppointments && _upcoming.isNotEmpty)
-                _UpcomingList(appointments: _upcoming)
+                _UpcomingList(appointments: _upcoming, onChanged: _loadAppointments)
               else
                 _BookAppointmentCard(),
               SizedBox(height: w * 0.04),
@@ -255,9 +377,8 @@ class _PatientDashboardState extends State<_PatientDashboard> {
                 },
               ),
               SizedBox(height: w * 0.04),
-              // Quick Services row
-              _QuickServicesRow(),
-              SizedBox(height: mq.padding.bottom + 24),
+              const _QuickServicesRow(),
+              SizedBox(height: mq.padding.bottom + 16),
             ]),
           ),
         ),
@@ -424,14 +545,13 @@ class _AnimatedHealthCardState extends State<_AnimatedHealthCard> with TickerPro
                     final resp = data['latest_heart_rate']?['respiratory_rate']?.toString() ?? '--';
                     return Row(
                       children: [
-                        Consumer(builder: (context, ref, _) {
-                          final localSteps = ref.watch(stepCountProvider).value ?? 0;
-                          final serverSteps = int.tryParse(backendSteps.toString()) ?? 0;
-                          // Server steps are persisted across sessions, local starts from 0 each launch
-                          // Show server + local session steps for today's total
-                          final steps = serverSteps + localSteps;
-                          return _BottomVital(icon: Icons.directions_walk_rounded, value: '$steps', label: 'Steps', iconColor: const Color(0xFF4ECDC4));
-                        }),
+                        StreamBuilder<StepCount>(
+                          stream: Pedometer.stepCountStream.handleError((_) {}),
+                          builder: (context, snapshot) {
+                            final steps = snapshot.hasData ? snapshot.data!.steps : 0;
+                            return _BottomVital(icon: Icons.directions_walk_rounded, value: '$steps', label: 'Steps', iconColor: const Color(0xFF4ECDC4));
+                          },
+                        ),
                         SizedBox(width: w * 0.025),
                         _BottomVital(icon: Icons.air_rounded, value: resp, label: 'Resp. Rate', iconColor: const Color(0xFF45B7D1)),
                       ],
@@ -634,20 +754,13 @@ class _QuickServicesRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Text('Quick Services', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.042, fontWeight: FontWeight.w700, color: AppColors.darkBlue900)),
-        SizedBox(height: w * 0.03),
-        Row(
-          children: [
-            _QuickServiceTile(icon: Icons.medication_rounded, label: 'Prescriptions', onTap: () => context.push('/patient/prescriptions')),
-            SizedBox(width: w * 0.025),
-            _QuickServiceTile(icon: Icons.chat_rounded, label: 'Messages', onTap: () => context.push('/patient/messages')),
-            SizedBox(width: w * 0.025),
-            _QuickServiceTile(icon: Icons.receipt_long_rounded, label: 'Records', onTap: () => context.push('/patient/medical-records')),
-          ],
-        ),
+        _QuickServiceTile(icon: Icons.medication_rounded, label: 'Prescriptions', onTap: () => context.push('/patient/prescriptions')),
+        SizedBox(width: w * 0.025),
+        _QuickServiceTile(icon: Icons.chat_rounded, label: 'Messages', onTap: () => context.push('/patient/messages')),
+        SizedBox(width: w * 0.025),
+        _QuickServiceTile(icon: Icons.receipt_long_rounded, label: 'Records', onTap: () => context.push('/patient/medical-records')),
       ],
     );
   }
@@ -693,7 +806,8 @@ class _QuickServiceTile extends StatelessWidget {
 
 class _UpcomingList extends StatelessWidget {
   final List<Map<String, dynamic>> appointments;
-  const _UpcomingList({required this.appointments});
+  final VoidCallback? onChanged;
+  const _UpcomingList({required this.appointments, this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -723,7 +837,10 @@ class _UpcomingList extends StatelessWidget {
           final isPending = status == 'pending';
 
           return GestureDetector(
-            onTap: () => context.push('/appointments/${a['appointment_id']}'),
+            onTap: () async {
+              final changed = await context.push<bool>('/appointments/${a['appointment_id']}');
+              if (changed == true) onChanged?.call();
+            },
             child: Container(
               margin: EdgeInsets.only(bottom: w * 0.025),
               padding: EdgeInsets.all(w * 0.035),
@@ -1061,7 +1178,7 @@ class _PatientProfileTabState extends State<_PatientProfileTab> {
                       ),
                     );
                     if (confirmed == true) {
-                      await AuthService.logout();
+                      await AuthService.logoutAndClear(context);
                       if (context.mounted) context.go('/login');
                     }
                   },

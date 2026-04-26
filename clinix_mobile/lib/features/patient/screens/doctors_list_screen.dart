@@ -532,7 +532,7 @@ class _DoctorCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.grey200),
         ),
@@ -540,19 +540,9 @@ class _DoctorCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
-                  width: 56, height: 56,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.sky400, AppColors.darkBlue800],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.local_hospital_rounded,
-                      color: Colors.white, size: 26),
-                ),
+                _CardInitialsAvatar(name: name),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -576,31 +566,16 @@ class _DoctorCard extends StatelessWidget {
                           _StatusDot(status: status),
                         ],
                       ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          // Specialty pill
-                          Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: AppColors.sky100,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                spec,
-                                style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.sky600,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 11,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 4),
+                      Text(
+                        spec,
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.darkBlue500,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 6),
                       Row(
@@ -635,7 +610,7 @@ class _DoctorCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.darkBlue800,
+                      color: AppColors.darkBlue500,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.chat_bubble_rounded,
@@ -644,28 +619,20 @@ class _DoctorCard extends StatelessWidget {
                 ),
               ],
             ),
-            // Location row — minimal, inline below the main row.
             if (locationText.isNotEmpty) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Container(
-                    width: 22, height: 22,
-                    decoration: BoxDecoration(
-                      color: AppColors.sky100,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(Icons.location_on_rounded,
-                        color: AppColors.darkBlue500, size: 13),
-                  ),
-                  const SizedBox(width: 8),
+                  const Icon(Icons.location_on_rounded,
+                      color: AppColors.grey400, size: 14),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       locationText,
                       style: AppTextStyles.caption.copyWith(
-                        color: AppColors.grey700,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
+                        color: AppColors.grey500,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -675,6 +642,43 @@ class _DoctorCard extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardInitialsAvatar extends StatelessWidget {
+  final String name;
+  const _CardInitialsAvatar({required this.name});
+
+  String _initials(String fullName) {
+    final cleaned = fullName
+        .replaceAll(RegExp(r'^(Dr\.?|Doctor|Mr\.?|Mrs\.?|Ms\.?)\s+', caseSensitive: false), '')
+        .trim();
+    if (cleaned.isEmpty) return '?';
+    final parts = cleaned.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 52,
+      height: 52,
+      decoration: const BoxDecoration(
+        color: AppColors.darkBlue500,
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        _initials(name),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
         ),
       ),
     );

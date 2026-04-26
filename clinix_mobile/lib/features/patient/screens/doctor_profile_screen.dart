@@ -93,145 +93,211 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     final fee = _provider['consultation_fee']?.toString() ?? '0';
 
     return Scaffold(
-      backgroundColor: AppColors.grey50,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: 190,
-            backgroundColor: AppColors.darkBlue500,
-            surfaceTintColor: Colors.transparent,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(color: AppColors.darkBlue500),
-                padding: const EdgeInsets.fromLTRB(24, 60, 24, 20),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: AppColors.darkBlue900, size: 18),
+          onPressed: () => context.pop(),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 140),
+        children: [
+          // ── Hero: clean initials + name + specialty + rating ─────────
+          Center(
+            child: Column(
+              children: [
+                _InitialsAvatar(name: name),
+                const SizedBox(height: 18),
+                Text(
+                  name,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.headlineLarge.copyWith(
+                    color: AppColors.darkBlue900,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  spec,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.darkBlue500,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    const Icon(Icons.star_rounded,
+                        color: Color(0xFFFBBF24), size: 16),
+                    const SizedBox(width: 4),
                     Text(
-                      name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.headlineLarge.copyWith(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800),
+                      rating,
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.darkBlue900,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
                     ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(spec, style: AppTextStyles.caption.copyWith(color: AppColors.sky200, fontWeight: FontWeight.w700, fontSize: 12)),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFBBF24).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(children: [
-                            const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 14),
-                            const SizedBox(width: 3),
-                            Text(rating, style: const TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.w800, fontSize: 12)),
-                          ]),
-                        ),
-                      ],
+                    const SizedBox(width: 4),
+                    Text(
+                      '· $reviewsCount review${reviewsCount == 1 ? '' : 's'}',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.grey500,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.all(24),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                const SizedBox(height: 24),
-                // Stats Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _StatItem(label: 'Consults', value: '${_provider['total_consultations'] ?? 0}'),
-                    _StatItem(label: 'Experience', value: '$yearsExp YRS'),
-                    _StatItem(label: 'Fee', value: '$fee XAF'),
-                  ],
+          const SizedBox(height: 28),
+          // Stats Row — clean white cards with darkBlue500 numbers
+          Row(
+            children: [
+              Expanded(
+                child: _StatItem(
+                  label: 'Consults',
+                  value: '${_provider['total_consultations'] ?? 0}',
                 ),
-                const SizedBox(height: 32),
-                Text('Biography', style: AppTextStyles.headlineSmall),
-                const SizedBox(height: 8),
-                Text(bio, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, height: 1.6)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatItem(label: 'Experience', value: '$yearsExp YRS'),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: _StatItem(label: 'Fee', value: '$fee XAF')),
+            ],
+          ),
+          const SizedBox(height: 28),
+          Text(
+            'Biography',
+            style: AppTextStyles.headlineSmall.copyWith(
+              color: AppColors.darkBlue900,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(bio,
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: AppColors.grey700, height: 1.6)),
                 const SizedBox(height: 32),
 
-                // Reviews Section
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Patient Reviews', style: AppTextStyles.headlineSmall),
-                    TextButton(
-                      onPressed: () => _showReviewModal(context),
-                      child: Text('Write a Review', style: TextStyle(color: AppColors.darkBlue500, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
+          const SizedBox(height: 28),
+          // Reviews Section
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Patient Reviews',
+                style: AppTextStyles.headlineSmall.copyWith(
+                  color: AppColors.darkBlue900,
+                  fontWeight: FontWeight.w800,
                 ),
-                const SizedBox(height: 12),
-                if (_reviews.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.grey200)),
-                    child: Text('No patient reviews yet.', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500)),
-                  )
-                else
-                  ..._reviews.map((r) => _ReviewCard(review: {
-                    'name': r['patient_name'] ?? 'Patient',
-                    'rating': r['rating'] ?? 0,
-                    'comment': r['comment'] ?? '',
-                    'date': r['created_at']?.toString() ?? '',
-                  })),
-
-                const SizedBox(height: 32),
-                Text('Location', style: AppTextStyles.headlineSmall),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.grey200),
+              ),
+              TextButton(
+                onPressed: () => _showReviewModal(context),
+                child: Text(
+                  'Write a Review',
+                  style: TextStyle(
+                    color: AppColors.darkBlue500,
+                    fontWeight: FontWeight.w800,
                   ),
-                  child: Row(
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_reviews.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.grey200),
+              ),
+              child: Text(
+                'No patient reviews yet.',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500),
+              ),
+            )
+          else
+            ..._reviews.map((r) => _ReviewCard(review: {
+                  'name': r['patient_name'] ?? 'Patient',
+                  'rating': r['rating'] ?? 0,
+                  'comment': r['comment'] ?? '',
+                  'date': r['created_at']?.toString() ?? '',
+                })),
+
+          const SizedBox(height: 28),
+          Text(
+            'Location',
+            style: AppTextStyles.headlineSmall.copyWith(
+              color: AppColors.darkBlue900,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.grey200),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.sky100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.location_on_rounded,
+                      color: AppColors.darkBlue500, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: AppColors.sky100, borderRadius: BorderRadius.circular(14)),
-                        child: const Icon(Icons.location_on_rounded, color: AppColors.darkBlue500),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text((_provider['locations'] is List && (_provider['locations'] as List).isNotEmpty)
-                                ? (((_provider['locations'] as List).first['facility_name'] ?? 'Clinic').toString())
-                                : 'Clinic location unavailable', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            Text((_provider['locations'] is List && (_provider['locations'] as List).isNotEmpty)
-                                ? ('${((_provider['locations'] as List).first['city'] ?? '').toString()}, ${((_provider['locations'] as List).first['region'] ?? '').toString()}')
-                                : 'Location unavailable', style: AppTextStyles.caption),
-                          ],
+                      Text(
+                        (_provider['locations'] is List &&
+                                (_provider['locations'] as List).isNotEmpty)
+                            ? (((_provider['locations'] as List).first['facility_name'] ?? 'Clinic')
+                                .toString())
+                            : 'Clinic location unavailable',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.darkBlue900,
+                          fontSize: 14,
                         ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        (_provider['locations'] is List &&
+                                (_provider['locations'] as List).isNotEmpty)
+                            ? ('${((_provider['locations'] as List).first['city'] ?? '').toString()}, '
+                                '${((_provider['locations'] as List).first['region'] ?? '').toString()}')
+                            : 'Location unavailable',
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.grey500),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 120), // Space for bottom button
-              ]),
+              ],
             ),
           ),
         ],
@@ -398,18 +464,79 @@ class _ReviewSubmissionModalState extends State<_ReviewSubmissionModal> {
   }
 }
 
+class _InitialsAvatar extends StatelessWidget {
+  final String name;
+  const _InitialsAvatar({required this.name});
+
+  String _initials(String fullName) {
+    final cleaned = fullName
+        .replaceAll(RegExp(r'^(Dr\.?|Doctor|Mr\.?|Mrs\.?|Ms\.?)\s+', caseSensitive: false), '')
+        .trim();
+    if (cleaned.isEmpty) return '?';
+    final parts = cleaned.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 88,
+      height: 88,
+      decoration: const BoxDecoration(
+        color: AppColors.darkBlue500,
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        _initials(name),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 30,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1,
+        ),
+      ),
+    );
+  }
+}
+
 class _StatItem extends StatelessWidget {
   final String label;
   final String value;
   const _StatItem({required this.label, required this.value});
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value, style: AppTextStyles.headlineSmall.copyWith(color: AppColors.darkBlue500)),
-        const SizedBox(height: 4),
-        Text(label, style: AppTextStyles.caption),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.grey200),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.headlineSmall.copyWith(
+              color: AppColors.darkBlue500,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.grey500,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

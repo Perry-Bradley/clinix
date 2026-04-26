@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../constants/api_constants.dart';
+import '../../features/patient/services/activity_service.dart';
+import '../../features/patient/services/health_metric_service.dart';
 
 class AuthService {
   static const _baseUrl = ApiConstants.accounts;
@@ -228,6 +232,21 @@ class AuthService {
       await FirebaseAuth.instance.signOut();
     } catch (_) {}
     await _storage.deleteAll();
+  }
+
+  /// Logout AND wipe in-memory user-tied state (step baseline, cached health
+  /// summary, etc) so the next account doesn't see the previous user's data.
+  static Future<void> logoutAndClear(BuildContext context) async {
+    try {
+      final container = ProviderScope.containerOf(context, listen: false);
+      try {
+        container.read(activityServiceProvider).reset();
+      } catch (_) {}
+      try {
+        container.invalidate(healthSummaryProvider);
+      } catch (_) {}
+    } catch (_) {}
+    await logout();
   }
 
   static Future<bool> isLoggedIn() async {

@@ -205,13 +205,46 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
       await AppointmentService.cancelAppointment(widget.appointmentId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment cancelled'), backgroundColor: AppColors.accentGreen));
-        context.pop();
+        // Signal the parent screen so it can refresh its appointment list.
+        context.pop(true);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not cancel'), backgroundColor: Colors.redAccent));
       }
     }
+  }
+
+  String? _providerId() {
+    final p = (_appointment ?? {})['provider'];
+    if (p is String) return p;
+    if (p is Map) {
+      final id = p['provider_id'] ?? p['id'] ?? p['user']?['user_id'];
+      if (id != null) return id.toString();
+    }
+    return null;
+  }
+
+  String _initialsFromName(String name) {
+    final cleaned = name
+        .replaceAll(RegExp(r'^(Dr\.?|Doctor|Mr\.?|Mrs\.?|Ms\.?)\s+', caseSensitive: false), '')
+        .trim();
+    if (cleaned.isEmpty) return '?';
+    final parts = cleaned.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  }
+
+  void _openChat() {
+    final pid = _providerId();
+    final name = _peerName();
+    if (pid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not identify the provider for chat.')),
+      );
+      return;
+    }
+    context.push('/dchat/launch/$pid?name=${Uri.encodeComponent(name)}');
   }
 
   String _peerName() {
@@ -235,7 +268,7 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
 
   Color _statusColor(String s) {
     switch (s) {
-      case 'confirmed': return AppColors.sky500;
+      case 'confirmed': return AppColors.darkBlue500;
       case 'completed': return AppColors.accentGreen;
       case 'cancelled': return AppColors.error;
       case 'no_show': return AppColors.grey500;
@@ -246,15 +279,19 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator(color: AppColors.sky500)));
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator(color: AppColors.darkBlue500)),
+      );
     }
     if (_error != null || _appointment == null) {
       return Scaffold(
+        backgroundColor: Colors.white,
         appBar: AppBar(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
-          leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.darkBlue900, size: 20), onPressed: () => context.pop()),
+          leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.darkBlue900, size: 18), onPressed: () => context.pop()),
         ),
         body: Center(child: Text(_error ?? 'Appointment not found', style: AppTextStyles.bodyMedium)),
       );
@@ -273,156 +310,252 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
 
     final canJoin = (status == 'confirmed' || status == 'pending') && type == 'virtual';
     final canCancel = status == 'pending' || status == 'confirmed';
+    final canMessage = !_isProvider && status != 'cancelled';
 
     return Scaffold(
-      backgroundColor: AppColors.grey50,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            backgroundColor: AppColors.darkBlue900,
-            expandedHeight: 200,
-            pinned: true,
-            elevation: 0,
-            leading: GestureDetector(
-              onTap: () => context.pop(),
-              child: Container(
-                margin: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.white, size: 16),
-              ),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 70, height: 70,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 2),
-                        ),
-                        child: const Icon(Icons.person_rounded, color: AppColors.white, size: 36),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(_peerName(), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.headlineLarge.copyWith(color: AppColors.white, fontSize: 18)),
-                            const SizedBox(height: 4),
-                            Text(_specialty(), style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.darkBlue900, size: 18),
+          onPressed: () => context.pop(),
+        ),
+        title: Text(
+          'Appointment',
+          style: AppTextStyles.headlineSmall.copyWith(
+            color: AppColors.darkBlue900,
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
           ),
-          SliverPadding(
-            padding: const EdgeInsets.all(24),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // Status Card
+        ),
+        centerTitle: true,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+        children: [
+          // ── Hero: clean initials avatar + name + specialty ──
+          Center(
+            child: Column(
+              children: [
                 Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: _statusColor(status).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: _statusColor(status).withValues(alpha: 0.3)),
+                  width: 84,
+                  height: 84,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    color: AppColors.darkBlue500,
+                    shape: BoxShape.circle,
                   ),
-                  child: Row(
-                    children: [
-                      Container(width: 10, height: 10, decoration: BoxDecoration(color: _statusColor(status), shape: BoxShape.circle)),
-                      const SizedBox(width: 10),
-                      Text(status[0].toUpperCase() + status.substring(1), style: AppTextStyles.headlineSmall.copyWith(color: _statusColor(status))),
-                      const Spacer(),
-                      Row(children: [
-                        Icon(type == 'virtual' ? Icons.videocam_rounded : Icons.local_hospital_rounded, color: _statusColor(status), size: 18),
-                        const SizedBox(width: 6),
-                        Text(type == 'virtual' ? 'Video Consult' : 'In-Person', style: AppTextStyles.bodyMedium.copyWith(color: _statusColor(status))),
-                      ]),
-                    ],
+                  child: Text(
+                    _initialsFromName(_peerName()),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                _InfoRow(
-                  icon: Icons.calendar_today_rounded,
-                  label: 'Date',
-                  value: scheduledAt != null ? DateFormat('MMMM d, y').format(scheduledAt) : '—',
-                ),
-                const SizedBox(height: 12),
-                _InfoRow(
-                  icon: Icons.access_time_rounded,
-                  label: 'Time',
-                  value: scheduledAt != null
-                      ? '${DateFormat('HH:mm').format(scheduledAt)} - ${DateFormat('HH:mm').format(endAt ?? scheduledAt)}'
-                      : '—',
-                ),
-                const SizedBox(height: 12),
-                _InfoRow(icon: Icons.attach_money_rounded, label: 'Fee', value: 'XAF ${fee.toInt()}'),
-                const SizedBox(height: 28),
-
-                if (status == 'cancelled' && reason.isNotEmpty) ...[
-                  Text('Cancellation Reason', style: AppTextStyles.headlineMedium),
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.grey200)),
-                    child: Text(reason, style: AppTextStyles.bodyLarge),
+                const SizedBox(height: 16),
+                Text(
+                  _peerName(),
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.headlineLarge.copyWith(
+                    color: AppColors.darkBlue900,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(height: 28),
-                ],
-
-                // CTA Buttons
-                if (canJoin || canCancel)
-                  Row(
-                    children: [
-                      if (canCancel)
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _cancel,
-                            icon: const Icon(Icons.cancel_outlined, size: 18),
-                            label: const Text('Cancel'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.error,
-                              side: const BorderSide(color: AppColors.error),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            ),
-                          ),
-                        ),
-                      if (canCancel && canJoin) const SizedBox(width: 12),
-                      if (canJoin)
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _joinCall,
-                            icon: const Icon(Icons.videocam_rounded, size: 18),
-                            label: const Text('Join Call'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.sky500,
-                              foregroundColor: AppColors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            ),
-                          ),
-                        ),
-                    ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _specialty(),
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.darkBlue500,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
                   ),
-
-                // ── Provider-only: post-call session management ──
-                if (_isProvider) _buildConsultationSessionPanel(a),
-              ]),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 24),
+
+          // ── Status pill ──
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.grey200),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 8, height: 8,
+                  decoration: BoxDecoration(color: _statusColor(status), shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  status[0].toUpperCase() + status.substring(1),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: _statusColor(status),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  type == 'virtual' ? Icons.videocam_rounded : Icons.local_hospital_rounded,
+                  color: AppColors.grey500, size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  type == 'virtual' ? 'Video Consult' : 'In-Person',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.grey500,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          _InfoRow(
+            icon: Icons.calendar_today_rounded,
+            label: 'Date',
+            value: scheduledAt != null ? DateFormat('MMMM d, y').format(scheduledAt) : '—',
+          ),
+          const SizedBox(height: 10),
+          _InfoRow(
+            icon: Icons.access_time_rounded,
+            label: 'Time',
+            value: scheduledAt != null
+                ? '${DateFormat('HH:mm').format(scheduledAt)} – ${DateFormat('HH:mm').format(endAt ?? scheduledAt)}'
+                : '—',
+          ),
+          const SizedBox(height: 10),
+          _InfoRow(icon: Icons.payments_rounded, label: 'Fee', value: 'XAF ${fee.toInt()}'),
+
+          if (status == 'cancelled' && reason.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Text(
+              'Cancellation reason',
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.grey500,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+                fontSize: 11,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.grey200),
+              ),
+              child: Text(reason, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey700)),
+            ),
+          ],
+
+          // ── Message tile (patient ↔ doctor chat) ──
+          if (canMessage) ...[
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: _openChat,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.grey200),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 42, height: 42,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.darkBlue500,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 18),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Message ${_peerName()}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.darkBlue900,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Send a message before or after your visit',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.grey500, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, color: AppColors.grey400),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          // ── CTA buttons ──
+          if (canJoin || canCancel) ...[
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                if (canCancel)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _cancel,
+                      icon: const Icon(Icons.cancel_outlined, size: 18),
+                      label: const Text('Cancel'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: const BorderSide(color: AppColors.error),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                if (canCancel && canJoin) const SizedBox(width: 12),
+                if (canJoin)
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _joinCall,
+                      icon: const Icon(Icons.videocam_rounded, size: 18),
+                      label: const Text('Join Call'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.darkBlue500,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+
+          // ── Provider-only post-call session panel ──
+          if (_isProvider) _buildConsultationSessionPanel(a),
         ],
       ),
     );
@@ -791,11 +924,18 @@ class _InfoRow extends StatelessWidget {
       decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.grey200)),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.sky500, size: 20),
+          Icon(icon, color: AppColors.darkBlue500, size: 18),
           const SizedBox(width: 12),
-          Text(label, style: AppTextStyles.bodyMedium),
+          Text(label, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey700)),
           const Spacer(),
-          Text(value, style: AppTextStyles.headlineSmall.copyWith(fontSize: 14)),
+          Text(
+            value,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.darkBlue900,
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+            ),
+          ),
         ],
       ),
     );

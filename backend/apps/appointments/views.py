@@ -27,9 +27,14 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
             'consultation',
         )
         if user.user_type == 'patient':
-            # Patients see all of their own appointments — including
-            # pending-payment ones, so they can resume booking flows.
-            return qs.filter(patient__patient_id=user).order_by('-scheduled_at')
+            # Patients see their non-cancelled appointments — pending ones
+            # are kept so they can resume payment, but cancelled / no-show
+            # are hidden because they're effectively dead records.
+            return (
+                qs.filter(patient__patient_id=user)
+                .exclude(status__in=['cancelled', 'no_show'])
+                .order_by('-scheduled_at')
+            )
         if user.user_type == 'provider':
             # Providers must NOT see appointments that haven't been paid
             # for yet. Only confirmed / completed / cancelled / no-show

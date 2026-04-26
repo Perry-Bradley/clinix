@@ -52,7 +52,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
-          onPressed: () => AuthService.logout().then((_) => context.go('/login')),
+          onPressed: () => AuthService.logoutAndClear(context).then((_) => context.go('/login')),
         ),
       ),
       body: SafeArea(

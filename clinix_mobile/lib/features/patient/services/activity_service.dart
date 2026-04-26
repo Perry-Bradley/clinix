@@ -10,6 +10,7 @@ import 'health_metric_service.dart';
 class ActivityService {
   final Ref _ref;
   StreamSubscription<StepCount>? _stepCountSubscription;
+  final StreamController<int> _stepsController = StreamController<int>.broadcast();
   int _todayBaseSteps = 0;
   int _currentSteps = 0;
   bool _initialized = false;
@@ -19,27 +20,19 @@ class ActivityService {
 
   ActivityService(this._ref);
 
-  Stream<int> get stepCountStream {
-    return Pedometer.stepCountStream.transform(
-      StreamTransformer<StepCount, int>.fromHandlers(
-        handleData: (event, sink) {
-          if (_todayBaseSteps == 0) _todayBaseSteps = event.steps;
-          _currentSteps = event.steps - _todayBaseSteps;
-          if (_currentSteps > 0 && _currentSteps % 10 == 0) _syncWithBackend();
-          sink.add(_currentSteps);
-        },
-        handleError: (error, trace, sink) {
-          debugPrint('[Steps] Stream error: $error');
-          sink.add(_currentSteps);
-        },
-      ),
-    );
+  /// Broadcast stream of today's step count (delta from the session baseline).
+  /// Backed by a single Pedometer subscription in [init], so multiple watchers
+  /// (home + health dashboard) all receive every update reliably.
+  Stream<int> get stepCountStream async* {
+    yield _currentSteps;
+    yield* _stepsController.stream;
   }
+
+  int get currentSteps => _currentSteps;
 
   Future<void> init() async {
     if (_initialized) return;
 
-    // Load step goal
     final savedGoal = await _storage.read(key: 'step_goal');
     _stepGoal = int.tryParse(savedGoal ?? '') ?? 10000;
 
@@ -62,8 +55,8 @@ class ActivityService {
           }
           _currentSteps = event.steps - _todayBaseSteps;
           debugPrint('[Steps] Current: $_currentSteps (raw: ${event.steps})');
+          _stepsController.add(_currentSteps);
           if (_currentSteps > 0 && _currentSteps % 10 == 0) _syncWithBackend();
-          // Goal reached notification
           if (_currentSteps >= _stepGoal && !_goalNotified) {
             _goalNotified = true;
             _sendGoalNotification();
@@ -71,7 +64,6 @@ class ActivityService {
         },
         onError: (error) {
           debugPrint('[Steps] Pedometer error: $error');
-          // Retry after 5 seconds on error
           Future.delayed(const Duration(seconds: 5), () {
             if (!_initialized) return;
             _initialized = false;
@@ -126,8 +118,20 @@ class ActivityService {
     );
   }
 
+  /// Wipe per-user step state on logout so the next account starts fresh.
+  void reset() {
+    _stepCountSubscription?.cancel();
+    _stepCountSubscription = null;
+    _todayBaseSteps = 0;
+    _currentSteps = 0;
+    _goalNotified = false;
+    _initialized = false;
+    if (!_stepsController.isClosed) _stepsController.add(0);
+  }
+
   void dispose() {
     _stepCountSubscription?.cancel();
+    _stepsController.close();
     _initialized = false;
   }
 }

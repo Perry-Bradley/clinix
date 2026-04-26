@@ -10,6 +10,9 @@ class Notification(models.Model):
         ('payment', 'Payment'),
         ('system', 'System'),
         ('reminder', 'Reminder'),
+        ('prescription', 'Prescription'),
+        ('medical_record', 'Medical Record'),
+        ('medication_reminder', 'Medication Reminder'),
     )
 
     CHANNEL_CHOICES = (

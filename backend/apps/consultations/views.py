@@ -117,6 +117,31 @@ def _create_reminders_from_prescription(prescription):
         )
 
 
+def _notify_patient_of_prescription(prescription):
+    """Push + WS notification to the patient when a doctor issues a prescription."""
+    try:
+        from apps.notifications.tasks import send_notification
+        provider_name = (
+            getattr(prescription.provider.provider_id, 'full_name', None)
+            or 'Your doctor'
+        )
+        med_count = len(prescription.medications or [])
+        body = (
+            f"{provider_name} sent you a new prescription"
+            + (f" with {med_count} medication{'s' if med_count != 1 else ''}." if med_count else '.')
+        )
+        send_notification.delay(
+            prescription.patient.patient_id.user_id,
+            'New prescription',
+            body,
+            'prescription',
+            {'prescription_id': str(prescription.prescription_id)},
+        )
+    except Exception:
+        # Notifications are best-effort; never fail the write because of them.
+        pass
+
+
 class ConsultationPrescriptionView(generics.CreateAPIView):
     serializer_class = PrescriptionSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -129,8 +154,84 @@ class ConsultationPrescriptionView(generics.CreateAPIView):
             patient=consultation.appointment.patient,
             provider=consultation.appointment.provider
         )
-        # Auto-generate medication reminders
         _create_reminders_from_prescription(prescription)
+        _notify_patient_of_prescription(prescription)
+
+
+class DoctorPrescriptionCreateView(APIView):
+    """Doctor writes a prescription for a patient they have an appointment with.
+
+    Body: { appointment_id, medications: [{name, dosage, frequency, duration}], instructions? }
+    The doctor must be the provider on a confirmed/completed appointment with the
+    patient. We attach the prescription to that appointment's consultation
+    (creating one on the fly if none exists yet).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        provider = _provider_for_user(request.user)
+        if not provider:
+            return Response(
+                {'error': 'Only providers can write prescriptions.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        appointment_id = request.data.get('appointment_id')
+        medications = request.data.get('medications') or []
+        instructions = request.data.get('instructions', '')
+
+        if not appointment_id:
+            return Response(
+                {'error': 'appointment_id is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not isinstance(medications, list) or not medications:
+            return Response(
+                {'error': 'At least one medication is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            appointment = Appointment.objects.select_related(
+                'patient', 'provider', 'patient__patient_id'
+            ).get(appointment_id=appointment_id)
+        except Appointment.DoesNotExist:
+            return Response(
+                {'error': 'Appointment not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if appointment.provider_id != provider.pk:
+            return Response(
+                {'error': 'You can only prescribe for your own patients.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if appointment.status not in ('confirmed', 'completed'):
+            return Response(
+                {'error': 'Prescriptions require a confirmed or completed appointment.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        consultation, _ = Consultation.objects.get_or_create(
+            appointment=appointment,
+            defaults={'webrtc_session_id': str(uuid.uuid4())},
+        )
+
+        prescription = Prescription.objects.create(
+            consultation=consultation,
+            patient=appointment.patient,
+            provider=provider,
+            medications=medications,
+            instructions=instructions,
+            is_digital=True,
+        )
+        _create_reminders_from_prescription(prescription)
+        _notify_patient_of_prescription(prescription)
+
+        return Response(
+            PrescriptionSerializer(prescription).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 class ConsultationTranscriptView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -358,11 +459,44 @@ class MedicalRecordListCreateView(generics.ListCreateAPIView):
         return MedicalRecord.objects.none()
 
     def perform_create(self, serializer):
-        # Only providers can author records
+        # Only providers can author records, and only for patients they have a
+        # confirmed or completed appointment with.
         provider = _provider_for_user(self.request.user)
         if not provider:
             raise serializers.ValidationError('Only providers can author medical records.')
-        serializer.save(authored_by=provider)
+
+        patient = serializer.validated_data.get('patient')
+        if not patient:
+            raise serializers.ValidationError({'patient': 'patient is required.'})
+
+        has_appointment = Appointment.objects.filter(
+            provider=provider,
+            patient=patient,
+            status__in=['confirmed', 'completed'],
+        ).exists()
+        if not has_appointment:
+            raise serializers.ValidationError(
+                'You can only write a medical record for a patient you have a confirmed or completed appointment with.'
+            )
+
+        record = serializer.save(authored_by=provider)
+
+        # Notify the patient.
+        try:
+            from apps.notifications.tasks import send_notification
+            provider_name = (
+                getattr(provider.provider_id, 'full_name', None) or 'Your doctor'
+            )
+            title_part = record.title or record.diagnosis or 'a new medical record'
+            send_notification.delay(
+                record.patient.patient_id.user_id,
+                'New medical record',
+                f'{provider_name} added {title_part} to your medical records.',
+                'medical_record',
+                {'record_id': str(record.record_id)},
+            )
+        except Exception:
+            pass
 
 
 class MedicalRecordDetailView(generics.RetrieveUpdateDestroyAPIView):

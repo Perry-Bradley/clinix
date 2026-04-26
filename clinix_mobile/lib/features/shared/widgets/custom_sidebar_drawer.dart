@@ -128,7 +128,7 @@ class _CustomSidebarDrawerState extends State<CustomSidebarDrawer> {
                     ),
                   );
                   if (confirmed == true) {
-                    await AuthService.logout();
+                    await AuthService.logoutAndClear(context);
                     if (context.mounted) context.go('/login');
                   }
                 },

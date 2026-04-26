@@ -63,16 +63,17 @@ class _WritePrescriptionPageState extends State<WritePrescriptionPage> {
     }
     setState(() => _submitting = true);
     try {
-      final consultationId = _selectedAppointment!['consultation_id']?.toString();
-      if (consultationId == null || consultationId.isEmpty) {
-        _toast('This appointment has no active consultation yet');
+      final appointmentId = _selectedAppointment!['appointment_id']?.toString();
+      if (appointmentId == null || appointmentId.isEmpty) {
+        _toast('Could not identify the appointment for this patient');
         setState(() => _submitting = false);
         return;
       }
       final token = await AuthService.getAccessToken();
       await Dio().post(
-        '${ApiConstants.baseUrl}consultations/$consultationId/prescription/',
+        '${ApiConstants.baseUrl}consultations/prescriptions/',
         data: {
+          'appointment_id': appointmentId,
           'medications': validMeds.map((m) => {
             'name': m.nameCtrl.text.trim(),
             'dosage': m.dosageCtrl.text.trim(),
@@ -80,7 +81,6 @@ class _WritePrescriptionPageState extends State<WritePrescriptionPage> {
             'duration': m.durationCtrl.text.trim(),
           }).toList(),
           'instructions': _instructionsCtrl.text.trim(),
-          'is_digital': true,
         },
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
@@ -202,7 +202,7 @@ class _WritePrescriptionPageState extends State<WritePrescriptionPage> {
         child: Row(children: [
           const Icon(Icons.info_outline_rounded, color: AppColors.grey400),
           const SizedBox(width: 10),
-          Expanded(child: Text('No confirmed appointments yet. Prescriptions can be written only for patients with an active consultation.', style: AppTextStyles.caption.copyWith(color: AppColors.grey500, height: 1.4))),
+          Expanded(child: Text('No confirmed or completed appointments yet. You can write a prescription once a patient has booked you.', style: AppTextStyles.caption.copyWith(color: AppColors.grey500, height: 1.4))),
         ]),
       );
     }

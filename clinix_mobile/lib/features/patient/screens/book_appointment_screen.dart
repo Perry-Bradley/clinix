@@ -191,43 +191,83 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         : (widget.doctor['specialty']?.toString() ?? 'General Practitioner');
 
     return Scaffold(
-      backgroundColor: AppColors.grey50,
+      backgroundColor: Colors.white,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            backgroundColor: AppColors.darkBlue500,
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            iconTheme: const IconThemeData(color: AppColors.darkBlue900),
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                  color: AppColors.darkBlue900, size: 18),
               onPressed: () => Navigator.pop(context),
             ),
-            title: Text('Book Appointment', style: AppTextStyles.headlineMedium.copyWith(color: AppColors.white, fontSize: 16)),
+            title: Text(
+              'Book Appointment',
+              style: AppTextStyles.headlineMedium.copyWith(
+                color: AppColors.darkBlue900,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            centerTitle: false,
           ),
           SliverPadding(
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // Doctor summary card
+                // Doctor summary card — clean white with darkBlue500 accent
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.darkBlue500,
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.grey200),
                   ),
                   child: Row(
                     children: [
                       Container(
                         width: 52, height: 52,
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(14)),
-                        child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 26),
+                        decoration: BoxDecoration(
+                          color: AppColors.sky100,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.darkBlue500, width: 1.5),
+                        ),
+                        child: const Icon(Icons.local_hospital_rounded,
+                            color: AppColors.darkBlue500, size: 24),
                       ),
                       const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(name, style: AppTextStyles.headlineSmall.copyWith(color: AppColors.white, fontSize: 16)),
-                          Text(spec, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: AppTextStyles.headlineSmall.copyWith(
+                                color: AppColors.darkBlue900,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              spec,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.darkBlue500,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
