@@ -71,9 +71,12 @@ class AppointmentService {
 
   static Future<void> cancelAppointment(String appointmentId, {String? reason}) async {
     final token = await AuthService.getAccessToken();
-    await _dio.patch(
+    // DELETE hits AppointmentDetailView.perform_destroy which sets
+    // status='cancelled' + saves the reason. PATCH is a no-op here because
+    // 'status' is a read-only field on the serializer.
+    await _dio.delete(
       '$appointmentId/',
-      data: {'status': 'cancelled', if (reason != null) 'cancellation_reason': reason},
+      data: {if (reason != null) 'cancellation_reason': reason},
       options: Options(headers: {'Authorization': 'Bearer $token'}),
     );
   }
