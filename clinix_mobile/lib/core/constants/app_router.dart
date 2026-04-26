@@ -37,6 +37,7 @@ import '../../features/patient/screens/book_lab_test_screen.dart';
 import '../../features/patient/screens/home_treatment_screen.dart';
 import '../../features/patient/screens/medication_reminders_screen.dart';
 import '../../features/patient/screens/nurses_list_screen.dart';
+import '../../features/appointments/screens/incoming_call_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -107,6 +108,25 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/patient/nurses',
       builder: (c, s) => const NursesListScreen(),
+    ),
+    GoRoute(
+      path: '/incoming-call',
+      builder: (c, s) {
+        final extra = s.extra as Map<String, dynamic>? ?? {};
+        final q = s.uri.queryParameters;
+        return IncomingCallScreen(
+          consultationId:
+              extra['consultationId']?.toString() ?? q['consultation_id'] ?? '',
+          callerName: extra['callerName']?.toString() ??
+              q['caller_name'] ??
+              'Caller',
+          callerPhoto:
+              extra['callerPhoto']?.toString() ?? q['caller_photo'],
+          audioOnly: (extra['audioOnly'] is bool)
+              ? extra['audioOnly'] as bool
+              : (q['audio_only']?.toLowerCase() == 'true'),
+        );
+      },
     ),
     GoRoute(
       path: '/register/provider-enrollment',

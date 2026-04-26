@@ -305,6 +305,59 @@ class AgoraTokenView(APIView):
         return Response({'app_id': app_id, 'token': token, 'channel': channel_name})
 
 
+class ConsultationRingView(APIView):
+    """Caller pings this when entering the video screen so we can FCM the
+    peer with a high-priority "incoming_call" payload. Their app shows a
+    full-screen incoming-call UI and plays the system ringtone.
+
+    Body: optional {"audio_only": bool}.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            consultation = Consultation.objects.select_related(
+                'appointment',
+                'appointment__patient', 'appointment__patient__patient_id',
+                'appointment__provider', 'appointment__provider__provider_id',
+            ).get(pk=pk)
+        except Consultation.DoesNotExist:
+            return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        appointment = consultation.appointment
+        patient_user = appointment.patient.patient_id
+        provider_user = appointment.provider.provider_id
+        caller = request.user
+
+        if caller != patient_user and caller != provider_user:
+            return Response({'error': 'You are not on this appointment.'}, status=status.HTTP_403_FORBIDDEN)
+
+        peer = provider_user if caller == patient_user else patient_user
+        caller_name = caller.full_name or 'Clinix'
+        caller_photo = getattr(caller, 'profile_photo', '') or ''
+
+        try:
+            from apps.notifications.tasks import send_notification
+            send_notification.delay(
+                str(peer.user_id),
+                f'Incoming call from {caller_name}',
+                f'{caller_name} is calling you on Clinix.',
+                'system',
+                {
+                    'type': 'incoming_call',
+                    'consultation_id': str(consultation.consultation_id),
+                    'caller_id': str(caller.user_id),
+                    'caller_name': caller_name,
+                    'caller_photo': caller_photo,
+                    'audio_only': bool(request.data.get('audio_only')),
+                },
+            )
+        except Exception:
+            pass
+
+        return Response({'status': 'ringing'}, status=status.HTTP_202_ACCEPTED)
+
+
 class ConsultationAudioUploadView(APIView):
     """Doctor-side audio upload after a consultation ends. The file is pushed
     to a Cloud Storage bucket on the SAME GCP project as Speech-to-Text

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
@@ -43,6 +44,11 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   bool _aiScribeConsented = false;
   bool _isRecording = false;
   String? _recordingPath;
+  // Caller-side ring state. The peer is "ringing" until they join the Agora
+  // channel (or 30s pass). We play a soft ringback tone via the system
+  // notification sound while we wait.
+  bool _ringbackActive = false;
+  Timer? _noAnswerTimer;
 
   @override
   void initState() {
@@ -182,6 +188,9 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
           if (mounted) setState(() => _localUserJoined = true);
         },
         onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+          // Peer answered → stop the ringback tone + clear the "ringing"
+          // overlay. From here it's just a normal call.
+          _stopRingback();
           if (mounted) setState(() => _remoteUid = remoteUid);
         },
         onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
@@ -200,6 +209,11 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
       await engine.enableVideo();
       await engine.startPreview();
     }
+
+    // Tell the backend to FCM-ring the peer + start the local ringback tone
+    // so the caller hears the standard "calling…" sound while they wait.
+    unawaited(_ringPeer());
+    _startRingback();
 
     await engine.joinChannel(
       token: _token!,
@@ -240,6 +254,7 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   }
 
   Future<void> _leave() async {
+    _stopRingback();
     final e = _engine;
     final wasRecording = _isRecording;
     final recordingPath = _recordingPath;
@@ -262,6 +277,51 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
       unawaited(_uploadRecording(recordingPath));
     }
     if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _ringPeer() async {
+    try {
+      final token = await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) return;
+      await Dio().post(
+        '${ApiConstants.baseUrl}${ApiConstants.consultations}${widget.consultationId}/ring/',
+        data: {'audio_only': widget.audioOnly},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+    } catch (_) {
+      // Ringing is best-effort — even if it fails, the call still works for
+      // any user already in the appointment screen.
+    }
+  }
+
+  void _startRingback() {
+    if (_ringbackActive) return;
+    _ringbackActive = true;
+    try {
+      // System notification sound looped — gives that classic "calling…" feel
+      // without bundling a custom audio asset.
+      FlutterRingtonePlayer().playNotification(looping: true);
+    } catch (_) {}
+    // Auto-give-up after 45 seconds if the peer doesn't answer.
+    _noAnswerTimer?.cancel();
+    _noAnswerTimer = Timer(const Duration(seconds: 45), () {
+      if (mounted && _remoteUid == null) {
+        _stopRingback();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No answer. Try again later.')),
+        );
+        _leave();
+      }
+    });
+  }
+
+  void _stopRingback() {
+    if (!_ringbackActive) return;
+    _ringbackActive = false;
+    _noAnswerTimer?.cancel();
+    try {
+      FlutterRingtonePlayer().stop();
+    } catch (_) {}
   }
 
   Future<void> _uploadRecording(String path) async {
@@ -371,6 +431,7 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
 
   @override
   void dispose() {
+    _stopRingback();
     final e = _engine;
     _engine = null;
     if (e != null) {
@@ -415,23 +476,12 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
                     ColoredBox(
                       color: Colors.black,
                       child: widget.audioOnly || _remoteUid == null
-                          ? Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(widget.audioOnly ? Icons.person_rounded : Icons.videocam_off_outlined,
-                                      size: 72, color: Colors.white24),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    _onHold
-                                        ? 'Call on hold'
-                                        : widget.audioOnly
-                                            ? 'Connected — audio only'
-                                            : 'Waiting for the other party to join…',
-                                    style: const TextStyle(color: Colors.white54),
-                                  ),
-                                ],
-                              ),
+                          ? _CallingOverlay(
+                              peerName: widget.doctorName,
+                              audioOnly: widget.audioOnly,
+                              onHold: _onHold,
+                              connected: _remoteUid != null,
+                              ringing: _ringbackActive && _remoteUid == null,
                             )
                           : AgoraVideoView(
                               controller: VideoViewController.remote(
@@ -484,7 +534,7 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
                                         ? 'On hold'
                                         : _remoteUid != null
                                             ? 'Connected'
-                                            : 'Connecting…',
+                                            : (_ringbackActive ? 'Ringing…' : 'Connecting…'),
                                     style: const TextStyle(color: Colors.white70, fontSize: 12),
                                   ),
                                 ],
@@ -613,6 +663,146 @@ class _CallButton extends StatelessWidget {
           height: size,
           child: Icon(icon, color: iconColor, size: size * 0.44),
         ),
+      ),
+    );
+  }
+}
+
+/// Caller-side waiting screen — shows the peer's avatar with a soft pulsing
+/// ring and a "Calling… / Ringing…" caption while we wait for them to join
+/// the Agora channel. Reused for audio-only calls too (no remote video).
+class _CallingOverlay extends StatefulWidget {
+  final String? peerName;
+  final bool audioOnly;
+  final bool onHold;
+  final bool connected;
+  final bool ringing;
+  const _CallingOverlay({
+    required this.peerName,
+    required this.audioOnly,
+    required this.onHold,
+    required this.connected,
+    required this.ringing,
+  });
+
+  @override
+  State<_CallingOverlay> createState() => _CallingOverlayState();
+}
+
+class _CallingOverlayState extends State<_CallingOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  String _initials(String name) {
+    final cleaned = name
+        .replaceAll(
+            RegExp(r'^(Dr\.?|Doctor|Mr\.?|Mrs\.?|Ms\.?)\s+',
+                caseSensitive: false),
+            '')
+        .trim();
+    if (cleaned.isEmpty) return '?';
+    final parts =
+        cleaned.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
+  }
+
+  String _statusText() {
+    if (widget.onHold) return 'On hold';
+    if (widget.connected && widget.audioOnly) return 'Connected — audio only';
+    if (widget.ringing) return 'Ringing…';
+    return 'Calling…';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (widget.peerName == null || widget.peerName!.trim().isEmpty)
+        ? 'Clinix'
+        : widget.peerName!;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedBuilder(
+            animation: _pulse,
+            builder: (_, __) {
+              final t = _pulse.value;
+              return SizedBox(
+                width: 200, height: 200,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 140 + 60 * t,
+                      height: 140 + 60 * t,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity((1 - t) * 0.14),
+                      ),
+                    ),
+                    Container(
+                      width: 120, height: 120,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                        color: AppColors.darkBlue500,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        _initials(name),
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: Colors.white,
+                          fontSize: 40,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 22),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _statusText(),
+            style: TextStyle(
+              fontFamily: 'Inter',
+              color: Colors.white.withOpacity(0.65),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

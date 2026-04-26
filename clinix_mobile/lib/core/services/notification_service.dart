@@ -83,6 +83,12 @@ class NotificationService {
 
   /// Show a visible notification banner when a message arrives while app is open
   static Future<void> _showForegroundNotification(RemoteMessage message) async {
+    // Incoming call: push the full-screen call UI immediately instead of a
+    // tray banner — that's the only way to actually "ring" the user.
+    if (message.data['type']?.toString() == 'incoming_call') {
+      _routeFromData(message.data);
+      return;
+    }
     final notification = message.notification;
     if (notification == null) return;
 
@@ -137,6 +143,17 @@ class NotificationService {
       // the device, so we coerce booleans manually.
       final isAiDraft = data['is_ai_draft']?.toString().toLowerCase() == 'true';
 
+      if (type == 'incoming_call') {
+        final consultationId = data['consultation_id']?.toString() ?? '';
+        if (consultationId.isEmpty) return;
+        appRouter.push('/incoming-call', extra: {
+          'consultationId': consultationId,
+          'callerName': data['caller_name']?.toString() ?? 'Caller',
+          'callerPhoto': data['caller_photo']?.toString(),
+          'audioOnly': data['audio_only']?.toString().toLowerCase() == 'true',
+        });
+        return;
+      }
       if (type == 'medical_record') {
         final recordId = data['record_id']?.toString();
         if (isAiDraft && recordId != null && recordId.isNotEmpty) {
