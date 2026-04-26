@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/theme/app_colors.dart';
 
 class VideoConsultationScreen extends StatefulWidget {
   final String consultationId;
@@ -34,6 +37,12 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   bool _videoDisabled = false;
   bool _speakerOn = true;
   bool _onHold = false;
+  // AI scribe — record the call audio on the doctor's device, then upload
+  // for Google STT + Gemini drafting after `End Session`.
+  bool _isProvider = false;
+  bool _aiScribeConsented = false;
+  bool _isRecording = false;
+  String? _recordingPath;
 
   @override
   void initState() {
@@ -50,6 +59,18 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
           _isInitializing = false;
         });
         return;
+      }
+
+      // Resolve role so we know if we should offer the AI scribe to the doctor.
+      try {
+        final t = await AuthService.getUserType();
+        _isProvider = t == 'provider';
+      } catch (_) {}
+
+      // Both sides see the AI-scribe consent before joining — patient
+      // consents to being transcribed, doctor consents to recording.
+      if (mounted) {
+        _aiScribeConsented = await _showConsentDialog() ?? false;
       }
 
       final response = await Dio().get(
@@ -76,6 +97,73 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
         _isInitializing = false;
       });
     }
+  }
+
+  Future<bool?> _showConsentDialog() {
+    final body = _isProvider
+        ? 'Clinix can record this call and let an AI medical-scribe draft a '
+          'medical report for you. You\'ll review and edit it before sending '
+          'it to the patient.\n\nThe patient is shown the same prompt and '
+          'must also accept.'
+        : 'Your doctor would like to use Clinix\'s AI medical-scribe. The call '
+          'audio will be transcribed so they can write your report faster. '
+          'Only your doctor sees the draft, and they review every word before '
+          'it lands in your medical record.';
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(children: [
+          const Icon(Icons.auto_awesome_rounded, color: AppColors.darkBlue500),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'AI medical scribe',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: AppColors.darkBlue900,
+                fontWeight: FontWeight.w800,
+                fontSize: 17,
+              ),
+            ),
+          ),
+        ]),
+        content: Text(
+          body,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            color: AppColors.darkBlue900,
+            fontSize: 13.5,
+            height: 1.45,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Skip',
+              style: TextStyle(color: AppColors.grey500, fontWeight: FontWeight.w700),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.darkBlue500,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              elevation: 0,
+            ),
+            child: const Text(
+              'Allow AI scribe',
+              style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _initAgora() async {
@@ -126,17 +214,79 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
       uid: 0,
     );
 
+    // Start the AI-scribe recording on the doctor's device only — patient
+    // mics aren't recorded locally; both voices are still captured because
+    // Agora's mixed recording includes the remote audio stream.
+    if (_isProvider && _aiScribeConsented) {
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        _recordingPath = '${dir.path}/clinix_call_${widget.consultationId}.wav';
+        // Wipe any leftover recording from a previous attempt.
+        final f = File(_recordingPath!);
+        if (await f.exists()) await f.delete();
+        await engine.startAudioRecording(AudioRecordingConfiguration(
+          filePath: _recordingPath!,
+          sampleRate: 16000,
+          fileRecordingType: AudioFileRecordingType.audioFileRecordingMixed,
+          quality: AudioRecordingQualityType.audioRecordingQualityMedium,
+        ));
+        _isRecording = true;
+      } catch (e) {
+        debugPrint('[AIScribe] Could not start recording: $e');
+      }
+    }
+
     if (mounted) setState(() => _isInitializing = false);
   }
 
   Future<void> _leave() async {
     final e = _engine;
+    final wasRecording = _isRecording;
+    final recordingPath = _recordingPath;
     _engine = null;
+    _isRecording = false;
     if (e != null) {
+      if (wasRecording) {
+        try {
+          await e.stopAudioRecording();
+        } catch (err) {
+          debugPrint('[AIScribe] Stop recording error: $err');
+        }
+      }
       await e.leaveChannel();
       await e.release();
     }
+    // Fire-and-forget upload — keep the user out of a wait state. The doctor
+    // gets a push notification when the AI draft is ready.
+    if (wasRecording && recordingPath != null) {
+      unawaited(_uploadRecording(recordingPath));
+    }
     if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _uploadRecording(String path) async {
+    try {
+      final file = File(path);
+      if (!await file.exists()) return;
+      final token = await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) return;
+      final formData = FormData.fromMap({
+        'audio': await MultipartFile.fromFile(path, filename: 'call.wav'),
+      });
+      await Dio().post(
+        '${ApiConstants.baseUrl}${ApiConstants.consultations}${widget.consultationId}/audio/',
+        data: formData,
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          sendTimeout: const Duration(minutes: 5),
+          receiveTimeout: const Duration(minutes: 2),
+        ),
+      );
+      // Clean up the local file once it's safely on the server.
+      try { await file.delete(); } catch (_) {}
+    } catch (e) {
+      debugPrint('[AIScribe] Upload failed: $e');
+    }
   }
 
   Future<void> _toggleMute() async {

@@ -31,7 +31,9 @@ class MedicalRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = MedicalRecord
         fields = '__all__'
-        read_only_fields = ('record_id', 'created_at', 'updated_at', 'shared_with')
+        # is_ai_draft is server-set; is_published is writable so the doctor
+        # can flip a draft to published on review.
+        read_only_fields = ('record_id', 'created_at', 'updated_at', 'shared_with', 'is_ai_draft')
 
 
 class MedicalRecordShareSerializer(serializers.Serializer):

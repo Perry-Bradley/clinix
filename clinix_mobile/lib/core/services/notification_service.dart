@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'auth_service.dart';
+import '../constants/app_router.dart';
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -112,14 +113,61 @@ class NotificationService {
 
   /// Handle when user taps a notification (from background/terminated)
   static void _handleMessageTap(RemoteMessage message) {
-    // The route data can be used with GoRouter to navigate
-    // e.g. message.data['route'] = '/patient/appointments/123'
-    // Navigation would need a global navigator key - handled by the app router
+    _routeFromData(message.data);
   }
 
   /// Handle when user taps a local notification (foreground)
   static void _onNotificationTap(NotificationResponse response) {
-    // response.payload contains the route if set
-    // Navigation would need a global navigator key
+    // We don't currently encode the data on local-notification taps; just
+    // surface a no-op rather than crash.
+  }
+
+  /// Map an incoming notification's `data` payload to a GoRouter destination.
+  /// Backend types we currently emit:
+  ///   - prescription   → /patient/prescriptions
+  ///   - medical_record → AI-draft path opens the doctor's review form,
+  ///                      otherwise the patient's records list
+  ///   - referral       → /patient/medical-records (referrals show there)
+  ///   - consultation   → direct chat (data.route already set)
+  ///   - appointment    → /appointments/<id>
+  static void _routeFromData(Map<String, dynamic> data) {
+    try {
+      final type = data['type']?.toString() ?? '';
+      // The backend always passes simple maps; FCM ships them as Strings on
+      // the device, so we coerce booleans manually.
+      final isAiDraft = data['is_ai_draft']?.toString().toLowerCase() == 'true';
+
+      if (type == 'medical_record') {
+        final recordId = data['record_id']?.toString();
+        if (isAiDraft && recordId != null && recordId.isNotEmpty) {
+          appRouter.push('/provider/medical-record/new?aiDraftRecordId=$recordId');
+        } else {
+          appRouter.push('/patient/medical-records');
+        }
+        return;
+      }
+      if (type == 'prescription') {
+        appRouter.push('/patient/prescriptions');
+        return;
+      }
+      if (type == 'referral') {
+        appRouter.push('/patient/medical-records');
+        return;
+      }
+      if (type == 'appointment') {
+        final appointmentId = data['appointment_id']?.toString();
+        if (appointmentId != null && appointmentId.isNotEmpty) {
+          appRouter.push('/appointments/$appointmentId');
+        }
+        return;
+      }
+      // Direct chat / explicit `route` payloads.
+      final route = data['route']?.toString();
+      if (route != null && route.isNotEmpty) {
+        appRouter.push(route);
+      }
+    } catch (_) {
+      // Routing is best-effort — never crash the FCM handler.
+    }
   }
 }

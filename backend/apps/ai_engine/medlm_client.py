@@ -427,4 +427,78 @@ class MedLMClient:
             raise MedLMInferenceError(str(e)) from e
 
 
+    def draft_medical_record(self, transcript: str) -> dict:
+        """Take a doctor↔patient call transcript and return a structured
+        medical-record draft as JSON. The doctor reviews + edits the draft
+        before submitting, so the model is allowed to be expansive — anything
+        wrong gets corrected by a human."""
+        self._require_model()
+        prompt = (
+            'You are a medical scribe. Read the following CONSULTATION TRANSCRIPT '
+            '(doctor and patient speaking) and draft a structured medical record. '
+            'Reply with ONLY valid JSON (no markdown fences) in this exact shape:\n'
+            '{"title": "string",'
+            ' "chief_complaint": "string",'
+            ' "symptoms": ["string"],'
+            ' "symptom_duration": "string",'
+            ' "examination_findings": "string",'
+            ' "diagnosis": "string",'
+            ' "treatment_plan": "string",'
+            ' "medications_summary": "string",'
+            ' "follow_up_date": "YYYY-MM-DD or empty"}\n'
+            'Rules:\n'
+            '- title: 4–8 words summarising the visit (e.g. "Acute sinusitis follow-up").\n'
+            '- chief_complaint: one sentence in the patient\'s own framing.\n'
+            '- symptoms: array of short symptom phrases extracted from the transcript.\n'
+            '- symptom_duration: e.g. "3 days", "2 weeks", or empty if not mentioned.\n'
+            '- examination_findings: what the doctor observed/asked about. Empty if nothing.\n'
+            '- diagnosis: working or confirmed diagnosis. Empty if doctor didn\'t state one.\n'
+            '- treatment_plan: what the doctor advised. Lifestyle, follow-up, referrals.\n'
+            '- medications_summary: list of meds with dose/frequency/duration on '
+            'separate lines (e.g. "Artemether-lumefantrine 80/480 mg, 4 tablets BID, 3 days").\n'
+            '- follow_up_date: only if the doctor explicitly scheduled one. Otherwise empty string.\n'
+            '- DO NOT invent details. If the transcript doesn\'t cover a field, leave it empty.\n'
+            '- Use the transcript\'s primary language for the prose fields (English or French).\n'
+            '\nCONSULTATION TRANSCRIPT:\n'
+            f'{transcript[:24000]}'
+        )
+
+        def _parse(text: str) -> dict:
+            text = (text or '').strip()
+            if '```' in text:
+                if '```json' in text:
+                    text = text.split('```json', 1)[1].split('```', 1)[0].strip()
+                else:
+                    text = text.split('```', 1)[1].split('```', 1)[0].strip()
+            data = json.loads(text)
+            data.setdefault('title', '')
+            data.setdefault('chief_complaint', '')
+            data.setdefault('symptoms', [])
+            if not isinstance(data['symptoms'], list):
+                data['symptoms'] = [str(data['symptoms'])]
+            data.setdefault('symptom_duration', '')
+            data.setdefault('examination_findings', '')
+            data.setdefault('diagnosis', '')
+            data.setdefault('treatment_plan', '')
+            data.setdefault('medications_summary', '')
+            data.setdefault('follow_up_date', '')
+            return data
+
+        try:
+            response = self.model.generate_content(prompt, safety_settings=SAFETY_SETTINGS)
+            return _parse(response.text)
+        except MedLMNotConfigured:
+            raise
+        except Exception as e:
+            if self._should_fallback(e) and self._fallback_model():
+                try:
+                    response = self.model.generate_content(prompt, safety_settings=SAFETY_SETTINGS)
+                    return _parse(response.text)
+                except Exception as e2:
+                    logger.exception('AI medical-record draft failed after fallback')
+                    raise MedLMInferenceError(str(e2)) from e2
+            logger.exception('AI medical-record draft failed')
+            raise MedLMInferenceError(str(e)) from e
+
+
 medlm_client = MedLMClient()

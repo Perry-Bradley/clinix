@@ -14,8 +14,17 @@ import '../../../../core/constants/api_constants.dart';
 class MedicalRecordFormPage extends StatefulWidget {
   final String? consultationId;
   final String? patientId;
+  // When supplied, the form pre-fills from an AI-drafted MedicalRecord and
+  // PATCHes that record on save (flipping is_published=true) instead of
+  // POSTing a brand-new one. The doctor reviews + edits before publishing.
+  final String? aiDraftRecordId;
 
-  const MedicalRecordFormPage({super.key, this.consultationId, this.patientId});
+  const MedicalRecordFormPage({
+    super.key,
+    this.consultationId,
+    this.patientId,
+    this.aiDraftRecordId,
+  });
 
   @override
   State<MedicalRecordFormPage> createState() => _MedicalRecordFormPageState();
@@ -33,6 +42,57 @@ class _MedicalRecordFormPageState extends State<MedicalRecordFormPage> {
   DateTime? _followUpDate;
   bool _saving = false;
   String? _error;
+  // True while we're fetching the AI draft to pre-fill the form.
+  bool _loadingDraft = false;
+  bool _isAiDraft = false;
+  // Resolved patient id when arriving via the AI-draft path (the draft
+  // already knows who the patient is, so the caller doesn't have to pass it).
+  String? _resolvedPatientId;
+  String? _resolvedConsultationId;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.aiDraftRecordId != null && widget.aiDraftRecordId!.isNotEmpty) {
+      _isAiDraft = true;
+      _loadDraft();
+    }
+  }
+
+  Future<void> _loadDraft() async {
+    setState(() => _loadingDraft = true);
+    try {
+      final token = await AuthService.getAccessToken();
+      final res = await Dio().get(
+        '${ApiConstants.baseUrl}${ApiConstants.consultations}records/${widget.aiDraftRecordId}/',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = res.data;
+      if (data is! Map) return;
+      _titleCtrl.text = (data['title'] ?? '').toString();
+      _chiefComplaintCtrl.text = (data['chief_complaint'] ?? '').toString();
+      final symptoms = data['symptoms'];
+      if (symptoms is List) {
+        _symptomsCtrl.text = symptoms.join(', ');
+      }
+      _symptomDurationCtrl.text = (data['symptom_duration'] ?? '').toString();
+      _findingsCtrl.text = (data['examination_findings'] ?? '').toString();
+      _diagnosisCtrl.text = (data['diagnosis'] ?? '').toString();
+      _treatmentCtrl.text = (data['treatment_plan'] ?? '').toString();
+      _medicationsCtrl.text = (data['medications_summary'] ?? '').toString();
+      final followUp = (data['follow_up_date'] ?? '').toString();
+      if (followUp.isNotEmpty) {
+        _followUpDate = DateTime.tryParse(followUp);
+      }
+      _resolvedPatientId = data['patient']?.toString();
+      _resolvedConsultationId = data['consultation']?.toString();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not load the AI draft.');
+    } finally {
+      if (mounted) setState(() => _loadingDraft = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -59,7 +119,9 @@ class _MedicalRecordFormPageState extends State<MedicalRecordFormPage> {
   }
 
   Future<void> _save() async {
-    if (widget.patientId == null || widget.patientId!.isEmpty) {
+    final patientId = widget.patientId ?? _resolvedPatientId;
+    final consultationId = widget.consultationId ?? _resolvedConsultationId;
+    if ((patientId == null || patientId.isEmpty) && widget.aiDraftRecordId == null) {
       setState(() => _error = 'Missing patient. Open this form from a consultation.');
       return;
     }
@@ -92,26 +154,39 @@ class _MedicalRecordFormPageState extends State<MedicalRecordFormPage> {
           .where((s) => s.isNotEmpty)
           .toList();
 
-      await Dio().post(
-        '${ApiConstants.baseUrl}${ApiConstants.consultations}records/',
-        data: {
-          'patient': widget.patientId,
-          if (widget.consultationId != null) 'consultation': widget.consultationId,
-          'title': _titleCtrl.text.trim().isEmpty
-              ? 'Consultation report'
-              : _titleCtrl.text.trim(),
-          'chief_complaint': _chiefComplaintCtrl.text.trim(),
-          'symptoms': symptomList,
-          'symptom_duration': _symptomDurationCtrl.text.trim(),
-          'examination_findings': _findingsCtrl.text.trim(),
-          'diagnosis': _diagnosisCtrl.text.trim(),
-          'treatment_plan': _treatmentCtrl.text.trim(),
-          'medications_summary': _medicationsCtrl.text.trim(),
-          if (_followUpDate != null)
-            'follow_up_date': DateFormat('yyyy-MM-dd').format(_followUpDate!),
-        },
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
+      final body = <String, dynamic>{
+        if (patientId != null) 'patient': patientId,
+        if (consultationId != null) 'consultation': consultationId,
+        'title': _titleCtrl.text.trim().isEmpty
+            ? 'Consultation report'
+            : _titleCtrl.text.trim(),
+        'chief_complaint': _chiefComplaintCtrl.text.trim(),
+        'symptoms': symptomList,
+        'symptom_duration': _symptomDurationCtrl.text.trim(),
+        'examination_findings': _findingsCtrl.text.trim(),
+        'diagnosis': _diagnosisCtrl.text.trim(),
+        'treatment_plan': _treatmentCtrl.text.trim(),
+        'medications_summary': _medicationsCtrl.text.trim(),
+        if (_followUpDate != null)
+          'follow_up_date': DateFormat('yyyy-MM-dd').format(_followUpDate!),
+      };
+
+      if (widget.aiDraftRecordId != null && widget.aiDraftRecordId!.isNotEmpty) {
+        // Publish the AI draft — flips is_published=true on the server, which
+        // fires the patient notification + chat card.
+        body['is_published'] = true;
+        await Dio().patch(
+          '${ApiConstants.baseUrl}${ApiConstants.consultations}records/${widget.aiDraftRecordId}/',
+          data: body,
+          options: Options(headers: {'Authorization': 'Bearer $token'}),
+        );
+      } else {
+        await Dio().post(
+          '${ApiConstants.baseUrl}${ApiConstants.consultations}records/',
+          data: body,
+          options: Options(headers: {'Authorization': 'Bearer $token'}),
+        );
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -150,7 +225,9 @@ class _MedicalRecordFormPageState extends State<MedicalRecordFormPage> {
           child: Divider(height: 1, color: AppColors.grey200),
         ),
       ),
-      body: SingleChildScrollView(
+      body: _loadingDraft
+          ? const Center(child: CircularProgressIndicator(color: AppColors.darkBlue500))
+          : SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,9 +327,9 @@ class _MedicalRecordFormPageState extends State<MedicalRecordFormPage> {
                         width: 20, height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text(
-                        'Save report',
-                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                    : Text(
+                        _isAiDraft ? 'Review & publish report' : 'Save report',
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                       ),
               ),
             ),
@@ -263,10 +340,11 @@ class _MedicalRecordFormPageState extends State<MedicalRecordFormPage> {
   }
 
   Widget _intro() {
+    final aiDraft = _isAiDraft;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.darkBlue900,
+        color: AppColors.darkBlue500,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -277,23 +355,52 @@ class _MedicalRecordFormPageState extends State<MedicalRecordFormPage> {
               color: Colors.white.withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.description_rounded, color: Colors.white, size: 20),
+            child: Icon(
+              aiDraft ? Icons.auto_awesome_rounded : Icons.description_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Consultation summary',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      aiDraft ? 'AI draft' : 'Consultation summary',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (aiDraft) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'BETA',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Saved to the patient\u2019s medical record. Patient may share it with another doctor on referral.',
+                  aiDraft
+                      ? 'Drafted from your call recording. Edit anything that\u2019s wrong, then tap "Review & publish" to send it to the patient.'
+                      : 'Saved to the patient\u2019s medical record. Patient may share it with another doctor on referral.',
                   style: AppTextStyles.caption.copyWith(color: Colors.white70),
                 ),
               ],

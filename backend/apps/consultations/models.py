@@ -23,6 +23,13 @@ class Consultation(models.Model):
     consultation_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='hybrid')
     webrtc_session_id = models.CharField(max_length=255, blank=True, null=True)
     recording_url = models.URLField(max_length=500, blank=True, null=True)
+    # Plain-text transcript produced by Google Cloud Speech-to-Text after the
+    # call ends. Feeds straight into Gemini for the AI medical-record draft.
+    call_transcript = models.TextField(blank=True, default='')
+    # gs:// URI of the uploaded audio in Firebase Storage; the STT job picks
+    # the audio up from here so we don't have to round-trip megabytes back to
+    # the worker.
+    audio_gs_uri = models.CharField(max_length=500, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -108,6 +115,12 @@ class MedicalRecord(models.Model):
     shared_with = models.ManyToManyField(
         HealthcareProvider, blank=True, related_name='shared_records',
     )
+    # AI-drafted records start as unpublished drafts, visible only to the
+    # authoring doctor. The doctor reviews + submits, which sets is_ai_draft
+    # back to False (or keeps it True for transparency) and is_published=True.
+    # The patient list query below filters on is_published.
+    is_ai_draft = models.BooleanField(default=False)
+    is_published = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

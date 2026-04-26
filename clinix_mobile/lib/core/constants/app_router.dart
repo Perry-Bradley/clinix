@@ -137,9 +137,14 @@ final GoRouter appRouter = GoRouter(
       path: '/provider/medical-record/new',
       builder: (c, s) {
         final extra = s.extra as Map<String, dynamic>? ?? {};
+        // Also accept aiDraftRecordId via the URI query so the FCM deep-link
+        // (`/provider/medical-record/new?aiDraftRecordId=<uuid>`) opens the
+        // form pre-filled with the draft.
+        final draftFromQuery = s.uri.queryParameters['aiDraftRecordId'];
         return MedicalRecordFormPage(
           consultationId: extra['consultationId']?.toString(),
           patientId: extra['patientId']?.toString(),
+          aiDraftRecordId: extra['aiDraftRecordId']?.toString() ?? draftFromQuery,
         );
       },
     ),

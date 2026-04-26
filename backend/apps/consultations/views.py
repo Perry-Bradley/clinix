@@ -305,6 +305,60 @@ class AgoraTokenView(APIView):
         return Response({'app_id': app_id, 'token': token, 'channel': channel_name})
 
 
+class ConsultationAudioUploadView(APIView):
+    """Doctor-side audio upload after a consultation ends. The file is pushed
+    to Firebase Storage (which is GCS) and the gs:// URI is stashed on the
+    consultation; a Celery task then transcribes it via Google Cloud
+    Speech-to-Text and asks Gemini to draft a structured medical record.
+    Only the doctor on the appointment can upload."""
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [__import__('rest_framework.parsers', fromlist=['MultiPartParser']).MultiPartParser]
+
+    def post(self, request, pk):
+        provider = _provider_for_user(request.user)
+        if not provider:
+            return Response({'error': 'Only providers can upload call audio.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            consultation = Consultation.objects.select_related('appointment', 'appointment__provider').get(pk=pk)
+        except Consultation.DoesNotExist:
+            return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if consultation.appointment.provider_id != provider.pk:
+            return Response({'error': 'You can only upload audio for your own consultations.'}, status=status.HTTP_403_FORBIDDEN)
+
+        audio_file = request.FILES.get('audio') or request.FILES.get('file')
+        if not audio_file:
+            return Response({'error': 'No audio file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Upload to Firebase Storage. The default bucket is also a GCS
+            # bucket, so we get a gs:// URI for free that Speech-to-Text can
+            # read directly.
+            from firebase_admin import storage as fb_storage
+            bucket = fb_storage.bucket()
+            blob_path = f'consultation_audio/{consultation.consultation_id}/{audio_file.name}'
+            blob = bucket.blob(blob_path)
+            blob.upload_from_file(audio_file, content_type=audio_file.content_type or 'audio/wav')
+            gs_uri = f'gs://{bucket.name}/{blob_path}'
+        except Exception as e:
+            return Response(
+                {'error': f'Audio upload failed: {e}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        consultation.audio_gs_uri = gs_uri
+        consultation.recording_url = blob.public_url if hasattr(blob, 'public_url') else ''
+        consultation.save(update_fields=['audio_gs_uri', 'recording_url'])
+
+        # Fire off the transcribe + draft job in the background.
+        try:
+            from .tasks import transcribe_and_draft_record
+            transcribe_and_draft_record.delay(str(consultation.consultation_id))
+        except Exception:
+            pass
+
+        return Response({'status': 'queued', 'audio_gs_uri': gs_uri}, status=status.HTTP_202_ACCEPTED)
+
+
 class ChatFileUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -462,20 +516,25 @@ class MedicalRecordListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         provider = _provider_for_user(user)
         patient = _patient_for_user(user)
+        only_drafts = self.request.query_params.get('drafts') == '1'
 
         qs = MedicalRecord.objects.all()
         if provider and patient:
-            return qs.filter(
-                Q(patient=patient) |
+            base = qs.filter(
+                Q(patient=patient, is_published=True) |
                 Q(authored_by=provider) |
-                Q(shared_with=provider)
+                Q(shared_with=provider, is_published=True)
             ).distinct()
+            return base.filter(is_ai_draft=True, is_published=False) if only_drafts else base
         if provider:
-            return qs.filter(
-                Q(authored_by=provider) | Q(shared_with=provider)
+            base = qs.filter(
+                Q(authored_by=provider) |
+                Q(shared_with=provider, is_published=True)
             ).distinct()
+            return base.filter(is_ai_draft=True, is_published=False) if only_drafts else base
         if patient:
-            return qs.filter(patient=patient)
+            # Patients never see unpublished AI drafts.
+            return qs.filter(patient=patient, is_published=True)
         return MedicalRecord.objects.none()
 
     def perform_create(self, serializer):
@@ -548,17 +607,57 @@ class MedicalRecordDetailView(generics.RetrieveUpdateDestroyAPIView):
         qs = MedicalRecord.objects.all()
         if provider and patient:
             return qs.filter(
-                Q(patient=patient) |
+                Q(patient=patient, is_published=True) |
                 Q(authored_by=provider) |
-                Q(shared_with=provider)
+                Q(shared_with=provider, is_published=True)
             ).distinct()
         if provider:
             return qs.filter(
-                Q(authored_by=provider) | Q(shared_with=provider)
+                Q(authored_by=provider) |
+                Q(shared_with=provider, is_published=True)
             ).distinct()
         if patient:
-            return qs.filter(patient=patient)
+            return qs.filter(patient=patient, is_published=True)
         return MedicalRecord.objects.none()
+
+    def perform_update(self, serializer):
+        was_unpublished = not serializer.instance.is_published
+        record = serializer.save()
+        # First time the doctor flips an AI draft to published, fire the
+        # patient notification + chat card (the same way perform_create on
+        # the list view does for non-AI records).
+        if was_unpublished and record.is_published:
+            provider = record.authored_by
+            provider_name = (
+                getattr(provider.provider_id, 'full_name', None) if provider else None
+            ) or 'Your doctor'
+            title_part = record.title or record.diagnosis or 'a new medical record'
+            try:
+                from apps.notifications.tasks import send_notification
+                send_notification.delay(
+                    record.patient.patient_id.user_id,
+                    'New medical record',
+                    f'{provider_name} added {title_part} to your medical records.',
+                    'medical_record',
+                    {'record_id': str(record.record_id)},
+                )
+            except Exception:
+                pass
+            try:
+                from apps.direct_chat.clinical import post_clinical_message
+                if provider:
+                    post_clinical_message(
+                        doctor_user=provider.provider_id,
+                        patient_user=record.patient.patient_id,
+                        message_type='medical_record',
+                        content=record.title or record.diagnosis or 'New medical record',
+                        metadata={
+                            'record_id': str(record.record_id),
+                            'diagnosis': (record.diagnosis or '')[:200],
+                        },
+                    )
+            except Exception:
+                pass
 
 
 class MedicalRecordShareView(APIView):
