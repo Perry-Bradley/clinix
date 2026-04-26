@@ -307,12 +307,27 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
     _noAnswerTimer = Timer(const Duration(seconds: 45), () {
       if (mounted && _remoteUid == null) {
         _stopRingback();
+        unawaited(_logMissedCall('no_answer'));
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No answer. Try again later.')),
+          const SnackBar(content: Text('No answer. The call was logged in your inbox.')),
         );
         _leave();
       }
     });
+  }
+
+  Future<void> _logMissedCall(String reason) async {
+    try {
+      final token = await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) return;
+      await Dio().post(
+        '${ApiConstants.baseUrl}${ApiConstants.consultations}${widget.consultationId}/ring/missed/',
+        data: {'reason': reason},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+    } catch (_) {
+      // Best-effort — the in-app missed-call inbox entry is nice-to-have.
+    }
   }
 
   void _stopRingback() {

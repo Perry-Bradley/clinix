@@ -358,6 +358,71 @@ class ConsultationRingView(APIView):
         return Response({'status': 'ringing'}, status=status.HTTP_202_ACCEPTED)
 
 
+class ConsultationMissedCallView(APIView):
+    """Caller fires this when the 45-second no-answer timer expires so we can
+    record the missed call on both sides. The receiver's CallKit already
+    surfaces an OS-level missed-call notification (configured in the mobile
+    app), so we don't push another FCM — we just persist Notification rows
+    so the call shows up in each user's in-app inbox.
+
+    Body: optional {"reason": "no_answer" | "declined"}.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            consultation = Consultation.objects.select_related(
+                'appointment',
+                'appointment__patient', 'appointment__patient__patient_id',
+                'appointment__provider', 'appointment__provider__provider_id',
+            ).get(pk=pk)
+        except Consultation.DoesNotExist:
+            return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        appointment = consultation.appointment
+        patient_user = appointment.patient.patient_id
+        provider_user = appointment.provider.provider_id
+        caller = request.user
+
+        if caller != patient_user and caller != provider_user:
+            return Response({'error': 'You are not on this appointment.'}, status=status.HTTP_403_FORBIDDEN)
+
+        peer = provider_user if caller == patient_user else patient_user
+        caller_name = caller.full_name or 'Clinix'
+        peer_name = peer.full_name or 'the other person'
+        reason = request.data.get('reason', 'no_answer')
+
+        try:
+            from apps.notifications.models import Notification
+            data = {
+                'consultation_id': str(consultation.consultation_id),
+                'appointment_id': str(appointment.appointment_id),
+                'reason': reason,
+            }
+            # Caller's inbox: outgoing miss.
+            Notification.objects.create(
+                user=caller,
+                title=f'No answer from {peer_name}',
+                body='Tap to try again.',
+                type='system',
+                channel='in_app',
+                data={**data, 'direction': 'outgoing'},
+            )
+            # Peer's inbox: incoming miss they didn't pick up.
+            Notification.objects.create(
+                user=peer,
+                title=f'Missed call from {caller_name}',
+                body='Tap to call back.',
+                type='system',
+                channel='in_app',
+                data={**data, 'direction': 'incoming', 'caller_name': caller_name},
+            )
+        except Exception:
+            pass
+
+        return Response({'status': 'logged'}, status=status.HTTP_200_OK)
+
+
 class ConsultationAudioUploadView(APIView):
     """Doctor-side audio upload after a consultation ends. The file is pushed
     to a Cloud Storage bucket on the SAME GCP project as Speech-to-Text
