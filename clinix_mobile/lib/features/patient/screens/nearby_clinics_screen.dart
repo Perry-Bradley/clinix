@@ -651,12 +651,13 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: FilledButton.icon(
-                                    onPressed: () =>
-                                        context.push('/patient/book-appointment', extra: _selectedClinic),
-                                    icon: const Icon(Icons.calendar_today_rounded, size: 20),
-                                    label: const Text('Book'),
+                                    onPressed: () => context.push(
+                                      '/patient/clinic-profile/${_selectedClinic!['id']}',
+                                    ),
+                                    icon: const Icon(Icons.info_outline_rounded, size: 20),
+                                    label: const Text('View Details'),
                                     style: FilledButton.styleFrom(
-                                      backgroundColor: AppColors.splashSlate900,
+                                      backgroundColor: AppColors.darkBlue500,
                                       foregroundColor: Colors.white,
                                       padding: const EdgeInsets.symmetric(vertical: 14),
                                       shape: RoundedRectangleBorder(
@@ -838,11 +839,13 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed: () => context.push('/patient/book-appointment', extra: clinic),
-                          icon: const Icon(Icons.calendar_today_rounded, size: 18),
-                          label: const Text('Book'),
+                          onPressed: () => context.push(
+                            '/patient/clinic-profile/${clinic['id']}',
+                          ),
+                          icon: const Icon(Icons.info_outline_rounded, size: 18),
+                          label: const Text('View Details'),
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.splashSlate900,
+                            backgroundColor: AppColors.darkBlue500,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(

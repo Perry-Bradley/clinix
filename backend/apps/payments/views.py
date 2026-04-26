@@ -134,23 +134,41 @@ def _initiate_campay_collection(payment):
 
 
 def _check_campay_status(reference):
-    """Check payment status on CamPay."""
+    """Check payment status on CamPay.
+
+    CamPay's transaction status endpoint accepts either GET or POST. We try
+    GET first (simpler, doc-supported) and log everything so debugging the
+    poll loop is straightforward.
+    """
     base_url = getattr(settings, 'CAMPAY_BASE_URL', 'https://demo.campay.net')
     token = _get_campay_token()
     if not token:
+        logger.warning('CamPay status check skipped: no token available')
         return None
 
+    url = f'{base_url}/api/transaction/{reference}/'
+    headers = {'Authorization': f'Token {token}', 'Content-Type': 'application/json'}
+
     try:
-        response = requests.post(
-            f'{base_url}/api/transaction/{reference}/',
-            headers={'Authorization': f'Token {token}', 'Content-Type': 'application/json'},
-            json={'reference': reference},
-            timeout=15,
+        # Most CamPay setups expose the status as a GET on this URL.
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            # Fallback: POST with the reference in the body (older API style).
+            response = requests.post(
+                url,
+                headers=headers,
+                json={'reference': reference},
+                timeout=15,
+            )
+
+        logger.info(
+            f'CamPay status check ref={reference} '
+            f'http={response.status_code} body={response.text[:300]}',
         )
         if response.status_code == 200:
             return response.json()
-    except requests.RequestException:
-        pass
+    except requests.RequestException as exc:
+        logger.error(f'CamPay status check error for {reference}: {exc}')
     return None
 
 

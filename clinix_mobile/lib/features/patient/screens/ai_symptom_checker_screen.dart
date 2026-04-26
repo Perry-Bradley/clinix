@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../core/services/ai_chat_service.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -980,12 +982,33 @@ class ChatMessage extends StatelessWidget {
           _summaryRow('Triage Priority', assessment!['triage_priority'] ?? 'Standard', Icons.flag_rounded,
               (assessment!['triage_priority']?.toString().toLowerCase().contains('high') ?? false) ? Colors.red : AppColors.accentGreen),
           _summaryRow('Recommended Care', assessment!['recommended_specialization'] ?? 'General Consultation', Icons.medical_services_rounded, _kAccent),
-          // ── Smart doctor recommendations: matches the AI's suggested
-          //    specialty against verified doctors and surfaces the best 3.
-          if ((assessment!['recommended_specialization'] ?? '').toString().trim().isNotEmpty) ...[
+          // ── Smart doctor / nurse recommendations — show unless the
+          //    patient explicitly said NO. Default-on prevents the
+          //    feature from disappearing because of a missing or oddly
+          //    typed value. For nurses the widget uses the patient's GPS
+          //    to favour closer providers (cheaper to dispatch). For
+          //    doctors distance is irrelevant (consults are virtual).
+          if (() {
+            final raw = assessment!['wants_provider_suggestion'];
+            if (raw == false) return false;
+            if (raw is String) {
+              final s = raw.trim().toLowerCase();
+              if (['no', 'false', 'non', 'decline', 'declined'].contains(s)) {
+                return false;
+              }
+            }
+            return (assessment!['recommended_specialization'] ?? '')
+                .toString()
+                .trim()
+                .isNotEmpty;
+          }()) ...[
             const SizedBox(height: 18),
             _RecommendedDoctorsCard(
               specialty: assessment!['recommended_specialization'].toString(),
+              urgency: (assessment!['triage_priority'] ?? '').toString().toLowerCase().contains('high')
+                  ? 'high'
+                  : 'standard',
+              providerRole: (assessment!['provider_role'] ?? 'doctor').toString().toLowerCase(),
             ),
           ],
           const SizedBox(height: 18),
@@ -1120,7 +1143,13 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator> with SingleTicke
 /// "Book" jumps straight into the booking flow for that doctor.
 class _RecommendedDoctorsCard extends StatefulWidget {
   final String specialty;
-  const _RecommendedDoctorsCard({required this.specialty});
+  final String urgency; // 'high' | 'standard'
+  final String providerRole; // 'doctor' | 'nurse'
+  const _RecommendedDoctorsCard({
+    required this.specialty,
+    this.urgency = 'standard',
+    this.providerRole = 'doctor',
+  });
 
   @override
   State<_RecommendedDoctorsCard> createState() => _RecommendedDoctorsCardState();
@@ -1138,33 +1167,58 @@ class _RecommendedDoctorsCardState extends State<_RecommendedDoctorsCard> {
 
   Future<void> _load() async {
     try {
+      // For nurses we need the patient's location — proximity matters
+      // because closer nurses are cheaper to dispatch. For doctors the
+      // consultation is virtual, so distance is irrelevant.
+      final isNurse = widget.providerRole == 'nurse';
+
+      double? lat;
+      double? lng;
+      if (isNurse) {
+        try {
+          final pos = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.medium,
+            timeLimit: const Duration(seconds: 4),
+          );
+          lat = pos.latitude;
+          lng = pos.longitude;
+        } catch (_) {}
+      }
+
+      String? language;
+      try {
+        language = await AuthService.getLanguagePref();
+      } catch (_) {}
+
+      final query = <String, dynamic>{
+        'specialty': widget.specialty,
+        'urgency': widget.urgency,
+        'limit': 3,
+        'role': isNurse ? 'nurse' : 'doctor',
+      };
+      if (lat != null && lng != null) {
+        query['lat'] = lat;
+        query['lng'] = lng;
+      }
+      if (language != null && language.isNotEmpty) {
+        query['language'] = language;
+      }
+
       final res = await Dio().get(
-        '${ApiConstants.baseUrl}providers/nearby/',
-        queryParameters: {
-          'specialty': widget.specialty,
-          'available': 'true',
-        },
+        '${ApiConstants.baseUrl}providers/recommended/',
+        queryParameters: query,
       );
       final data = res.data;
-      List items = data is List ? data : (data is Map ? data['results'] ?? [] : []);
-      var raw = items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      raw.sort((a, b) => _score(b).compareTo(_score(a)));
+      final items = data is List ? data : const [];
       if (mounted) {
         setState(() {
-          _doctors = raw.take(3).toList();
+          _doctors = items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
           _loading = false;
         });
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  double _score(Map<String, dynamic> d) {
-    final rating = double.tryParse(d['rating']?.toString() ?? '0') ?? 0.0;
-    final consults = double.tryParse(d['total_consultations']?.toString() ?? '0') ?? 0.0;
-    final online = (d['status']?.toString() ?? '').toLowerCase() == 'online' ? 1.0 : 0.0;
-    return rating * 2 + consults * 0.05 + online;
   }
 
   @override
@@ -1227,101 +1281,157 @@ class _RecommendedDoctorsCardState extends State<_RecommendedDoctorsCard> {
     final feeRaw = d['consultation_fee']?.toString() ?? '0';
     final fee = double.tryParse(feeRaw)?.toInt() ?? 0;
     final isOnline = (d['status']?.toString() ?? '').toLowerCase() == 'online';
+    final reasons = (d['match_reasons'] as List?)?.cast<dynamic>() ?? const [];
+    final distance = d['distance_km'];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            clipBehavior: Clip.none,
+          Row(
             children: [
-              Container(
-                width: 42, height: 42,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF38BDF8), _kAccent],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 18),
-              ),
-              if (isOnline)
-                Positioned(
-                  right: -2, bottom: -2,
-                  child: Container(
-                    width: 12, height: 12,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 44, height: 44,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10B981),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF38BDF8), _kAccent],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.local_hospital_rounded,
+                        color: Colors.white, size: 20),
+                  ),
+                  if (isOnline)
+                    Positioned(
+                      right: -2, bottom: -2,
+                      child: Container(
+                        width: 12, height: 12,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: _kAccentDark,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13.5,
+                      ),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      specialty,
+                      style: AppTextStyles.caption
+                          .copyWith(color: AppColors.grey500, fontSize: 11),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                    ),
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded,
+                            color: Color(0xFFFBBF24), size: 12),
+                        const SizedBox(width: 2),
+                        Text(
+                          rating,
+                          style: AppTextStyles.caption.copyWith(
+                            color: _kAccentDark,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                        if (fee > 0) ...[
+                          const SizedBox(width: 8),
+                          Text('· $fee XAF',
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.grey500,
+                                fontSize: 11,
+                              )),
+                        ],
+                        if (distance != null) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.location_on_rounded,
+                              size: 11, color: AppColors.grey400),
+                          const SizedBox(width: 1),
+                          Text(
+                            '${distance.toStringAsFixed(1)} km',
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.grey500,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () => context.push(
+                  '/patient/doctor-profile/${d['provider_id']}',
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _kAccent,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'Book',
+                    style: AppTextStyles.caption.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
                     ),
                   ),
                 ),
+              ),
             ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: _kAccentDark,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
+          // ── "Recommended because…" reason chips ───────────────────────
+          if (reasons.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: reasons.map((r) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _kAccent.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  specialty,
-                  style: AppTextStyles.caption.copyWith(color: AppColors.grey500, fontSize: 11),
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                ),
-                Row(
-                  children: [
-                    const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 12),
-                    const SizedBox(width: 2),
-                    Text(rating,
-                        style: AppTextStyles.caption.copyWith(
-                            color: _kAccentDark, fontWeight: FontWeight.w700, fontSize: 11)),
-                    if (fee > 0) ...[
-                      const SizedBox(width: 8),
-                      Text('· $fee XAF',
-                          style: AppTextStyles.caption.copyWith(
-                              color: AppColors.grey500, fontSize: 11)),
-                    ],
-                  ],
-                ),
-              ],
+                  child: Text(
+                    r.toString(),
+                    style: AppTextStyles.caption.copyWith(
+                      color: _kAccent,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
-          ),
-          GestureDetector(
-            onTap: () => context.push(
-              '/patient/doctor-profile/${d['provider_id']}',
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: _kAccent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                'Book',
-                style: AppTextStyles.caption.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          ),
+          ],
         ],
       ),
     );

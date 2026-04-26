@@ -166,6 +166,15 @@ class AuthService {
     return await _storage.read(key: 'full_name');
   }
 
+  /// Returns the user's preferred language ('en' or 'fr'), or null if unset.
+  /// Reads the value the backend embedded in the login response when we
+  /// stored it locally, falling back to the device locale.
+  static Future<String?> getLanguagePref() async {
+    final stored = await _storage.read(key: 'language_pref');
+    if (stored != null && stored.isNotEmpty) return stored;
+    return null;
+  }
+
   static Future<String?> getAccessToken() async {
     return await _storage.read(key: 'access_token');
   }

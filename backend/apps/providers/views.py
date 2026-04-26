@@ -1,5 +1,6 @@
 from rest_framework import generics, permissions, status
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -291,6 +292,211 @@ class ProviderNearbyView(generics.ListAPIView):
                 pass
                 
         return queryset
+
+def _haversine_km(lat1, lng1, lat2, lng2):
+    """Great-circle distance between two lat/lng pairs in kilometres."""
+    r = 6371.0
+    lat1_r = math.radians(lat1)
+    lat2_r = math.radians(lat2)
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1_r) * math.cos(lat2_r) * math.sin(dlng / 2) ** 2
+    )
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+class ProviderRecommendedView(APIView):
+    """Smart doctor matcher used by the AI consultation flow.
+
+    Combines the patient's context (location, language, budget, urgency)
+    with each provider's data to compute a transparent ranking score and a
+    list of human-readable reasons for the patient to trust the suggestion.
+
+    Query params (all optional):
+        specialty       — name or keyword from the AI assessment
+        urgency         — 'high' | 'standard' (default: 'standard')
+        role            — 'doctor' | 'specialist' | 'generalist' | 'nurse'
+        lat, lng        — patient's current coordinates
+        language        — 'en' | 'fr'
+        max_distance_km — hard cap on distance (filters out beyond this)
+        max_fee         — soft budget ceiling (XAF)
+        limit           — number of results (default 5, max 10)
+    """
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        params = request.query_params
+        specialty_query = (params.get('specialty') or '').strip()
+        urgency = (params.get('urgency') or 'standard').lower()
+        language = (params.get('language') or '').lower()
+        role = (params.get('role') or '').lower()
+        try:
+            patient_lat = float(params.get('lat')) if params.get('lat') else None
+            patient_lng = float(params.get('lng')) if params.get('lng') else None
+        except (TypeError, ValueError):
+            patient_lat = patient_lng = None
+        try:
+            max_fee = float(params.get('max_fee')) if params.get('max_fee') else None
+        except (TypeError, ValueError):
+            max_fee = None
+        try:
+            max_distance_km = (
+                float(params.get('max_distance_km'))
+                if params.get('max_distance_km') else None
+            )
+        except (TypeError, ValueError):
+            max_distance_km = None
+        try:
+            limit = max(1, min(int(params.get('limit', 5)), 10))
+        except (TypeError, ValueError):
+            limit = 5
+
+        candidates = HealthcareProvider.objects.filter(
+            verification_status='approved',
+        ).select_related('provider_id', 'specialty_obj').prefetch_related('locations')
+
+        # Role filter — nurse vs doctor (generalist+specialist) -- so the AI
+        # can route home-care cases to nurses only, and clinical cases to
+        # doctors only.
+        if role:
+            if role == 'doctor':
+                candidates = candidates.filter(provider_role__in=['generalist', 'specialist'])
+            elif role in {'specialist', 'generalist', 'nurse'}:
+                candidates = candidates.filter(provider_role=role)
+
+        # Specialty fuzzy match — try exact, contains, and word-level overlap.
+        if specialty_query:
+            words = [w for w in re.split(r'\W+', specialty_query) if len(w) > 2]
+            specialty_q = (
+                Q(specialty_obj__name__icontains=specialty_query) |
+                Q(other_specialty__icontains=specialty_query) |
+                Q(specialty__icontains=specialty_query)
+            )
+            for w in words:
+                specialty_q |= (
+                    Q(specialty_obj__name__icontains=w) |
+                    Q(other_specialty__icontains=w) |
+                    Q(specialty__icontains=w) |
+                    Q(bio__icontains=w)
+                )
+            specialty_matches = candidates.filter(specialty_q)
+            # Fallback to all candidates if nothing matched the specialty —
+            # patient still benefits from a recommendation.
+            candidates = specialty_matches if specialty_matches.exists() else candidates
+
+        scored = []
+        for prov in candidates[:50]:  # cap to keep scoring cheap
+            user = prov.provider_id
+            reasons = []
+            score = 0.0
+
+            # ── Specialty fit ──────────────────────────────────────────────
+            sp_name = (prov.specialty_obj.name if prov.specialty_obj else '') or prov.other_specialty or prov.specialty or ''
+            if specialty_query and specialty_query.lower() in sp_name.lower():
+                score += 8.0
+                reasons.append(f'Specialises in {sp_name}')
+            elif specialty_query and any(
+                w.lower() in sp_name.lower()
+                for w in re.split(r'\W+', specialty_query) if len(w) > 2
+            ):
+                score += 5.0
+                reasons.append(f'Works in {sp_name}')
+            elif sp_name:
+                score += 1.0
+                reasons.append(f'{sp_name}')
+
+            # ── Rating + experience ────────────────────────────────────────
+            rating = float(prov.rating or 0)
+            if rating >= 4.5:
+                score += 4.0
+                reasons.append(f'Top-rated ({rating:.1f}★)')
+            elif rating >= 4.0:
+                score += 2.5
+            elif rating > 0:
+                score += rating * 0.5
+
+            consults = prov.total_consultations or 0
+            if consults >= 100:
+                score += 2.0
+                reasons.append(f'{consults}+ consultations')
+            elif consults >= 25:
+                score += 1.0
+
+            # ── Online / availability (urgency-weighted) ───────────────────
+            online = False
+            if user.last_seen:
+                from django.utils import timezone
+                diff = (timezone.now() - user.last_seen).total_seconds()
+                online = diff < 300  # 5 min
+            if online and urgency == 'high':
+                score += 6.0
+                reasons.insert(0, 'Online right now (urgent)')
+            elif online:
+                score += 2.5
+                reasons.append('Online now')
+            elif prov.is_available:
+                score += 0.5
+
+            # ── Distance ───────────────────────────────────────────────────
+            distance_km = None
+            if patient_lat is not None and patient_lng is not None:
+                # Pick the closest of the provider's locations.
+                best = None
+                for loc in prov.locations.all():
+                    if loc.latitude is None or loc.longitude is None:
+                        continue
+                    d = _haversine_km(
+                        patient_lat, patient_lng,
+                        float(loc.latitude), float(loc.longitude),
+                    )
+                    if best is None or d < best:
+                        best = d
+                if best is not None:
+                    distance_km = round(best, 1)
+                    # Hard filter: if the patient told the AI they wanted a
+                    # provider within X km, drop anyone beyond that radius.
+                    if max_distance_km is not None and best > max_distance_km:
+                        continue
+                    if best < 2:
+                        score += 4.0
+                        reasons.append(f'{distance_km} km away')
+                    elif best < 10:
+                        score += 2.0
+                        reasons.append(f'{distance_km} km away')
+                    elif best < 50:
+                        score += 0.5
+                    else:
+                        score -= 1.0
+
+            # ── Language preference ────────────────────────────────────────
+            if language and user.language_pref and language == user.language_pref.lower():
+                score += 1.5
+                pretty = 'English' if language == 'en' else 'French'
+                reasons.append(f'Speaks {pretty}')
+
+            # ── Fee fit ────────────────────────────────────────────────────
+            fee = float(prov.consultation_fee or 0)
+            if max_fee is not None and fee > 0:
+                if fee <= max_fee:
+                    score += 1.0
+                    reasons.append(f'Within your budget ({int(fee)} XAF)')
+                else:
+                    score -= 2.0
+
+            # Build the public payload.
+            provider_payload = ProviderPublicSerializer(prov, context={'request': request}).data
+            provider_payload['score'] = round(score, 2)
+            provider_payload['distance_km'] = distance_km
+            provider_payload['match_reasons'] = reasons[:3]  # top 3 reasons
+            scored.append((score, provider_payload))
+
+        # Highest score first, then break ties by rating.
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return Response([p for _, p in scored[:limit]])
+
 
 class ProviderPublicDetailView(generics.RetrieveAPIView):
     serializer_class = ProviderPublicSerializer

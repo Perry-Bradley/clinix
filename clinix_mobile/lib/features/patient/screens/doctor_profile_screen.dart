@@ -99,7 +99,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           SliverAppBar(
             pinned: true,
             expandedHeight: 190,
-            backgroundColor: AppColors.darkBlue900,
+            backgroundColor: AppColors.darkBlue500,
             surfaceTintColor: Colors.transparent,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
@@ -107,7 +107,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+                decoration: const BoxDecoration(color: AppColors.darkBlue500),
                 padding: const EdgeInsets.fromLTRB(24, 60, 24, 20),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -177,7 +177,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     Text('Patient Reviews', style: AppTextStyles.headlineSmall),
                     TextButton(
                       onPressed: () => _showReviewModal(context),
-                      child: Text('Write a Review', style: TextStyle(color: AppColors.sky600, fontWeight: FontWeight.bold)),
+                      child: Text('Write a Review', style: TextStyle(color: AppColors.darkBlue500, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -211,7 +211,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(color: AppColors.sky100, borderRadius: BorderRadius.circular(14)),
-                        child: const Icon(Icons.location_on_rounded, color: AppColors.sky600),
+                        child: const Icon(Icons.location_on_rounded, color: AppColors.darkBlue500),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -245,7 +245,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         child: ElevatedButton(
           onPressed: () => context.push('/patient/book-appointment', extra: _provider),
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.sky600,
+            backgroundColor: AppColors.darkBlue500,
             foregroundColor: Colors.white,
             minimumSize: const Size(double.infinity, 56),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -384,7 +384,7 @@ class _ReviewSubmissionModalState extends State<_ReviewSubmissionModal> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.sky600,
+              backgroundColor: AppColors.darkBlue500,
               minimumSize: const Size(double.infinity, 56),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
@@ -406,7 +406,7 @@ class _StatItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(value, style: AppTextStyles.headlineSmall.copyWith(color: AppColors.sky600)),
+        Text(value, style: AppTextStyles.headlineSmall.copyWith(color: AppColors.darkBlue500)),
         const SizedBox(height: 4),
         Text(label, style: AppTextStyles.caption),
       ],

@@ -35,7 +35,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       firstDate: now,
       lastDate: now.add(const Duration(days: 60)),
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.sky500)),
+        data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.darkBlue500)),
         child: child!,
       ),
     );
@@ -123,6 +123,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           return 'in-person';
         case 'video':
         case 'audio':
+        case 'chat':
         default:
           return 'virtual';
       }
@@ -195,7 +196,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            backgroundColor: AppColors.darkBlue900,
+            backgroundColor: AppColors.darkBlue500,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
               onPressed: () => Navigator.pop(context),
@@ -210,7 +211,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.darkBlue800, AppColors.sky600]),
+                    color: AppColors.darkBlue500,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -233,17 +234,74 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Consultation Type
-                Text('Consultation Type', style: AppTextStyles.headlineSmall.copyWith(fontSize: 14)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _TypeButton(label: 'Video', icon: Icons.videocam_rounded, value: 'video', selected: _consultationType == 'video', onTap: (v) => setState(() => _consultationType = v)),
-                    const SizedBox(width: 10),
-                    _TypeButton(label: 'Audio', icon: Icons.phone_rounded, value: 'audio', selected: _consultationType == 'audio', onTap: (v) => setState(() => _consultationType = v)),
-                    const SizedBox(width: 10),
-                    _TypeButton(label: 'In-Person', icon: Icons.location_on_rounded, value: 'in_person', selected: _consultationType == 'in_person', onTap: (v) => setState(() => _consultationType = v)),
-                  ],
+                // Consultation Type — role-aware:
+                //  • Doctor (generalist/specialist) → Video / Audio / Chat
+                //  • Nurse → Home visit (in-person) only
+                Builder(
+                  builder: (_) {
+                    final role = (widget.doctor['provider_role'] ?? 'generalist')
+                        .toString()
+                        .toLowerCase();
+                    final isNurse = role == 'nurse';
+
+                    // Default the selected type per role.
+                    if (isNurse && _consultationType != 'in_person') {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) setState(() => _consultationType = 'in_person');
+                      });
+                    } else if (!isNurse && _consultationType == 'in_person') {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) setState(() => _consultationType = 'video');
+                      });
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isNurse ? 'Service' : 'Consultation Type',
+                          style: AppTextStyles.headlineSmall.copyWith(fontSize: 14),
+                        ),
+                        const SizedBox(height: 12),
+                        if (isNurse)
+                          _TypeButton(
+                            label: 'Home Visit',
+                            icon: Icons.home_rounded,
+                            value: 'in_person',
+                            selected: _consultationType == 'in_person',
+                            onTap: (v) => setState(() => _consultationType = v),
+                          )
+                        else
+                          Row(
+                            children: [
+                              _TypeButton(
+                                label: 'Video',
+                                icon: Icons.videocam_rounded,
+                                value: 'video',
+                                selected: _consultationType == 'video',
+                                onTap: (v) => setState(() => _consultationType = v),
+                              ),
+                              const SizedBox(width: 10),
+                              _TypeButton(
+                                label: 'Audio',
+                                icon: Icons.phone_rounded,
+                                value: 'audio',
+                                selected: _consultationType == 'audio',
+                                onTap: (v) => setState(() => _consultationType = v),
+                              ),
+                              const SizedBox(width: 10),
+                              _TypeButton(
+                                label: 'Chat',
+                                icon: Icons.chat_rounded,
+                                value: 'chat',
+                                selected: _consultationType == 'chat',
+                                onTap: (v) => setState(() => _consultationType = v),
+                              ),
+                            ],
+                          ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
 
@@ -260,7 +318,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                           decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.grey200)),
                           child: Row(
                             children: [
-                              const Icon(Icons.calendar_today_rounded, color: AppColors.sky500, size: 18),
+                              const Icon(Icons.calendar_today_rounded, color: AppColors.darkBlue500, size: 18),
                               const SizedBox(width: 10),
                               Text(
                                 _selectedDate == null ? 'Select date' : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
@@ -280,7 +338,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                           decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.grey200)),
                           child: Row(
                             children: [
-                              const Icon(Icons.access_time_rounded, color: AppColors.sky500, size: 18),
+                              const Icon(Icons.access_time_rounded, color: AppColors.darkBlue500, size: 18),
                               const SizedBox(width: 10),
                               Text(
                                 _selectedTime == null ? 'Select time' : _selectedTime!.format(context),
@@ -317,9 +375,9 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: selected ? AppColors.sky500 : Colors.white,
+                            color: selected ? AppColors.darkBlue500 : Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: selected ? AppColors.sky500 : AppColors.grey200),
+                            border: Border.all(color: selected ? AppColors.darkBlue500 : AppColors.grey200),
                           ),
                           child: Text(
                             slot,
@@ -363,7 +421,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      backgroundColor: AppColors.sky500,
+                      backgroundColor: AppColors.darkBlue500,
                     ),
                     child: _isLoading
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -396,9 +454,9 @@ class _TypeButton extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: selected ? AppColors.sky500 : AppColors.white,
+            color: selected ? AppColors.darkBlue500 : AppColors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: selected ? AppColors.sky500 : AppColors.grey200),
+            border: Border.all(color: selected ? AppColors.darkBlue500 : AppColors.grey200),
           ),
           child: Column(
             children: [
