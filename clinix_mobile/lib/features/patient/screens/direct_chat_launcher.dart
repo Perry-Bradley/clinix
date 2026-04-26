@@ -40,10 +40,13 @@ class _DirectChatLauncherState extends State<DirectChatLauncher> {
       final peerName = widget.doctorName ?? conv['peer_name']?.toString() ?? '';
       final peerPhoto = widget.doctorPhoto ?? conv['peer_photo']?.toString() ?? '';
 
-      // Build the query string safely
+      // Build the query string safely. Including peerId lets the doctor side
+      // launch the Report / Prescription / Referral flows from inside the
+      // chat with the patient already pre-identified.
       final params = <String, String>{};
       if (peerName.isNotEmpty) params['name'] = peerName;
       if (peerPhoto.isNotEmpty) params['photo'] = peerPhoto;
+      params['peerId'] = widget.providerId;
       final qs = params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&');
       final path = qs.isEmpty ? '/dchat/$convId' : '/dchat/$convId?$qs';
 

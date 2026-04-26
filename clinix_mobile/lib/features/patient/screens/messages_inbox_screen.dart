@@ -139,7 +139,17 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
                                   ),
                               ],
                             ),
-                            onTap: () => context.push('/dchat/$convId?name=${Uri.encodeComponent(peerName)}${peerPhoto != null && peerPhoto.isNotEmpty ? '&photo=${Uri.encodeComponent(peerPhoto)}' : ''}'),
+                            onTap: () {
+                              final peerId = c['peer_id']?.toString() ?? '';
+                              final query = StringBuffer('name=${Uri.encodeComponent(peerName)}');
+                              if (peerPhoto != null && peerPhoto.isNotEmpty) {
+                                query.write('&photo=${Uri.encodeComponent(peerPhoto)}');
+                              }
+                              if (peerId.isNotEmpty) {
+                                query.write('&peerId=${Uri.encodeComponent(peerId)}');
+                              }
+                              context.push('/dchat/$convId?$query');
+                            },
                           );
                         },
                       ),

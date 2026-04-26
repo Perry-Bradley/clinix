@@ -166,6 +166,7 @@ final GoRouter appRouter = GoRouter(
         conversationId: s.pathParameters['conversationId'] ?? '',
         peerName: s.uri.queryParameters['name'],
         peerPhoto: s.uri.queryParameters['photo'],
+        peerId: s.uri.queryParameters['peerId'],
       ),
     ),
     GoRoute(

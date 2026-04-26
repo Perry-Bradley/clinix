@@ -16,12 +16,14 @@ class DirectChatScreen extends StatefulWidget {
   final String conversationId;
   final String? peerName;
   final String? peerPhoto;
+  final String? peerId;
 
   const DirectChatScreen({
     super.key,
     required this.conversationId,
     this.peerName,
     this.peerPhoto,
+    this.peerId,
   });
 
   @override
@@ -35,6 +37,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   final List<Map<String, dynamic>> _messages = [];
   StreamSubscription<Map<String, dynamic>>? _sub;
   String? _myUserId;
+  bool _isProvider = false;
   bool _isLoading = true;
   bool _polling = false;
 
@@ -55,6 +58,13 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
       _myUserId = await AuthService.getCurrentUserId();
     } catch (_) {
       _myUserId = null;
+    }
+
+    try {
+      final t = await AuthService.getUserType();
+      _isProvider = t == 'provider';
+    } catch (_) {
+      _isProvider = false;
     }
 
     try {
@@ -402,6 +412,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   }
 
   void _showAttachSheet() {
+    final patientId = widget.peerId;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -414,16 +425,50 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
           children: [
             Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(100))),
             const SizedBox(height: 20),
-            Text('Attach', style: AppTextStyles.headlineSmall.copyWith(fontSize: 16)),
+            Text(_isProvider ? 'Send to patient' : 'Attach', style: AppTextStyles.headlineSmall.copyWith(fontSize: 16)),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _AttachOption(icon: Icons.photo_library_rounded, label: 'Gallery', color: AppColors.sky500, onTap: () { Navigator.pop(ctx); _pickImage(); }),
-                _AttachOption(icon: Icons.camera_alt_rounded, label: 'Camera', color: AppColors.accentCyan, onTap: () { Navigator.pop(ctx); _pickCamera(); }),
-                _AttachOption(icon: Icons.description_rounded, label: 'File', color: AppColors.accentOrange, onTap: () { Navigator.pop(ctx); _pickFile(); }),
-              ],
-            ),
+            if (_isProvider)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _AttachOption(
+                    icon: Icons.description_rounded,
+                    label: 'Report',
+                    color: AppColors.darkBlue500,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.push('/provider/medical-record/new', extra: {'patientId': patientId});
+                    },
+                  ),
+                  _AttachOption(
+                    icon: Icons.medication_rounded,
+                    label: 'Prescription',
+                    color: AppColors.darkBlue500,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.push('/provider/prescription/new', extra: {'patientId': patientId});
+                    },
+                  ),
+                  _AttachOption(
+                    icon: Icons.swap_horiz_rounded,
+                    label: 'Referral',
+                    color: AppColors.darkBlue500,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.push('/provider/refer', extra: {'patientId': patientId});
+                    },
+                  ),
+                ],
+              )
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _AttachOption(icon: Icons.photo_library_rounded, label: 'Gallery', color: AppColors.darkBlue500, onTap: () { Navigator.pop(ctx); _pickImage(); }),
+                  _AttachOption(icon: Icons.camera_alt_rounded, label: 'Camera', color: AppColors.darkBlue500, onTap: () { Navigator.pop(ctx); _pickCamera(); }),
+                  _AttachOption(icon: Icons.description_rounded, label: 'File', color: AppColors.darkBlue500, onTap: () { Navigator.pop(ctx); _pickFile(); }),
+                ],
+              ),
             const SizedBox(height: 8),
           ],
         ),
