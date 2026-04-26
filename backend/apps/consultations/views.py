@@ -588,6 +588,40 @@ class MedicalRecordShareView(APIView):
         return Response({'status': 'granted', 'provider_id': str(provider.provider_id_id)})
 
 
+class PrescriptionShareView(APIView):
+    """Patient grants or revokes another provider's view access to one of
+    their prescriptions — useful when handing the script to a pharmacist or
+    seeing a different doctor for a refill."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, prescription_id):
+        patient = _patient_for_user(request.user)
+        if not patient:
+            return Response(
+                {'error': 'Only patients can share prescriptions.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            prescription = Prescription.objects.get(
+                prescription_id=prescription_id, patient=patient
+            )
+        except Prescription.DoesNotExist:
+            return Response({'error': 'Prescription not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = MedicalRecordShareSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            provider = HealthcareProvider.objects.get(provider_id=serializer.validated_data['provider_id'])
+        except HealthcareProvider.DoesNotExist:
+            return Response({'error': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if serializer.validated_data.get('revoke'):
+            prescription.shared_with.remove(provider)
+            return Response({'status': 'revoked', 'provider_id': str(provider.provider_id_id)})
+        prescription.shared_with.add(provider)
+        return Response({'status': 'granted', 'provider_id': str(provider.provider_id_id)})
+
+
 # ─── Referrals ──────────────────────────────────────────────────────────────
 
 class ReferralListCreateView(generics.ListCreateAPIView):

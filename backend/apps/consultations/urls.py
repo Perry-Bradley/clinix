@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     ConsultationStartView, ConsultationDetailView, ConsultationEndView,
-    ConsultationPrescriptionView, DoctorPrescriptionCreateView,
+    ConsultationPrescriptionView, DoctorPrescriptionCreateView, PrescriptionShareView,
     ConsultationTranscriptView, WebRTCSignalEndpointView,
     AgoraTokenView, ChatFileUploadView, ChatMessageListView,
     PatientRemindersView, ReminderLogView, ReminderAdherenceView,
@@ -15,6 +15,7 @@ urlpatterns = [
     path('<uuid:pk>/end/', ConsultationEndView.as_view(), name='consultation_end'),
     path('<uuid:pk>/prescription/', ConsultationPrescriptionView.as_view(), name='consultation_prescription'),
     path('prescriptions/', DoctorPrescriptionCreateView.as_view(), name='doctor_prescription_create'),
+    path('prescriptions/<uuid:prescription_id>/share/', PrescriptionShareView.as_view(), name='prescription_share'),
     path('<uuid:pk>/transcript/', ConsultationTranscriptView.as_view(), name='consultation_transcript'),
     path('webrtc/signal/', WebRTCSignalEndpointView.as_view(), name='webrtc_signal'),
     path('agora/token/', AgoraTokenView.as_view(), name='agora_token'),

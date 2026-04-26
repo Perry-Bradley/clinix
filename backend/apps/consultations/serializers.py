@@ -4,10 +4,14 @@ from apps.providers.models import HealthcareProvider
 
 class PrescriptionSerializer(serializers.ModelSerializer):
     provider_name = serializers.CharField(source='provider.provider_id.first_name', read_only=True)
-    
+    shared_with_ids = serializers.PrimaryKeyRelatedField(
+        many=True, read_only=True, source='shared_with',
+    )
+
     class Meta:
         model = Prescription
         fields = '__all__'
+        read_only_fields = ('shared_with',)
 
 class MedicalRecordSerializer(serializers.ModelSerializer):
     authored_by_name = serializers.CharField(source='authored_by.provider_id.full_name', read_only=True)

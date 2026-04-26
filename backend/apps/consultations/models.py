@@ -39,6 +39,12 @@ class Prescription(models.Model):
     is_digital = models.BooleanField(default=True)
     issued_at = models.DateTimeField(auto_now_add=True)
     valid_until = models.DateField(null=True, blank=True)
+    # Patient-controlled sharing — providers the patient has granted view
+    # access to this prescription (e.g. when being referred to a pharmacy
+    # or another doctor for a follow-up).
+    shared_with = models.ManyToManyField(
+        HealthcareProvider, blank=True, related_name='shared_prescriptions',
+    )
 
     class Meta:
         db_table = 'prescriptions'
