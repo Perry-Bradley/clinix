@@ -58,6 +58,10 @@ dependencies:
   flutter_ringtone_player: ^4.0.0+3
   vibration: ^2.0.0
   flutter_callkit_incoming: ^2.5.4
+  # Pinned because flutter_callkit_incoming pulls in an older device_info_plus
+  # whose Java package path doesn't match what the plugin registrant generates
+  # — forcing 11.x lines them up so `flutter run` builds cleanly.
+  device_info_plus: ^11.1.0
 
   # Communication & Video Call
   agora_rtc_engine: ^6.3.2
