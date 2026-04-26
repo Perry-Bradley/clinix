@@ -62,24 +62,14 @@ android {
         }
     }
 
-    // Per-ABI APKs cut download size by ~40% — each phone only pulls the
-    // native libs for its own CPU. Run `flutter build apk --split-per-abi
-    // --release` to produce the three small APKs.
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86_64")
-            isUniversalApk = false
-        }
-    }
+    // Per-ABI splitting is handled by Flutter's CLI flag — run
+    //   flutter build apk --split-per-abi --release
+    // to get a per-ABI APK in build/app/outputs/flutter-apk/. Configuring
+    // `splits.abi` here clashes with Flutter Gradle's own ndk.abiFilters
+    // and breaks the debug build, so we keep this section out.
 
-    // Strip extra Android resources we don't ship in.
-    bundle {
-        language { enableSplit = true }
-        density { enableSplit = true }
-        abi { enableSplit = true }
-    }
+    // For Play Store AAB uploads, language/density/abi splits are on by
+    // default in modern Android Gradle plugin — no need to declare.
 
     packagingOptions {
         resources {
