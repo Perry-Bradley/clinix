@@ -244,11 +244,14 @@ class _ProviderDashboard extends StatefulWidget {
 
 class _ProviderDashboardState extends State<_ProviderDashboard> {
   String _providerName = 'Doctor';
+  String _greeting = 'Good Day';
+  IconData _greetingIcon = Icons.wb_sunny_rounded;
   int _todayAppointments = 0;
   int _pendingRequests = 0;
   double _rating = 0.0;
   List<Map<String, dynamic>> _appointments = [];
   bool _loadingDashboard = true;
+  bool _isAvailable = true;
 
   @override
   void initState() {
@@ -256,6 +259,21 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
     _loadProviderName();
     _loadDashboard();
     _loadAppointments();
+    _resolveGreeting();
+  }
+
+  void _resolveGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      _greeting = 'Good Morning';
+      _greetingIcon = Icons.wb_twilight_rounded;
+    } else if (hour >= 12 && hour < 17) {
+      _greeting = 'Good Afternoon';
+      _greetingIcon = Icons.wb_sunny_rounded;
+    } else {
+      _greeting = 'Good Evening';
+      _greetingIcon = Icons.nightlight_round;
+    }
   }
 
   Future<void> _loadProviderName() async {
@@ -316,132 +334,303 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final w = mq.size.width;
+    final hp = w * 0.05;
+    final initial = _providerName.isNotEmpty ? _providerName[0].toUpperCase() : 'D';
+
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(24, 60, 24, 30),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                bottom: BorderSide(color: AppColors.grey200, width: 1),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        SliverAppBar(
+          pinned: true,
+          backgroundColor: AppColors.grey50,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          automaticallyImplyLeading: false,
+          toolbarHeight: 80,
+          titleSpacing: 0,
+          title: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                GestureDetector(
+                  onTap: () => Scaffold.of(context).openDrawer(),
+                  behavior: HitTestBehavior.opaque,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 50, height: 50,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.darkBlue500,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.darkBlue500.withOpacity(0.25),
+                              blurRadius: 14,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          initial,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: -2, bottom: -2,
+                        child: Container(
+                          width: 18, height: 18,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.grey200),
+                          ),
+                          child: const Icon(Icons.menu_rounded, color: AppColors.darkBlue900, size: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
                         children: [
-                          Text('Doctor Portal', style: AppTextStyles.caption.copyWith(color: AppColors.grey500, fontSize: 13, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 4),
-                          Text(_providerName, style: AppTextStyles.displayLarge.copyWith(fontSize: 22, color: AppColors.darkBlue900)),
-                          const SizedBox(height: 2),
-                          Text('Healthcare Provider', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500)),
+                          Icon(_greetingIcon, size: 14, color: AppColors.darkBlue500),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Dr. $_greeting',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              color: AppColors.grey500,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                    GestureDetector(
-                      onTap: () => context.push('/notifications'),
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.grey50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.grey200),
+                      const SizedBox(height: 3),
+                      Text(
+                        _providerName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.darkBlue900,
+                          height: 1.1,
+                          letterSpacing: -0.3,
                         ),
-                        child: const Icon(Icons.notifications_none_rounded, color: AppColors.darkBlue500, size: 22),
                       ),
-                    ),
-                    GestureDetector(
-                      onTap: () => context.push('/provider/messages'),
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        margin: const EdgeInsets.only(right: 10),
-                        decoration: BoxDecoration(
-                          color: AppColors.grey50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.grey200),
-                        ),
-                        child: const Icon(Icons.chat_bubble_rounded, color: AppColors.darkBlue500, size: 22),
-                      ),
-                    ),
-                    _AvailabilityToggle(),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 24),
-                // Stats Row
-                Row(
-                  children: [
-                    Expanded(child: _StatChip(label: 'Today', value: '$_todayAppointments', icon: Icons.today_rounded)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _StatChip(label: 'Pending', value: '$_pendingRequests', icon: Icons.pending_actions_rounded)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _StatChip(label: 'Rating', value: _rating > 0 ? _rating.toStringAsFixed(1) : '—', icon: Icons.star_rounded)),
-                  ],
+                GestureDetector(
+                  onTap: () => context.push('/notifications'),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    width: 48, height: 48,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.grey200),
+                    ),
+                    child: const Icon(Icons.notifications_none_rounded, color: AppColors.darkBlue900, size: 22),
+                  ),
                 ),
               ],
             ),
           ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.all(20),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Text("Today's Appointments", style: AppTextStyles.headlineMedium),
-              const SizedBox(height: 14),
-              if (_appointments.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(20),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(70),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
+              child: GestureDetector(
+                onTap: () => setState(() => _isAvailable = !_isAvailable),
+                child: Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: AppColors.grey200),
                   ),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.event_available_rounded, size: 48, color: AppColors.grey200),
-                        const SizedBox(height: 12),
-                        Text('No appointments today', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400)),
-                      ],
-                    ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32, height: 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: (_isAvailable ? AppColors.accentGreen : AppColors.grey400).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Container(
+                          width: 8, height: 8,
+                          decoration: BoxDecoration(
+                            color: _isAvailable ? AppColors.accentGreen : AppColors.grey400,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _isAvailable ? 'Online · accepting consults' : 'Offline · paused',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: _isAvailable ? AppColors.darkBlue900 : AppColors.grey500,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              'Tap to toggle',
+                              style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.grey500),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: 36, height: 22,
+                        decoration: BoxDecoration(
+                          color: _isAvailable ? AppColors.darkBlue500 : AppColors.grey200,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: AnimatedAlign(
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOut,
+                          alignment: _isAvailable ? Alignment.centerRight : Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Container(
+                              width: 18, height: 18,
+                              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(hp, w * 0.05, hp, mq.padding.bottom + 24),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              // Stats — three chunky white cards (matches patient feature cards)
+              Row(
+                children: [
+                  Expanded(child: _StatCard(label: 'Today', value: '$_todayAppointments', icon: Icons.today_rounded)),
+                  SizedBox(width: w * 0.03),
+                  Expanded(child: _StatCard(label: 'Pending', value: '$_pendingRequests', icon: Icons.pending_actions_rounded)),
+                  SizedBox(width: w * 0.03),
+                  Expanded(child: _StatCard(label: 'Rating', value: _rating > 0 ? _rating.toStringAsFixed(1) : '—', icon: Icons.star_rounded)),
+                ],
+              ),
+              SizedBox(height: w * 0.06),
+
+              // Today's Appointments
+              Text(
+                "Today's Appointments",
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: w * 0.042,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.darkBlue900,
+                ),
+              ),
+              SizedBox(height: w * 0.03),
+              if (_loadingDashboard)
+                Container(
+                  padding: EdgeInsets.all(w * 0.06),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.grey200),
+                  ),
+                  child: const Center(child: CircularProgressIndicator(color: AppColors.darkBlue500, strokeWidth: 2)),
+                )
+              else if (_appointments.isEmpty)
+                Container(
+                  padding: EdgeInsets.all(w * 0.06),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.grey200),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.event_available_rounded, size: 36, color: AppColors.grey400),
+                      SizedBox(height: w * 0.02),
+                      Text(
+                        'No appointments today',
+                        style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.034, color: AppColors.grey500, fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
                 )
               else
                 ..._appointments.map((a) => _ProviderApptCard(appointment: a)),
-              const SizedBox(height: 24),
-              Text('Quick Actions', style: AppTextStyles.headlineMedium),
-              const SizedBox(height: 14),
+              SizedBox(height: w * 0.07),
+
+              // Quick Actions — three white cards matching patient feature cards
+              Text(
+                'Quick Actions',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: w * 0.042,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.darkBlue900,
+                ),
+              ),
+              SizedBox(height: w * 0.03),
               Row(
                 children: [
                   Expanded(
                     child: _ProviderQuickCard(
                       icon: Icons.description_outlined,
-                      label: 'Write\nPrescription',
-                      color: AppColors.sky500,
+                      label: 'Write Prescription',
                       onTap: () => context.push('/provider/prescription/new'),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: w * 0.03),
                   Expanded(
                     child: _ProviderQuickCard(
                       icon: Icons.chat_bubble_outline_rounded,
-                      label: 'Patient\nChats',
-                      color: AppColors.accentCyan,
+                      label: 'Patient Chats',
                       onTap: () => context.push('/provider/messages'),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: w * 0.03),
                   Expanded(
                     child: _ProviderQuickCard(
                       icon: Icons.bar_chart_rounded,
-                      label: 'View\nEarnings',
-                      color: AppColors.darkBlue500,
+                      label: 'View Earnings',
                       onTap: () {
                         final state = context.findAncestorStateOfType<_ProviderHomePageState>();
                         state?.setState(() => state._selectedTab = 2);
@@ -458,67 +647,55 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
   }
 }
 
-class _AvailabilityToggle extends StatefulWidget {
-  @override
-  State<_AvailabilityToggle> createState() => __AvailabilityToggleState();
-}
-
-class __AvailabilityToggleState extends State<_AvailabilityToggle> {
-  bool _isAvailable = true;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => setState(() => _isAvailable = !_isAvailable),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: _isAvailable ? AppColors.accentGreen.withOpacity(0.2) : Colors.red.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _isAvailable ? AppColors.accentGreen : Colors.redAccent),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: 8, height: 8,
-              decoration: BoxDecoration(color: _isAvailable ? AppColors.accentGreen : Colors.redAccent, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 6),
-            Text(_isAvailable ? 'Online' : 'Offline', style: AppTextStyles.caption.copyWith(color: _isAvailable ? AppColors.accentGreen : Colors.redAccent, fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
+class _StatCard extends StatelessWidget {
   final String label, value;
   final IconData icon;
-  const _StatChip({required this.label, required this.value, required this.icon});
+  const _StatCard({required this.label, required this.value, required this.icon});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 112,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-        decoration: BoxDecoration(
-          color: AppColors.grey50,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.grey200),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: AppColors.darkBlue500, size: 18),
-            const SizedBox(height: 6),
-            Text(value, style: AppTextStyles.headlineMedium.copyWith(color: AppColors.darkBlue500, fontSize: 20, fontWeight: FontWeight.w800)),
-            Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.grey500, fontSize: 11)),
-          ],
-        ),
+    final w = MediaQuery.of(context).size.width;
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: w * 0.04, horizontal: w * 0.025),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.grey200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: EdgeInsets.all(w * 0.022),
+            decoration: BoxDecoration(
+              color: AppColors.darkBlue500.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppColors.darkBlue500, size: w * 0.045),
+          ),
+          SizedBox(height: w * 0.025),
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: w * 0.058,
+              fontWeight: FontWeight.w800,
+              color: AppColors.darkBlue900,
+              height: 1,
+              letterSpacing: -0.5,
+            ),
+          ),
+          SizedBox(height: w * 0.008),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: w * 0.028,
+              fontWeight: FontWeight.w600,
+              color: AppColors.grey500,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -565,68 +742,103 @@ class _ProviderApptCard extends StatelessWidget {
       statusColor = AppColors.accentGreen;
     }
 
+    final initials = _initialsFromName(name);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.grey200),
-        boxShadow: [BoxShadow(color: AppColors.darkBlue900.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
       ),
       child: Column(
         children: [
           Row(
             children: [
               Container(
-                width: 54, height: 54,
-                decoration: BoxDecoration(
-                  color: AppColors.sky100,
-                  borderRadius: BorderRadius.circular(18),
+                width: 48, height: 48,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(color: AppColors.darkBlue500, shape: BoxShape.circle),
+                child: Text(
+                  initials,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
                 ),
-                child: const Icon(Icons.person_rounded, color: AppColors.sky500, size: 28),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: AppTextStyles.headlineSmall.copyWith(fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Text('${isVideo ? "Video" : "In-Person"} • $time',
-                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky500, fontSize: 13)),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.darkBlue900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Icon(isVideo ? Icons.videocam_rounded : Icons.local_hospital_rounded, color: AppColors.darkBlue500, size: 13),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${isVideo ? "Video" : "In-Person"} · $time',
+                          style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.grey500, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
                   color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   status[0].toUpperCase() + status.substring(1),
-                  style: AppTextStyles.caption.copyWith(color: statusColor, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: statusColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                  ),
                 ),
               ),
             ],
           ),
           if (!isCompleted && !isCancelled) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => apptId.isEmpty ? null : context.push('/appointments/$apptId'),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
                       side: const BorderSide(color: AppColors.grey200),
+                      foregroundColor: AppColors.darkBlue900,
                     ),
-                    child: Text("View", style: AppTextStyles.labelLarge.copyWith(color: AppColors.grey700, fontSize: 12)),
+                    child: const Text(
+                      'View',
+                      style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 12),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
@@ -646,13 +858,16 @@ class _ProviderApptCard extends StatelessWidget {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.sky500,
+                      backgroundColor: AppColors.darkBlue500,
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
                     ),
-                    child: Text(isVideo ? "Start Call" : "Open Chat", style: AppTextStyles.labelLarge.copyWith(fontSize: 12)),
+                    child: Text(
+                      isVideo ? 'Start Call' : 'Open Chat',
+                      style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 12),
+                    ),
                   ),
                 ),
               ],
@@ -662,31 +877,58 @@ class _ProviderApptCard extends StatelessWidget {
       ),
     );
   }
+
+  String _initialsFromName(String fullName) {
+    final cleaned = fullName
+        .replaceAll(RegExp(r'^(Dr\.?|Doctor|Mr\.?|Mrs\.?|Ms\.?)\s+', caseSensitive: false), '')
+        .trim();
+    if (cleaned.isEmpty) return '?';
+    final parts = cleaned.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  }
 }
 
 class _ProviderQuickCard extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Color color;
   final VoidCallback? onTap;
-  const _ProviderQuickCard({required this.icon, required this.label, required this.color, this.onTap});
+  const _ProviderQuickCard({required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
+        padding: EdgeInsets.symmetric(vertical: w * 0.045, horizontal: w * 0.025),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
+          border: Border.all(color: AppColors.grey200),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(label, textAlign: TextAlign.center, style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+            Container(
+              padding: EdgeInsets.all(w * 0.022),
+              decoration: BoxDecoration(
+                color: AppColors.darkBlue500.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: AppColors.darkBlue500, size: w * 0.05),
+            ),
+            SizedBox(height: w * 0.025),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: w * 0.032,
+                fontWeight: FontWeight.w800,
+                color: AppColors.darkBlue900,
+                height: 1.2,
+              ),
+            ),
           ],
         ),
       ),
