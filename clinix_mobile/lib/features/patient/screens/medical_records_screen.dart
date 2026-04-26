@@ -705,7 +705,7 @@ class _ShareRecordSheetState extends State<_ShareRecordSheet> {
                               color: Colors.white,
                               border: Border.all(
                                 color: isShared
-                                    ? AppColors.darkBlue800
+                                    ? AppColors.darkBlue500
                                     : AppColors.grey200,
                                 width: isShared ? 1.5 : 1,
                               ),
@@ -715,14 +715,19 @@ class _ShareRecordSheetState extends State<_ShareRecordSheet> {
                               children: [
                                 Container(
                                   width: 40, height: 40,
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [AppColors.sky400, AppColors.darkBlue800],
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
+                                  alignment: Alignment.center,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.darkBlue500,
+                                    shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(Icons.local_hospital_rounded,
-                                      color: Colors.white, size: 18),
+                                  child: Text(
+                                    _initials(name),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13,
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -739,7 +744,8 @@ class _ShareRecordSheetState extends State<_ShareRecordSheet> {
                                       Text(
                                         specialty,
                                         style: AppTextStyles.caption.copyWith(
-                                          color: AppColors.grey500,
+                                          color: AppColors.darkBlue500,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                     ],
@@ -758,12 +764,12 @@ class _ShareRecordSheetState extends State<_ShareRecordSheet> {
                                           decoration: BoxDecoration(
                                             color: isShared
                                                 ? AppColors.grey50
-                                                : AppColors.darkBlue800,
+                                                : AppColors.darkBlue500,
                                             borderRadius: BorderRadius.circular(10),
                                             border: Border.all(
                                               color: isShared
                                                   ? AppColors.grey200
-                                                  : AppColors.darkBlue800,
+                                                  : AppColors.darkBlue500,
                                             ),
                                           ),
                                           child: Text(
@@ -786,6 +792,16 @@ class _ShareRecordSheetState extends State<_ShareRecordSheet> {
         ],
       ),
     );
+  }
+
+  String _initials(String fullName) {
+    final cleaned = fullName
+        .replaceAll(RegExp(r'^(Dr\.?|Doctor|Mr\.?|Mrs\.?|Ms\.?)\s+', caseSensitive: false), '')
+        .trim();
+    if (cleaned.isEmpty) return '?';
+    final parts = cleaned.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
   }
 }
 
