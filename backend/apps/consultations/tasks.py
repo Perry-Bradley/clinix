@@ -160,6 +160,30 @@ def transcribe_and_draft_record(consultation_id: str):
     logger.info(f'transcribe_and_draft: draft {record.record_id} ready for provider')
 
 
+def _gcp_credentials():
+    """Build google.auth credentials from the same JSON env var Firebase uses
+    so we don't need GOOGLE_APPLICATION_CREDENTIALS as a file path on Railway."""
+    import os
+    import json
+    creds_json = os.environ.get('FIREBASE_ADMIN_CREDENTIALS_JSON')
+    if creds_json:
+        try:
+            from google.oauth2 import service_account
+            return service_account.Credentials.from_service_account_info(json.loads(creds_json))
+        except Exception as e:
+            logger.warning(f'Could not build credentials from FIREBASE_ADMIN_CREDENTIALS_JSON: {e}')
+    # Local dev: fall back to firebase_key.json sitting beside manage.py.
+    try:
+        from django.conf import settings as dj_settings
+        from google.oauth2 import service_account
+        key_path = os.path.join(dj_settings.BASE_DIR, 'firebase_key.json')
+        if os.path.exists(key_path):
+            return service_account.Credentials.from_service_account_file(key_path)
+    except Exception as e:
+        logger.warning(f'Could not build credentials from firebase_key.json: {e}')
+    return None
+
+
 def _run_speech_to_text(audio_gs_uri: str) -> str:
     """Long-running Google Cloud Speech-to-Text recognise. Audio is read from
     a `gs://...` URI in Firebase Storage. Detects English/French and returns
@@ -170,49 +194,38 @@ def _run_speech_to_text(audio_gs_uri: str) -> str:
         logger.error('google-cloud-speech is not installed; cannot transcribe.')
         return ''
 
-    try:
-        client = speech.SpeechClient()
+    creds = _gcp_credentials()
+
+    def _recognise(model: str | None) -> str:
+        client = speech.SpeechClient(credentials=creds) if creds else speech.SpeechClient()
         audio = speech.RecognitionAudio(uri=audio_gs_uri)
-        config = speech.RecognitionConfig(
+        cfg_kwargs = dict(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=16000,
             language_code='en-US',
             alternative_language_codes=['fr-FR'],
             enable_automatic_punctuation=True,
-            model='medical_conversation',
-            use_enhanced=True,
         )
+        if model:
+            cfg_kwargs['model'] = model
+            cfg_kwargs['use_enhanced'] = True
+        config = speech.RecognitionConfig(**cfg_kwargs)
         operation = client.long_running_recognize(config=config, audio=audio)
-        # Wait up to 10 min for the transcription to finish — well over the
-        # length of any sane consultation.
         response = operation.result(timeout=600)
-        parts = []
-        for result in response.results:
-            if result.alternatives:
-                parts.append(result.alternatives[0].transcript.strip())
-        return ' '.join(parts).strip()
-    except Exception:
-        # Fall back to the standard model — `medical_conversation` requires
-        # the medical add-on to be enabled on the GCP project; if it's not,
-        # try again without it so v1 still works on a vanilla project.
+        return ' '.join(
+            r.alternatives[0].transcript.strip()
+            for r in response.results
+            if r.alternatives
+        ).strip()
+
+    try:
+        # Try the medical model first; auto-fall back to the standard model
+        # if the medical add-on isn't enabled on the project.
+        return _recognise('medical_conversation')
+    except Exception as e:
+        logger.warning(f'medical_conversation STT failed, trying default: {e}')
         try:
-            from google.cloud import speech_v1 as speech
-            client = speech.SpeechClient()
-            audio = speech.RecognitionAudio(uri=audio_gs_uri)
-            config = speech.RecognitionConfig(
-                encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-                sample_rate_hertz=16000,
-                language_code='en-US',
-                alternative_language_codes=['fr-FR'],
-                enable_automatic_punctuation=True,
-            )
-            operation = client.long_running_recognize(config=config, audio=audio)
-            response = operation.result(timeout=600)
-            parts = []
-            for result in response.results:
-                if result.alternatives:
-                    parts.append(result.alternatives[0].transcript.strip())
-            return ' '.join(parts).strip()
-        except Exception as e:
-            logger.exception(f'Google Speech-to-Text failed: {e}')
+            return _recognise(None)
+        except Exception as e2:
+            logger.exception(f'Google Speech-to-Text failed: {e2}')
             return ''
