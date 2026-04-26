@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
@@ -131,6 +132,12 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
     try {
       final reply = await AiChatService.sendMessage(_sessionId!, text, imageBase64: imageDataUri);
       setState(() => _messages.add(ChatMessage(text: reply, isUser: false)));
+      // If the AI just announced it's about to suggest a provider, fetch the
+      // recommended specialty/role + render doctor cards inline so the patient
+      // can tap straight through to a profile without ending the conversation.
+      if (_shouldInjectRecommendation(reply)) {
+        unawaited(_injectInlineRecommendation());
+      }
     } on DioException catch (e) {
       final body = e.response?.data;
       final map = body is Map ? Map<String, dynamic>.from(body as Map) : <String, dynamic>{};
@@ -140,6 +147,71 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
       _scrollToBottom();
+    }
+  }
+
+  bool _shouldInjectRecommendation(String reply) {
+    final r = reply.toLowerCase();
+    // Phrases the AI uses when it commits to recommending a provider.
+    const triggers = [
+      "i'm suggesting", "i am suggesting", "suggesting a doctor",
+      "suggesting a generalist", "suggesting a specialist",
+      "connecting you with", "connect you with",
+      "matching you with", "match you with",
+      "i'll find a doctor", "i will find a doctor",
+      "let me suggest", "let me recommend",
+      "i'll recommend", "i will recommend",
+      'on the clinix platform',
+    ];
+    return triggers.any(r.contains);
+  }
+
+  Future<void> _injectInlineRecommendation() async {
+    if (_sessionId == null) return;
+    // Avoid double-injecting if the previous message already had cards.
+    if (_messages.isNotEmpty &&
+        _messages.last.inlineRecommendation != null) {
+      return;
+    }
+    try {
+      final token = await AuthService.getAccessToken();
+      final res = await Dio().post(
+        '${ApiConstants.baseUrl}ai-engine/chat/$_sessionId/recommend/',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = res.data;
+      if (data is! Map) return;
+      final assessment = data['assessment'];
+      if (assessment is! Map) return;
+
+      final wantsRaw = assessment['wants_provider_suggestion'];
+      final wantsSuggestion = !(wantsRaw is bool && wantsRaw == false) &&
+          !(wantsRaw is String && wantsRaw.toLowerCase() == 'false');
+      if (!wantsSuggestion) return;
+
+      final specialty = (assessment['recommended_specialization'] ?? '').toString();
+      if (specialty.isEmpty) return;
+
+      final urgency = (assessment['triage_priority'] ?? '').toString().toLowerCase().contains('high')
+          ? 'high'
+          : 'standard';
+      final role = (assessment['provider_role'] ?? 'doctor').toString().toLowerCase();
+
+      if (!mounted) return;
+      setState(() {
+        _messages.add(ChatMessage(
+          text: '',
+          isUser: false,
+          inlineRecommendation: {
+            'specialty': specialty,
+            'urgency': urgency,
+            'providerRole': role,
+          },
+        ));
+      });
+      _scrollToBottom();
+    } catch (_) {
+      // Best-effort: if the recommend call fails, the chat keeps working.
     }
   }
 
@@ -853,6 +925,9 @@ class ChatMessage extends StatelessWidget {
   final bool isFinal;
   final Map<String, dynamic>? assessment;
   final String? imageDataUri;
+  // Mid-conversation recommendation (no final summary). Map keys:
+  // {specialty, urgency, providerRole}.
+  final Map<String, dynamic>? inlineRecommendation;
 
   const ChatMessage({
     super.key,
@@ -861,6 +936,7 @@ class ChatMessage extends StatelessWidget {
     this.isFinal = false,
     this.assessment,
     this.imageDataUri,
+    this.inlineRecommendation,
   });
 
   @override
@@ -869,12 +945,14 @@ class ChatMessage extends StatelessWidget {
     final bool hasImage = img != null && img.trim().isNotEmpty;
     final String? b64 = hasImage && img.contains('base64,') ? img.split('base64,')[1] : null;
 
+    final bool hasText = text.trim().isNotEmpty;
+    final bool showBubble = hasText || hasImage;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Row(
+          if (showBubble) Row(
             mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -929,6 +1007,14 @@ class ChatMessage extends StatelessWidget {
             ],
           ),
           if (isFinal && assessment != null) _buildFinalSummary(context),
+          if (inlineRecommendation != null) Padding(
+            padding: const EdgeInsets.only(top: 10, left: 40, right: 8),
+            child: _RecommendedDoctorsCard(
+              specialty: (inlineRecommendation!['specialty'] ?? 'Generalist').toString(),
+              urgency: (inlineRecommendation!['urgency'] ?? 'standard').toString(),
+              providerRole: (inlineRecommendation!['providerRole'] ?? 'doctor').toString(),
+            ),
+          ),
         ],
       ),
     );
@@ -1270,6 +1356,16 @@ class _RecommendedDoctorsCardState extends State<_RecommendedDoctorsCard> {
   }
 
   Widget _doctorTile(BuildContext context, Map<String, dynamic> d) {
+    final providerId = d['provider_id']?.toString() ?? '';
+    return GestureDetector(
+      onTap: providerId.isEmpty
+          ? null
+          : () => context.push('/patient/doctor-profile/$providerId'),
+      child: _doctorTileBody(context, d),
+    );
+  }
+
+  Widget _doctorTileBody(BuildContext context, Map<String, dynamic> d) {
     final name = d['full_name']?.toString() ?? 'Doctor';
     final specialty = (d['specialty_name'] ??
             d['other_specialty'] ??

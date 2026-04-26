@@ -231,3 +231,45 @@ class AIChatCompleteView(APIView):
         session.save()
 
         return Response({'status': 'completed', 'assessment': assessment})
+
+
+class AIChatRecommendView(APIView):
+    """Run a structured assessment WITHOUT ending the session.
+
+    Used when the AI offers to suggest a doctor mid-conversation: the mobile
+    calls this to get the recommended specialty + role, then renders the
+    recommendation cards inline so the user can keep chatting.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, session_id):
+        session = get_object_or_404(
+            AISymptomSession, session_id=session_id, patient__patient_id=request.user
+        )
+
+        history = []
+        for msg in session.messages.all().order_by('timestamp'):
+            history.append({
+                'role': 'user' if msg.sender == 'user' else 'model',
+                'parts': [msg.message],
+            })
+
+        try:
+            assessment = medlm_client.get_structured_assessment(history)
+        except MedLMNotConfigured as e:
+            return Response(
+                {'error': 'medlm_not_configured', 'detail': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except MedLMInferenceError as e:
+            return Response(
+                {'error': 'medlm_inference_failed', 'detail': str(e)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Persist the cached suggestion so the final summary stays consistent,
+        # but DO NOT mark the session inactive — the patient is still chatting.
+        session.suggested_specialization = assessment.get('recommended_specialization', 'Generalist')
+        session.save(update_fields=['suggested_specialization'])
+
+        return Response({'assessment': assessment})

@@ -4,7 +4,8 @@ from .views import (
     AIChatStartView,
     AIChatMessageView,
     AIChatDetailView,
-    AIChatCompleteView
+    AIChatCompleteView,
+    AIChatRecommendView,
 )
 
 urlpatterns = [
@@ -13,4 +14,5 @@ urlpatterns = [
     path('chat/<uuid:session_id>/message/', AIChatMessageView.as_view(), name='ai_chat_message'),
     path('chat/<uuid:session_id>/', AIChatDetailView.as_view(), name='ai_chat_detail'),
     path('chat/<uuid:session_id>/complete/', AIChatCompleteView.as_view(), name='ai_chat_complete'),
+    path('chat/<uuid:session_id>/recommend/', AIChatRecommendView.as_view(), name='ai_chat_recommend'),
 ]
