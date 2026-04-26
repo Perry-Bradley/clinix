@@ -161,26 +161,38 @@ def transcribe_and_draft_record(consultation_id: str):
 
 
 def _gcp_credentials():
-    """Build google.auth credentials from the same JSON env var Firebase uses
-    so we don't need GOOGLE_APPLICATION_CREDENTIALS as a file path on Railway."""
+    """Build google.auth credentials for the Speech-to-Text client.
+
+    Preference order:
+      1. GCP_STT_CREDENTIALS_JSON  — dedicated service account on the GCP
+         project where Speech-to-Text is enabled (works even when STT lives
+         on a different GCP project than Firebase, which is the common case
+         for teams that set up Maps/Gemini/STT on one account and Firebase
+         Auth on another).
+      2. FIREBASE_ADMIN_CREDENTIALS_JSON — fall back to the Firebase service
+         account if STT happens to be enabled on the same project.
+      3. Local dev: firebase_key.json or gcp-key.json next to manage.py.
+    """
     import os
     import json
-    creds_json = os.environ.get('FIREBASE_ADMIN_CREDENTIALS_JSON')
-    if creds_json:
-        try:
-            from google.oauth2 import service_account
-            return service_account.Credentials.from_service_account_info(json.loads(creds_json))
-        except Exception as e:
-            logger.warning(f'Could not build credentials from FIREBASE_ADMIN_CREDENTIALS_JSON: {e}')
-    # Local dev: fall back to firebase_key.json sitting beside manage.py.
+    from google.oauth2 import service_account
+
+    for env_var in ('GCP_STT_CREDENTIALS_JSON', 'FIREBASE_ADMIN_CREDENTIALS_JSON'):
+        raw = os.environ.get(env_var)
+        if raw:
+            try:
+                return service_account.Credentials.from_service_account_info(json.loads(raw))
+            except Exception as e:
+                logger.warning(f'Could not build credentials from {env_var}: {e}')
+
     try:
         from django.conf import settings as dj_settings
-        from google.oauth2 import service_account
-        key_path = os.path.join(dj_settings.BASE_DIR, 'firebase_key.json')
-        if os.path.exists(key_path):
-            return service_account.Credentials.from_service_account_file(key_path)
+        for fname in ('gcp-key.json', 'firebase_key.json'):
+            key_path = os.path.join(dj_settings.BASE_DIR, fname)
+            if os.path.exists(key_path):
+                return service_account.Credentials.from_service_account_file(key_path)
     except Exception as e:
-        logger.warning(f'Could not build credentials from firebase_key.json: {e}')
+        logger.warning(f'Could not build credentials from key file: {e}')
     return None
 
 
