@@ -36,6 +36,7 @@ import '../../features/patient/screens/lab_tests_screen.dart';
 import '../../features/patient/screens/book_lab_test_screen.dart';
 import '../../features/patient/screens/home_treatment_screen.dart';
 import '../../features/patient/screens/medication_reminders_screen.dart';
+import '../../features/patient/screens/nurses_list_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -99,6 +100,10 @@ final GoRouter appRouter = GoRouter(
       builder: (c, s) => DoctorProfileScreen(
         providerId: s.pathParameters['providerId'] ?? '',
       ),
+    ),
+    GoRoute(
+      path: '/patient/nurses',
+      builder: (c, s) => const NursesListScreen(),
     ),
     GoRoute(
       path: '/register/provider-enrollment',

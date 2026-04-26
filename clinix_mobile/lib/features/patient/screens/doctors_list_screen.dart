@@ -93,7 +93,7 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
       if (mounted) {
         setState(() { 
           List<dynamic> results = [];
-          
+
           if (response.data is List) {
             results = response.data;
           } else if (response.data is Map) {
@@ -102,9 +102,16 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
             // Handle cases where response.data is a String (e.g. HTML 500 error)
             _error = 'Backend returned an unexpected response format.';
           }
-          
+
+          // The Doctors tab is for doctors only (generalist/specialist/midwife).
+          // Nurses are discovered through the HomeCare and Lab-Test flows.
+          results = results.where((d) {
+            final role = (d['provider_role'] ?? '').toString().toLowerCase();
+            return role != 'nurse';
+          }).toList();
+
           _doctors = results;
-          _isLoading = false; 
+          _isLoading = false;
         });
       }
     } catch (e) {
@@ -245,7 +252,7 @@ class _DoctorsHeader extends StatelessWidget {
   }
 
   void _showFilterSheet(BuildContext context) {
-    const specs = ['All', 'Generalist', 'Nurse', 'Midwife', 'Specialist'];
+    const specs = ['All', 'Generalist', 'Midwife', 'Specialist'];
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,

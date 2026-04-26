@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/auth_service.dart';
@@ -31,10 +32,28 @@ class _BookLabTestScreenState extends State<BookLabTestScreen> {
 
   Future<void> _loadNurses() async {
     try {
+      // Pull live coordinates so the ranking can sort by proximity. Nurses
+      // travel to the patient, so distance dominates the ranking.
+      double? lat;
+      double? lng;
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 4),
+        );
+        lat = pos.latitude;
+        lng = pos.longitude;
+      } catch (_) {}
+
       final token = await AuthService.getAccessToken();
       final res = await Dio().get(
-        '${ApiConstants.baseUrl}providers/nearby/',
-        queryParameters: {'specialty': 'nurse'},
+        '${ApiConstants.baseUrl}providers/recommended/',
+        queryParameters: {
+          'role': 'nurse',
+          'limit': 3,
+          if (lat != null) 'lat': lat,
+          if (lng != null) 'lng': lng,
+        },
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
       final data = res.data is List ? res.data : (res.data['results'] ?? []);
@@ -91,13 +110,30 @@ class _BookLabTestScreenState extends State<BookLabTestScreen> {
                       decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(14)),
                       child: Center(child: Text('No nurses available in your area', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.034, color: AppColors.grey400))),
                     )
-                  else
-                    ...(_nurses.map((n) => _NurseCard(
+                  else ...[
+                    ..._nurses.map((n) => _NurseCard(
                       nurse: n,
                       selected: _selectedNurse?['provider_id'] == n['provider_id'],
                       onTap: () => setState(() => _selectedNurse = Map<String, dynamic>.from(n)),
                       onMessage: () => context.push('/dchat/launch/${n['provider_id']}?name=${Uri.encodeComponent(n['full_name'] ?? 'Nurse')}'),
-                    ))),
+                    )),
+                    GestureDetector(
+                      onTap: () => context.push('/patient/nurses'),
+                      child: Padding(
+                        padding: EdgeInsets.only(top: w * 0.01),
+                        child: Row(
+                          children: [
+                            Text(
+                              'View all nurses',
+                              style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.032, fontWeight: FontWeight.w700, color: AppColors.darkBlue500),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.darkBlue500),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
 
                   SizedBox(height: w * 0.06),
                   _sectionTitle('Your Address', w),
@@ -231,46 +267,85 @@ class _NurseCard extends StatelessWidget {
   final VoidCallback onMessage;
   const _NurseCard({required this.nurse, required this.selected, required this.onTap, required this.onMessage});
 
+  String _locationLabel() {
+    final locs = nurse['locations'];
+    if (locs is List && locs.isNotEmpty) {
+      final first = locs.first;
+      if (first is Map) {
+        final city = first['city']?.toString().trim() ?? '';
+        final region = first['region']?.toString().trim() ?? '';
+        return [city, region].where((s) => s.isNotEmpty).join(', ');
+      }
+    }
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
     final name = nurse['full_name']?.toString() ?? 'Nurse';
-    final rating = (double.tryParse(nurse['rating']?.toString() ?? '') ?? 0).toStringAsFixed(1);
-    final fee = nurse['consultation_fee']?.toString() ?? '0';
+    final feeRaw = nurse['consultation_fee']?.toString() ?? '0';
+    final fee = double.tryParse(feeRaw)?.toInt() ?? 0;
+    final distance = nurse['distance_km'];
+    final location = _locationLabel();
+    final isOnline = (nurse['status']?.toString() ?? '').toLowerCase() == 'online';
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: EdgeInsets.only(bottom: w * 0.025),
-        padding: EdgeInsets.all(w * 0.04),
+        padding: EdgeInsets.all(w * 0.038),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: selected ? AppColors.splashSlate900 : AppColors.grey200, width: selected ? 2 : 1),
+          border: Border.all(
+            color: selected ? AppColors.darkBlue500 : AppColors.grey200,
+            width: selected ? 1.5 : 1,
+          ),
         ),
         child: Row(
           children: [
             if (selected)
               Container(
-                padding: EdgeInsets.all(w * 0.01),
-                margin: EdgeInsets.only(right: w * 0.03),
-                decoration: BoxDecoration(color: AppColors.splashSlate900, shape: BoxShape.circle),
-                child: Icon(Icons.check_rounded, color: Colors.white, size: w * 0.035),
+                width: 18, height: 18,
+                margin: EdgeInsets.only(right: w * 0.025),
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(color: AppColors.darkBlue500, shape: BoxShape.circle),
+                child: const Icon(Icons.check_rounded, color: Colors.white, size: 12),
               ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.035, fontWeight: FontWeight.w600, color: AppColors.splashSlate900)),
-                  SizedBox(height: w * 0.008),
                   Row(
                     children: [
-                      Icon(Icons.star_rounded, size: w * 0.035, color: const Color(0xFFFBBF24)),
-                      SizedBox(width: w * 0.01),
-                      Text(rating, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, fontWeight: FontWeight.w600, color: AppColors.grey500)),
-                      SizedBox(width: w * 0.04),
-                      Text('$fee XAF', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, color: AppColors.grey400)),
+                      Flexible(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.036, fontWeight: FontWeight.w800, color: AppColors.darkBlue900),
+                        ),
+                      ),
+                      if (isOnline) ...[
+                        SizedBox(width: w * 0.02),
+                        Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppColors.accentGreen, shape: BoxShape.circle)),
+                      ],
                     ],
+                  ),
+                  if (location.isNotEmpty) ...[
+                    SizedBox(height: w * 0.008),
+                    Text(
+                      distance is num ? '$location · ${distance.toStringAsFixed(1)} km' : location,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, color: AppColors.grey500),
+                    ),
+                  ],
+                  SizedBox(height: w * 0.01),
+                  Text(
+                    fee > 0 ? '$fee XAF' : 'Fee on request',
+                    style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.03, fontWeight: FontWeight.w700, color: AppColors.darkBlue500),
                   ),
                 ],
               ),
@@ -280,7 +355,7 @@ class _NurseCard extends StatelessWidget {
               child: Container(
                 padding: EdgeInsets.all(w * 0.025),
                 decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.chat_rounded, color: AppColors.splashSlate900, size: w * 0.045),
+                child: Icon(Icons.chat_rounded, color: AppColors.darkBlue500, size: w * 0.04),
               ),
             ),
           ],

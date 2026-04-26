@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/auth_service.dart';
@@ -151,10 +152,26 @@ class _TreatmentDetailSheetState extends State<_TreatmentDetailSheet> {
 
   Future<void> _loadNurses() async {
     try {
+      double? lat;
+      double? lng;
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 4),
+        );
+        lat = pos.latitude;
+        lng = pos.longitude;
+      } catch (_) {}
+
       final token = await AuthService.getAccessToken();
       final res = await Dio().get(
-        '${ApiConstants.baseUrl}providers/nearby/',
-        queryParameters: {'specialty': 'nurse'},
+        '${ApiConstants.baseUrl}providers/recommended/',
+        queryParameters: {
+          'role': 'nurse',
+          'limit': 3,
+          if (lat != null) 'lat': lat,
+          if (lng != null) 'lng': lng,
+        },
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
       final data = res.data is List ? res.data : (res.data['results'] ?? []);
@@ -162,6 +179,17 @@ class _TreatmentDetailSheetState extends State<_TreatmentDetailSheet> {
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  String _nurseLocation(dynamic n) {
+    final locs = n['locations'];
+    if (locs is List && locs.isNotEmpty && locs.first is Map) {
+      final m = locs.first as Map;
+      final city = m['city']?.toString().trim() ?? '';
+      final region = m['region']?.toString().trim() ?? '';
+      return [city, region].where((s) => s.isNotEmpty).join(', ');
+    }
+    return '';
   }
 
   @override
@@ -211,35 +239,107 @@ class _TreatmentDetailSheetState extends State<_TreatmentDetailSheet> {
             Text('Available Nurses', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.038, fontWeight: FontWeight.w700, color: AppColors.splashSlate900)),
             SizedBox(height: w * 0.03),
             if (_loading)
-              Center(child: Padding(padding: EdgeInsets.all(w * 0.05), child: const CircularProgressIndicator(strokeWidth: 2, color: AppColors.splashSlate900)))
+              Center(child: Padding(padding: EdgeInsets.all(w * 0.05), child: const CircularProgressIndicator(strokeWidth: 2, color: AppColors.darkBlue500)))
             else if (_nurses.isEmpty)
               Text('No nurses available nearby', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.032, color: AppColors.grey400))
-            else
-              ...(_nurses.take(3).map((n) {
+            else ...[
+              ..._nurses.take(3).map((n) {
                 final name = n['full_name']?.toString() ?? 'Nurse';
                 final nurseId = n['provider_id']?.toString() ?? '';
-                return Container(
-                  margin: EdgeInsets.only(bottom: w * 0.025),
-                  padding: EdgeInsets.all(w * 0.035),
-                  decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text(name, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.034, fontWeight: FontWeight.w600, color: AppColors.splashSlate900))),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.pop(context);
-                          context.push('/dchat/launch/$nurseId?name=${Uri.encodeComponent(name)}');
-                        },
-                        child: Container(
-                          padding: EdgeInsets.all(w * 0.02),
-                          decoration: BoxDecoration(color: AppColors.splashSlate900, borderRadius: BorderRadius.circular(8)),
-                          child: Icon(Icons.chat_rounded, color: Colors.white, size: w * 0.04),
+                final feeRaw = n['consultation_fee']?.toString() ?? '0';
+                final fee = double.tryParse(feeRaw)?.toInt() ?? 0;
+                final distance = n['distance_km'];
+                final location = _nurseLocation(n);
+                final isOnline = (n['status']?.toString() ?? '').toLowerCase() == 'online';
+
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context);
+                    if (nurseId.isNotEmpty) context.push('/patient/doctor-profile/$nurseId');
+                  },
+                  child: Container(
+                    margin: EdgeInsets.only(bottom: w * 0.025),
+                    padding: EdgeInsets.all(w * 0.035),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.grey200),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.035, fontWeight: FontWeight.w800, color: AppColors.darkBlue900),
+                                    ),
+                                  ),
+                                  if (isOnline) ...[
+                                    SizedBox(width: w * 0.018),
+                                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppColors.accentGreen, shape: BoxShape.circle)),
+                                  ],
+                                ],
+                              ),
+                              if (location.isNotEmpty) ...[
+                                SizedBox(height: w * 0.005),
+                                Text(
+                                  distance is num ? '$location · ${distance.toStringAsFixed(1)} km' : location,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.026, color: AppColors.grey500),
+                                ),
+                              ],
+                              SizedBox(height: w * 0.008),
+                              Text(
+                                fee > 0 ? '$fee XAF' : 'Fee on request',
+                                style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, fontWeight: FontWeight.w700, color: AppColors.darkBlue500),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pop(context);
+                            context.push('/dchat/launch/$nurseId?name=${Uri.encodeComponent(name)}');
+                          },
+                          child: Container(
+                            padding: EdgeInsets.all(w * 0.022),
+                            decoration: BoxDecoration(color: AppColors.darkBlue500, borderRadius: BorderRadius.circular(10)),
+                            child: Icon(Icons.chat_rounded, color: Colors.white, size: w * 0.04),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
-              })),
+              }),
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/patient/nurses');
+                },
+                child: Padding(
+                  padding: EdgeInsets.only(top: w * 0.005, bottom: w * 0.01),
+                  child: Row(
+                    children: [
+                      Text(
+                        'View all nurses',
+                        style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.03, fontWeight: FontWeight.w700, color: AppColors.darkBlue500),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_forward_rounded, size: 13, color: AppColors.darkBlue500),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             SizedBox(height: w * 0.04),
             SizedBox(
               width: double.infinity,

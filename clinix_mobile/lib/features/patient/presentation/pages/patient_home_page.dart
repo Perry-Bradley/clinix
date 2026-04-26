@@ -49,8 +49,8 @@ class _PatientHomePageState extends State<PatientHomePage> {
         onTap: (i) => setState(() => _selectedTab = i),
         items: [
           BubbleNavItem(icon: Icons.home_outlined, label: 'Home'),
-          BubbleNavItem(icon: Icons.search_rounded, label: 'Doctors'),
-          BubbleNavItem(icon: Icons.map_outlined, label: 'Map'),
+          BubbleNavItem(icon: Icons.medical_services_outlined, label: 'Doctors'),
+          BubbleNavItem(icon: Icons.local_hospital_outlined, label: 'Facilities'),
           BubbleNavItem(icon: Icons.favorite_outline_rounded, label: 'Health'),
           BubbleNavItem(icon: Icons.person_outline_rounded, label: 'Profile'),
         ],
