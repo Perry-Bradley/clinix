@@ -1,0 +1,69 @@
+@startuml sequence_consultation
+' --------------------------------------------------------------
+' Sequence Diagram - patient consultation workflow
+' Figure 3.5 in the BTech report
+' --------------------------------------------------------------
+title Clinix - Patient Consultation Sequence
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam ParticipantBorderColor #1F4E79
+skinparam ParticipantBackgroundColor #EAF2F9
+skinparam ArrowColor #1F4E79
+skinparam SequenceLifeLineBorderColor #888888
+
+actor Patient
+participant "Mobile App\n(Flutter)" as App
+participant "AI Engine\n(Gemini)"   as AI
+participant "Django REST API" as API
+database  "PostgreSQL"          as DB
+participant "Agora\n(Video)"    as Agora
+participant "Provider App"      as Provider
+
+Patient -> App  : Enter symptoms / image
+App     -> API  : POST /ai/chat/<id>/message
+API     -> AI   : Forward conversation + vitals
+AI      --> API : Reply (next question)
+API     --> App : Reply
+App     --> Patient : AI recommendation
+
+App     -> API  : POST /ai/chat/<id>/complete
+API     -> AI   : Request structured assessment
+AI      --> API : { triage, specialty, causes }
+API     --> App : Structured assessment
+
+Patient -> App  : Book appointment
+App     -> API  : POST /appointments/
+API     -> DB   : Insert (status='pending')
+API     --> App : Appointment created
+
+Patient -> App  : Pay (mobile money)
+App     -> API  : POST /payments/initiate/
+API     --> App : USSD code
+... User dials USSD on phone ...
+API     <-- API : CamPay webhook
+API     -> DB   : Mark payment='success'\nAppointment='confirmed'
+API     -> Provider : FCM notification
+
+Provider -> API : Join consultation
+API     -> Agora : Issue RTC token
+Agora   --> Provider : Token
+Patient -> Agora : Join channel
+Provider -> Agora : Join channel
+Agora   -- Patient   : Media stream
+Agora   -- Provider  : Media stream
+
+... Live consultation ...
+
+Provider -> API  : POST /consultations/<id>/end\n+ notes, diagnosis
+API     -> DB   : Save consultation
+Provider -> API  : POST /consultations/<id>/audio
+API     -> API   : Celery task:\nSTT + Gemini draft
+API     -> DB    : MedicalRecord(is_ai_draft=true)
+
+Provider -> API  : Review + publish draft
+API     -> DB    : is_published=true
+API     -> App   : Notify patient
+App     --> Patient : Receive prescription &\nmedical record
+@enduml

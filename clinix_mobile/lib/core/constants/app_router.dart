@@ -39,6 +39,7 @@ import '../../features/patient/screens/medication_reminders_screen.dart';
 import '../../features/patient/screens/nurses_list_screen.dart';
 import '../../features/appointments/screens/incoming_call_screen.dart';
 import '../../features/appointments/screens/call_history_screen.dart';
+import '../../features/provider/screens/provider_appointments_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -210,7 +211,7 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/provider/appointments',
-      builder: (c, s) => const _ProviderAppointmentsPlaceholder(),
+      builder: (c, s) => const ProviderAppointmentsScreen(),
     ),
   ],
 );
@@ -358,90 +359,3 @@ class _PatientAppointmentsPlaceholderState extends State<_PatientAppointmentsPla
   String _monthName(int m) => const ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m];
 }
 
-class _ProviderAppointmentsPlaceholder extends StatefulWidget {
-  const _ProviderAppointmentsPlaceholder();
-
-  @override
-  State<_ProviderAppointmentsPlaceholder> createState() => _ProviderAppointmentsPlaceholderState();
-}
-
-class _ProviderAppointmentsPlaceholderState extends State<_ProviderAppointmentsPlaceholder> {
-  bool _loading = true;
-  List<Map<String, dynamic>> _items = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    try {
-      final list = await AppointmentService.getMyAppointments();
-      if (mounted) setState(() => _items = list);
-    } catch (_) {
-      if (mounted) setState(() => _items = []);
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        title: const Text('Appointments', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 18, color: Color(0xFF0A1628))),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0A1628), size: 20),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0EA5E9)))
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: _items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (context, i) {
-                  final a = _items[i];
-                  final id = a['appointment_id']?.toString() ?? '';
-                  final when = a['scheduled_at']?.toString() ?? '';
-                  final u = a['patient']?['user'];
-                  final name = u is Map ? u['full_name']?.toString() ?? 'Patient' : 'Patient';
-                  final status = a['status']?.toString() ?? 'pending';
-                  return GestureDetector(
-                    onTap: id.isEmpty ? null : () => context.push('/appointments/$id'),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Row(children: [
-                        Container(
-                          width: 44, height: 44,
-                          decoration: BoxDecoration(color: const Color(0xFFE0F4FF), borderRadius: BorderRadius.circular(12)),
-                          child: const Icon(Icons.person_rounded, color: Color(0xFF0EA5E9), size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(name, style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF0A1628))),
-                          Text(when, style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.grey.shade500)),
-                        ])),
-                        Text(status, style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w600, color: status == 'confirmed' ? const Color(0xFF10B981) : const Color(0xFFF97316))),
-                      ]),
-                    ),
-                  );
-                },
-              ),
-            ),
-    );
-  }
-}

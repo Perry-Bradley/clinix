@@ -37,6 +37,7 @@ dependencies:
 
   # UI
   shimmer: ^3.0.0
+  table_calendar: ^3.1.2
 
   # Localizations
   flutter_localizations:

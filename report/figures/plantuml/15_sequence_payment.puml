@@ -1,0 +1,54 @@
+@startuml sequence_payment
+' --------------------------------------------------------------
+' Sequence Diagram - Mobile-money payment via CamPay
+' --------------------------------------------------------------
+title Clinix - Mobile-Money Payment Sequence (CamPay)
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam ParticipantBorderColor #1F4E79
+skinparam ParticipantBackgroundColor #EAF2F9
+skinparam ArrowColor #1F4E79
+skinparam SequenceLifeLineBorderColor #888888
+
+actor Patient
+participant "Mobile App"   as App
+participant "Django API"   as API
+database  "PostgreSQL"    as DB
+participant "CamPay"       as CamPay
+participant "Mobile-Money\nOperator (MTN / Orange)" as MNO
+participant "Provider App" as Provider
+
+Patient -> App : Tap "Pay"
+App -> API     : POST /payments/initiate/\n{amount, method, phone, appointment_id}
+API -> DB      : Insert Payment (status=pending)
+API -> CamPay  : Authenticate + /collect/
+CamPay --> API : { reference, ussd_code }
+API --> App    : { ussd_code, payment_id }
+
+App --> Patient : Display USSD code
+
+Patient -> MNO : Dial USSD\nconfirm transaction
+MNO --> CamPay : Charge confirmation
+
+alt success
+  CamPay -> API : Webhook (status=success)
+  API -> DB     : Update Payment(success)\nAppointment(confirmed)\nProviderWallet(credit)
+  API -> Provider : FCM "New booking"
+  API --> App     : Status=success (via poll or push)
+  App --> Patient : "Payment confirmed"
+else failure
+  CamPay -> API : Webhook (status=failed)
+  API -> DB     : Update Payment(failed)
+  API --> App   : Status=failed
+  App --> Patient : "Payment failed, please retry"
+end
+
+opt webhook missed
+  App -> API   : GET /payments/status/<id>/ (poll)
+  API -> CamPay : Fetch latest
+  CamPay --> API : status
+  API --> App  : status
+end
+@enduml

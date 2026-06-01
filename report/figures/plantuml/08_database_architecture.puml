@@ -1,0 +1,33 @@
+@startuml database_architecture
+' --------------------------------------------------------------
+' Database Architecture - distributed storage layers
+' Figure 3.7 in the BTech report
+' --------------------------------------------------------------
+title Clinix - Database Architecture
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam defaultFontSize 12
+skinparam ComponentBorderColor #1F4E79
+skinparam ComponentBackgroundColor #EAF2F9
+skinparam DatabaseBorderColor #1F4E79
+skinparam DatabaseBackgroundColor #F5F9FC
+skinparam ArrowColor #555555
+
+component "Mobile App\n(Flutter)"  as Mobile
+component "Web Admin\n(React)"     as Admin
+
+component "Backend API\n(Django REST + Channels)" as API
+
+database "PostgreSQL\nMain Database\n(users, patients, providers,\nappointments, consultations,\nmedical records, payments)" as PG
+database "Redis\nCache + Channel Layer +\nCelery Broker\n(sessions, real-time,\nbackground tasks)" as Redis
+database "Firebase Cloud Storage\nMedia & Documents\n(profile photos, KYC docs,\nprescription PDFs,\ncall recordings)" as FS
+
+Mobile --> API
+Admin  --> API
+
+API --> PG    : SQL via Django ORM
+API --> Redis : pub/sub + cache
+API --> FS    : signed URLs
+@enduml

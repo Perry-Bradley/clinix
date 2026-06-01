@@ -1,0 +1,84 @@
+@startuml usecase
+' --------------------------------------------------------------
+' Use Case Diagram - role-based capabilities
+' Figure 3.2 in the BTech report
+' --------------------------------------------------------------
+title Clinix - Use Case Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam defaultFontSize 12
+skinparam ActorBorderColor #1F4E79
+skinparam UsecaseBorderColor #1F4E79
+skinparam UsecaseBackgroundColor #EAF2F9
+skinparam ArrowColor #555555
+
+left to right direction
+
+actor Patient
+actor "Healthcare\nProvider" as Provider
+actor Superadmin
+actor "Payment\nGateway" as Gateway <<external>>
+
+rectangle "Clinix System" {
+  usecase "Register / Login"             as UC_Auth
+  usecase "AI Symptom Check"             as UC_AI
+  usecase "Search Doctors / Clinics"     as UC_Search
+  usecase "Book Appointment"             as UC_Book
+  usecase "Make Mobile-Money Payment"    as UC_Pay
+  usecase "Attend Video / Audio Call"    as UC_Call
+  usecase "Real-time Chat"               as UC_Chat
+  usecase "View Prescription"            as UC_ViewRx
+  usecase "View Medical Records"         as UC_ViewMR
+  usecase "Track Medication Adherence"   as UC_Meds
+  usecase "Book Lab Test / Home Care"    as UC_Home
+  usecase "Submit Credentials"           as UC_Submit
+  usecase "Accept Appointment"           as UC_Accept
+  usecase "Write Prescription"           as UC_WriteRx
+  usecase "Create Medical Record"        as UC_WriteMR
+  usecase "Create Referral"              as UC_Refer
+  usecase "Request Withdrawal"           as UC_Withdraw
+  usecase "Verify Providers"             as UC_Verify
+  usecase "Manage Users / Patients"      as UC_ManageU
+  usecase "Manage Specialties / Lab Tests" as UC_ManageCat
+  usecase "Approve Withdrawals"          as UC_ApproveW
+  usecase "View Platform Analytics"      as UC_Analytics
+  usecase "Process Payment"              as UC_GW
+}
+
+Patient --> UC_Auth
+Patient --> UC_AI
+Patient --> UC_Search
+Patient --> UC_Book
+Patient --> UC_Pay
+Patient --> UC_Call
+Patient --> UC_Chat
+Patient --> UC_ViewRx
+Patient --> UC_ViewMR
+Patient --> UC_Meds
+Patient --> UC_Home
+
+Provider --> UC_Auth
+Provider --> UC_Submit
+Provider --> UC_Accept
+Provider --> UC_Call
+Provider --> UC_Chat
+Provider --> UC_WriteRx
+Provider --> UC_WriteMR
+Provider --> UC_Refer
+Provider --> UC_Withdraw
+
+Superadmin --> UC_Auth
+Superadmin --> UC_Verify
+Superadmin --> UC_ManageU
+Superadmin --> UC_ManageCat
+Superadmin --> UC_ApproveW
+Superadmin --> UC_Analytics
+
+UC_Pay ..> UC_GW : <<include>>
+Gateway --> UC_GW
+
+UC_Book ..> UC_Pay : <<include>>
+UC_AI   ..> UC_Search : <<extend>>
+@enduml

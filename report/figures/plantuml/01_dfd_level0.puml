@@ -1,0 +1,37 @@
+@startuml dfd_level0
+' --------------------------------------------------------------
+' DFD Level 0 - Context Diagram for the Clinix System
+' Figure 3.0 in the BTech report
+' --------------------------------------------------------------
+title Clinix - Data Flow Diagram Level 0 (Context Diagram)
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam defaultFontSize 12
+skinparam ArrowColor #1F4E79
+skinparam ActorBorderColor #1F4E79
+skinparam UsecaseBorderColor #1F4E79
+skinparam UsecaseBackgroundColor #EAF2F9
+
+left to right direction
+
+actor "Patient"            as Patient
+actor "Healthcare\nProvider" as Provider
+actor "Superadmin"         as Admin
+actor "Payment Gateway\n(CamPay)" as Gateway
+
+usecase "0\nCLINIX SYSTEM" as System #DCE9F4
+
+Patient   -down-> System : Symptoms, appointment\nrequests, payments
+System    -down-> Patient : Recommendations,\nnotifications, records
+
+Provider  -down-> System : Credentials, schedule,\nconsultation data
+System    -down-> Provider : Appointments,\nverification status,\nearnings
+
+Admin     -down-> System : Verification decisions,\nmanagement actions
+System    -down-> Admin  : Reports, analytics
+
+Gateway   -up->   System : Payment confirmations
+System    -up->   Gateway : Payment initiations
+@enduml

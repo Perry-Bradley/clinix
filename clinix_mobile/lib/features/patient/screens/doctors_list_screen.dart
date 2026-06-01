@@ -70,14 +70,18 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
     try {
       Position? position;
       try {
+        // Use cached fix first — instant if the OS has one
+        position = await Geolocator.getLastKnownPosition();
+      } catch (_) {/* ignore */}
+      try {
         position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 5),
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 4),
         );
-        _currentPosition = position;
       } catch (e) {
-        print('Error getting location: $e');
+        print('Doctors list: location unavailable, continuing without lat/lng: $e');
       }
+      if (position != null) _currentPosition = position;
 
       final token = await AuthService.getAccessToken();
       final response = await Dio().get(

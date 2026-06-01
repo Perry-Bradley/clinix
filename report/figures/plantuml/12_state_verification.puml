@@ -1,0 +1,29 @@
+@startuml state_verification
+' --------------------------------------------------------------
+' State Diagram - Provider Verification Lifecycle
+' --------------------------------------------------------------
+title Clinix - Provider Verification Lifecycle (State Diagram)
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam StateBorderColor #1F4E79
+skinparam StateBackgroundColor #EAF2F9
+skinparam ArrowColor #555555
+
+[*] --> Registered : Provider signs up\n(role = provider)
+
+Registered --> DocumentsSubmitted : Uploads ID front/back\n& medical license
+
+DocumentsSubmitted --> UnderReview : Admin opens\nverification queue
+UnderReview --> Approved : Admin clicks "Approve"
+UnderReview --> Rejected : Admin clicks "Reject"\n(reason logged)
+UnderReview --> Registered : Admin requests\nresubmission
+
+Approved --> Active : Schedule set\n+ bio published
+Active   --> Suspended : Admin suspends\n(complaint / policy)
+Suspended --> Active    : Admin reinstates
+Active   --> [*]        : Account deactivated
+
+Rejected --> [*]
+@enduml

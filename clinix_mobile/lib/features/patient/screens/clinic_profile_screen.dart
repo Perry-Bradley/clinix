@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -54,8 +55,10 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
     }
   }
 
-  String _getPhotoUrl(String reference) {
-    return 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=$reference&key=$_apiKey';
+  String _getPhotoUrl(String reference, {int width = 600}) {
+    // Google Places Photo API expects `photoreference` (no underscore).
+    // Using `photo_reference=` silently fails and returns an error image.
+    return 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=$width&photoreference=$reference&key=$_apiKey';
   }
 
   Future<void> _call() async {
@@ -253,7 +256,18 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
               background: photos.isNotEmpty
-                  ? Image.network(_getPhotoUrl(photos[0]['photo_reference']), fit: BoxFit.cover)
+                  ? CachedNetworkImage(
+                      imageUrl: _getPhotoUrl(photos[0]['photo_reference'], width: 600),
+                      fit: BoxFit.cover,
+                      fadeInDuration: const Duration(milliseconds: 150),
+                      placeholder: (c, _) => Container(color: AppColors.grey100),
+                      errorWidget: (c, _, __) => Container(
+                        color: AppColors.darkBlue900,
+                        child: const Center(
+                          child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 56),
+                        ),
+                      ),
+                    )
                   : Container(color: AppColors.darkBlue900, child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 80)),
             ),
             leading: IconButton(
@@ -329,12 +343,17 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
                           return Container(
                             width: 200,
                             margin: const EdgeInsets.only(right: 12),
+                            clipBehavior: Clip.antiAlias,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
-                              image: DecorationImage(
-                                image: Image.network(_getPhotoUrl(photos[index + 1]['photo_reference'])).image,
-                                fit: BoxFit.cover,
-                              ),
+                              color: AppColors.grey100,
+                            ),
+                            child: CachedNetworkImage(
+                              imageUrl: _getPhotoUrl(photos[index + 1]['photo_reference'], width: 400),
+                              fit: BoxFit.cover,
+                              fadeInDuration: const Duration(milliseconds: 120),
+                              placeholder: (c, _) => Container(color: AppColors.grey100),
+                              errorWidget: (c, _, __) => const Icon(Icons.broken_image_rounded, color: AppColors.grey400),
                             ),
                           );
                         },

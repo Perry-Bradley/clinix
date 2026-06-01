@@ -1,0 +1,73 @@
+@startuml system_architecture
+' --------------------------------------------------------------
+' System Architecture - three-tier component view
+' Figure 3.6 in the BTech report
+' --------------------------------------------------------------
+title Clinix - System Architecture (Three-Tier)
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam defaultFontSize 11
+skinparam ComponentBorderColor #1F4E79
+skinparam ComponentBackgroundColor #EAF2F9
+skinparam RectangleBorderColor #1F4E79
+skinparam RectangleBackgroundColor #F5F9FC
+skinparam ArrowColor #555555
+
+rectangle "Presentation Tier" #F0F7FB {
+  component "Patient Mobile App\n(Flutter / Android & iOS)"  as PatientApp
+  component "Provider Mobile App\n(same Flutter codebase)"   as ProviderApp
+  component "Admin Dashboard\n(React + Vite + TypeScript)"   as Admin
+}
+
+rectangle "Application Tier" #F0F7FB {
+  component "Django REST API\n(DRF + SimpleJWT)"           as API
+  component "Django Channels\n(WebSocket consumers)"        as Channels
+  component "Celery Workers\n+ Celery Beat"                 as Celery
+  component "AI Consultation\nService (Gemini client)"      as AI
+  component "Provider\nRecommender"                         as Reco
+}
+
+rectangle "Data Tier" #F0F7FB {
+  database "PostgreSQL\n(primary store)"                     as PG
+  database "Redis\n(cache, channel layer, broker)"           as Redis
+  database "Firebase Storage\n(media, KYC, recordings)"      as FS
+}
+
+rectangle "External Services" #FFF7E0 {
+  component "CamPay\n(MTN MoMo / Orange Money)"  as CamPay
+  component "Agora RTC\n(video / audio)"          as Agora
+  component "Google Maps\nAPIs"                   as Maps
+  component "Firebase\nCloud Messaging (FCM)"     as FCM
+  component "Twilio\n(SMS OTP)"                   as Twilio
+  component "Google Gemini\n+ Cloud Speech-to-Text" as GCloud
+}
+
+PatientApp  --> API     : HTTPS / REST
+ProviderApp --> API     : HTTPS / REST
+Admin       --> API     : HTTPS / REST
+PatientApp  --> Channels : WSS
+ProviderApp --> Channels : WSS
+
+API       --> PG
+API       --> Redis
+API       --> FS
+Channels  --> Redis
+Celery    --> Redis
+Celery    --> PG
+Celery    --> FS
+
+API --> CamPay  : Initiate payment
+CamPay --> API  : Webhook callback
+API --> Agora   : Issue RTC token
+API --> FCM     : Push notifications
+API --> Twilio  : OTP SMS
+API --> Maps    : Geocoding (server-side)
+PatientApp --> Maps : Map tiles + routes
+AI  --> GCloud  : Gemini + STT
+API --> AI
+API --> Reco
+Reco --> PG    : query verified providers
+AI  --> Reco   : recommended_specialty
+@enduml

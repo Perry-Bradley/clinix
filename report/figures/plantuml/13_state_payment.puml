@@ -1,0 +1,29 @@
+@startuml state_payment
+' --------------------------------------------------------------
+' State Diagram - Payment Lifecycle (CamPay)
+' --------------------------------------------------------------
+title Clinix - Payment Lifecycle (State Diagram)
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam StateBorderColor #1F4E79
+skinparam StateBackgroundColor #EAF2F9
+skinparam ArrowColor #555555
+
+[*] --> Pending : Patient calls\n/payments/initiate/
+
+Pending --> AwaitingUSSD : CamPay returns\nUSSD code
+AwaitingUSSD --> Processing : Patient confirms\non phone
+Processing --> Success : CamPay webhook /\npoll confirms success
+Processing --> Failed  : Insufficient funds /\ntimeout / declined
+
+Pending --> Failed : Network error\nor invalid input
+
+Success --> Reconciled : Provider wallet credited\n+ appointment confirmed
+Reconciled --> [*]
+
+Failed --> Refunded : (rare)\nmanual refund issued
+Failed --> [*]
+Refunded --> [*]
+@enduml

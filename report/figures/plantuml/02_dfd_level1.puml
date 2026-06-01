@@ -1,0 +1,60 @@
+@startuml dfd_level1
+' --------------------------------------------------------------
+' DFD Level 1 - decomposition into the four major processes
+' Figure 3.1 in the BTech report
+' --------------------------------------------------------------
+title Clinix - Data Flow Diagram Level 1
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam defaultFontSize 11
+skinparam ArrowColor #1F4E79
+skinparam ActorBorderColor #1F4E79
+skinparam UsecaseBorderColor #1F4E79
+skinparam UsecaseBackgroundColor #EAF2F9
+skinparam DatabaseBorderColor #1F4E79
+skinparam DatabaseBackgroundColor #F5F9FC
+
+top to bottom direction
+
+actor "Patient"          as Patient
+actor "Provider"         as Provider
+actor "Superadmin"       as Admin
+actor "Payment\nGateway" as Gateway
+
+usecase "1.\nAuthentication" as P1
+usecase "2.\nAppointment\nManagement" as P2
+usecase "3.\nAI Consultation\n& Triage" as P3
+usecase "4.\nProvider\nVerification" as P4
+usecase "5.\nPayment\nProcessing" as P5
+
+database "User DB"           as D1
+database "Appointment DB"    as D2
+database "Medical Records DB" as D3
+database "Verification DB"   as D4
+database "Payment DB"        as D5
+
+Patient  --> P1 : Login / register
+Provider --> P1 : Login / register
+Admin    --> P1 : Login
+
+P1 <--> D1
+
+Patient  --> P3 : Symptoms / image
+P3 --> Patient  : AI recommendation
+P3 <--> D3
+
+Patient  --> P2 : Book appointment
+Provider --> P2 : Accept / decline
+P2 <--> D2
+
+Provider --> P4 : Submit credentials
+Admin    --> P4 : Approve / reject
+P4 <--> D4
+
+Patient  --> P5 : Pay
+Gateway  --> P5 : Confirmation
+P5 <--> D5
+P5 --> P2 : Confirm appointment\non success
+@enduml

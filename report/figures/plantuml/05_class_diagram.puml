@@ -1,0 +1,180 @@
+@startuml class_diagram
+' --------------------------------------------------------------
+' Class Diagram - core domain model
+' Figure 3.4 in the BTech report
+' --------------------------------------------------------------
+title Clinix - Class Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam defaultFontSize 12
+skinparam ClassBorderColor #1F4E79
+skinparam ClassBackgroundColor #EAF2F9
+skinparam ClassHeaderBackgroundColor #1F4E79
+skinparam ClassFontColor #1F2937
+skinparam ArrowColor #555555
+hide circle
+
+abstract class User {
+  - user_id: UUID
+  - phone_number: String
+  - email: String
+  - password_hash: String
+  - full_name: String
+  - language_pref: String
+  - role: String
+  + login()
+  + logout()
+  + updateProfile()
+}
+
+class Patient {
+  - date_of_birth: Date
+  - gender: String
+  - blood_type: String
+  - allergies: List<String>
+  - chronic_conditions: List<String>
+  + requestConsultation()
+  + viewMedicalRecords()
+}
+
+class HealthcareProvider {
+  - specialty: String
+  - license_number: String
+  - years_experience: Integer
+  - consultation_fee: Decimal
+  - verification_status: String
+  - rating: Float
+  + submitCredentials()
+  + acceptAppointment()
+  + conductConsultation()
+  + writePrescription()
+}
+
+class Superadmin {
+  + verifyProvider()
+  + manageUsers()
+  + approveWithdrawal()
+}
+
+class Appointment {
+  - appointment_id: UUID
+  - scheduled_at: DateTime
+  - duration_minutes: Integer
+  - appointment_type: String
+  - status: String
+  + schedule()
+  + cancel()
+  + reschedule()
+}
+
+class Consultation {
+  - consultation_id: UUID
+  - started_at: DateTime
+  - ended_at: DateTime
+  - webrtc_session_id: String
+  - recording_url: String
+  - provider_notes: Text
+  - diagnosis: Text
+  + start()
+  + end()
+}
+
+class Prescription {
+  - prescription_id: UUID
+  - medications: JSON
+  - instructions: Text
+  - valid_until: Date
+  + generatePDF()
+  + shareWithProvider()
+}
+
+class MedicalRecord {
+  - record_id: UUID
+  - symptoms: List<String>
+  - diagnosis: Text
+  - treatment_plan: Text
+  - is_ai_draft: Boolean
+  - is_published: Boolean
+  + publish()
+  + share()
+}
+
+class MedicationReminder {
+  - reminder_id: UUID
+  - medication_name: String
+  - reminder_times: JSON
+  - is_active: Boolean
+  + scheduleNext()
+}
+
+class AISymptomSession {
+  - session_id: UUID
+  - is_active: Boolean
+  - triage_score: Integer
+  - recommendation: Text
+  + sendMessage()
+  + completeAssessment()
+}
+
+class Payment {
+  - payment_id: UUID
+  - amount: Decimal
+  - currency: String
+  - payment_method: String
+  - transaction_ref: String
+  - status: String
+  + initiate()
+  + reconcile()
+}
+
+class ProviderWallet {
+  - balance: Decimal
+  + credit()
+  + debit()
+}
+
+class Location {
+  - location_id: UUID
+  - latitude: Double
+  - longitude: Double
+  - address: String
+  + updateLocation()
+}
+
+class AIConsultationSession {
+  - session_id: UUID
+  - is_active: Boolean
+  - assessment: JSON
+  - recommended_specialty: String
+  + sendMessage()
+  + completeAssessment()
+  + getProviderRecommendation()
+}
+
+class ProviderRecommender {
+  + scoreProviders(specialty,\n  location, language, budget)
+  + rankByCompositeScore()
+  + buildMatchReasons()
+}
+
+User <|-- Patient
+User <|-- HealthcareProvider
+User <|-- Superadmin
+
+Patient "1" -- "many" Appointment
+HealthcareProvider "1" -- "many" Appointment
+Appointment "1" -- "1" Consultation
+Consultation "1" -- "many" Prescription
+Consultation "1" -- "many" MedicalRecord
+Prescription "1" -- "many" MedicationReminder
+Patient "1" -- "many" AISymptomSession
+Appointment "1" -- "1" Payment
+HealthcareProvider "1" -- "1" ProviderWallet
+HealthcareProvider "1" -- "many" Location
+
+Patient "1" -- "many" AIConsultationSession
+AIConsultationSession ..> ProviderRecommender : feeds\nrecommended_specialty
+ProviderRecommender ..> HealthcareProvider : ranks verified
+@enduml

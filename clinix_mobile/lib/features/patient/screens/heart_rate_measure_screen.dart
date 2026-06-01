@@ -1,10 +1,11 @@
+import 'dart:async';
+import 'dart:math' as math;
+import 'package:camera/camera.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
-import 'package:heart_bpm/heart_bpm.dart';
 import 'package:clinix_mobile/core/theme/app_colors.dart';
 import 'package:clinix_mobile/features/patient/services/health_metric_service.dart';
-import 'dart:math' as math;
 
 class HeartRateMeasureScreen extends ConsumerStatefulWidget {
   const HeartRateMeasureScreen({super.key});
@@ -15,7 +16,10 @@ class HeartRateMeasureScreen extends ConsumerStatefulWidget {
 class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen> with TickerProviderStateMixin {
   late AnimationController _pulseCtrl;
   late AnimationController _timerCtrl;
-  List<SensorValue> data = [];
+  // Raw luminance signal from the front camera (one sample per frame)
+  final List<double> _signal = [];
+  final List<DateTime> _signalTimes = [];
+  // Visual ECG-style trace
   List<double> _pulseHistory = [];
   int? lastBpm;
   double? hrvMs;
@@ -26,12 +30,16 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
   int _elapsedSeconds = 0;
   static const _targetSeconds = 30;
 
-  // All BPM readings collected during measurement
+  // BPM samples derived from peak detection during measurement
   final List<int> _allBpmReadings = [];
-  // Timestamps of each BPM callback for HRV calculation
   final List<DateTime> _bpmTimestamps = [];
-  // Recent BPMs for finger detection
+  // Recent BPMs for finger-detection stability check
   final List<int> _recentBpm = [];
+
+  // Camera state
+  CameraController? _cam;
+  bool _processingFrame = false;
+  Timer? _bpmTimer;
 
   @override
   void initState() {
@@ -41,7 +49,184 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
   }
 
   @override
-  void dispose() { _pulseCtrl.dispose(); _timerCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _pulseCtrl.dispose();
+    _timerCtrl.dispose();
+    _bpmTimer?.cancel();
+    _stopCamera();
+    super.dispose();
+  }
+
+  Future<void> _stopCamera() async {
+    try {
+      if (_cam?.value.isStreamingImages == true) {
+        await _cam!.stopImageStream();
+      }
+      await _cam?.dispose();
+    } catch (_) {/* ignore */}
+    _cam = null;
+  }
+
+  Future<bool> _startCamera() async {
+    try {
+      final cameras = await availableCameras();
+      final front = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+      _cam = CameraController(
+        front,
+        ResolutionPreset.low,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.yuv420,
+      );
+      await _cam!.initialize();
+      await _cam!.startImageStream(_onFrame);
+      return true;
+    } catch (e) {
+      debugPrint('[HR] camera init failed: $e');
+      return false;
+    }
+  }
+
+  // Per-frame: average the Y (luminance) channel over a centre square.
+  // With the screen lit white and a finger covering the front lens, the
+  // light that diffuses through the fingertip pulses with each heartbeat.
+  void _onFrame(CameraImage image) {
+    if (_processingFrame || !mounted) return;
+    _processingFrame = true;
+    try {
+      final y = image.planes[0];
+      final w = image.width;
+      final h = image.height;
+      final bpr = y.bytesPerRow;
+      // 80x80 centre window — small enough to be cheap, big enough to average noise out
+      const half = 40;
+      final cx = w ~/ 2;
+      final cy = h ~/ 2;
+      final x0 = (cx - half).clamp(0, w - 1);
+      final y0 = (cy - half).clamp(0, h - 1);
+      final x1 = (cx + half).clamp(0, w - 1);
+      final y1 = (cy + half).clamp(0, h - 1);
+      int sum = 0;
+      int count = 0;
+      for (int row = y0; row < y1; row += 2) {
+        final base = row * bpr;
+        for (int col = x0; col < x1; col += 2) {
+          sum += y.bytes[base + col];
+          count++;
+        }
+      }
+      if (count == 0) return;
+      final avg = sum / count;
+      final now = DateTime.now();
+
+      _signal.add(avg);
+      _signalTimes.add(now);
+      // Keep ~12s of samples (camera ~30fps → ~360 samples)
+      while (_signalTimes.isNotEmpty &&
+          now.difference(_signalTimes.first).inMilliseconds > 12000) {
+        _signal.removeAt(0);
+        _signalTimes.removeAt(0);
+      }
+
+      // Update the ECG trace (keep AC component only — subtract running mean)
+      if (_signal.length > 30) {
+        final tail = _signal.sublist(math.max(0, _signal.length - 30));
+        final mean = tail.reduce((a, b) => a + b) / tail.length;
+        _pulseHistory.add(avg - mean);
+        if (_pulseHistory.length > 90) _pulseHistory.removeAt(0);
+      }
+    } catch (_) {/* swallow — frame format issues are non-fatal */} finally {
+      _processingFrame = false;
+    }
+  }
+
+  // Estimate BPM from the buffered signal using simple peak detection.
+  // Runs on a timer (every 1s) instead of every frame.
+  void _estimateBpm() {
+    if (_signal.length < 90) return;
+
+    // Smooth with a 5-tap moving average to remove camera noise
+    final smoothed = <double>[];
+    const window = 2; // 5-tap = 2 each side + centre
+    for (int i = window; i < _signal.length - window; i++) {
+      double s = 0;
+      for (int j = -window; j <= window; j++) {
+        s += _signal[i + j];
+      }
+      smoothed.add(s / (window * 2 + 1));
+    }
+    if (smoothed.length < 60) return;
+
+    // Subtract slow-drift (rolling mean of 30 samples ≈ 1s at 30fps)
+    final detrended = <double>[];
+    const drift = 15;
+    for (int i = drift; i < smoothed.length - drift; i++) {
+      double s = 0;
+      for (int j = -drift; j <= drift; j++) {
+        s += smoothed[i + j];
+      }
+      detrended.add(smoothed[i] - s / (drift * 2 + 1));
+    }
+    if (detrended.length < 30) return;
+
+    // Find peaks: local max with min separation (~250ms = 240 BPM upper bound)
+    final samplingRate = _signalTimes.length /
+        (_signalTimes.last.difference(_signalTimes.first).inMilliseconds / 1000.0);
+    final minSep = (samplingRate * 0.25).round().clamp(4, 30);
+    final peaks = <int>[];
+    for (int i = 1; i < detrended.length - 1; i++) {
+      if (detrended[i] > detrended[i - 1] &&
+          detrended[i] > detrended[i + 1] &&
+          detrended[i] > 0) {
+        if (peaks.isEmpty || i - peaks.last >= minSep) {
+          peaks.add(i);
+        }
+      }
+    }
+    if (peaks.length < 3) return;
+
+    // Compute BPM from average inter-peak interval
+    final intervals = <double>[];
+    for (int i = 1; i < peaks.length; i++) {
+      intervals.add((peaks[i] - peaks[i - 1]) / samplingRate);
+    }
+    intervals.sort();
+    // Trim outliers — drop top & bottom one
+    if (intervals.length > 4) {
+      intervals.removeAt(0);
+      intervals.removeLast();
+    }
+    final avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
+    final bpm = (60 / avgInterval).round();
+    if (bpm < 40 || bpm > 200) return;
+
+    if (!mounted) return;
+    setState(() {
+      _recentBpm.add(bpm);
+      if (_recentBpm.length > 10) _recentBpm.removeAt(0);
+
+      // Finger detection: 4+ stable readings in a normal range
+      if (_recentBpm.length >= 4) {
+        final valid = _recentBpm.where((b) => b >= 45 && b <= 170).toList();
+        if (valid.length >= (_recentBpm.length * 0.7)) {
+          final spread = valid.reduce(math.max) - valid.reduce(math.min);
+          _fingerDetected = spread < 30;
+        } else {
+          _fingerDetected = false;
+        }
+      }
+
+      if (_fingerDetected && bpm >= 45 && bpm <= 170) {
+        _allBpmReadings.add(bpm);
+        _bpmTimestamps.add(DateTime.now());
+        lastBpm = bpm;
+      } else if (!_fingerDetected) {
+        lastBpm = null;
+      }
+    });
+  }
 
   void _startTimer() {
     _elapsedSeconds = 0;
@@ -53,6 +238,8 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
         setState(() => _elapsedSeconds++);
       }
       if (_elapsedSeconds >= _targetSeconds) {
+        _bpmTimer?.cancel();
+        _stopCamera();
         _calculateFinalVitals();
         setState(() { isMeasuring = false; hasFinished = true; });
         return false;
@@ -102,23 +289,51 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
     respiratoryRate = (avgBpm / 4.2).clamp(12.0, 22.0).round();
   }
 
-  void _startScan() {
+  Future<void> _startScan() async {
     setState(() {
       isMeasuring = true;
       _pulseHistory = [];
       _allBpmReadings.clear();
       _bpmTimestamps.clear();
       _recentBpm.clear();
-      data = [];
+      _signal.clear();
+      _signalTimes.clear();
       _fingerDetected = false;
       hrvMs = null;
       respiratoryRate = null;
-      _startTimer();
     });
+    final ok = await _startCamera();
+    if (!ok) {
+      if (!mounted) return;
+      setState(() => isMeasuring = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not start camera')),
+      );
+      return;
+    }
+    _bpmTimer?.cancel();
+    _bpmTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) => _estimateBpm());
+    _startTimer();
   }
 
   void _reset() {
-    setState(() { hasFinished = false; isMeasuring = false; data = []; _pulseHistory = []; _allBpmReadings.clear(); _bpmTimestamps.clear(); hrvMs = null; respiratoryRate = null; _elapsedSeconds = 0; _fingerDetected = false; _recentBpm.clear(); lastBpm = null; });
+    _bpmTimer?.cancel();
+    _stopCamera();
+    setState(() {
+      hasFinished = false;
+      isMeasuring = false;
+      _pulseHistory = [];
+      _allBpmReadings.clear();
+      _bpmTimestamps.clear();
+      _signal.clear();
+      _signalTimes.clear();
+      hrvMs = null;
+      respiratoryRate = null;
+      _elapsedSeconds = 0;
+      _fingerDetected = false;
+      _recentBpm.clear();
+      lastBpm = null;
+    });
     _timerCtrl.reset();
   }
 
@@ -127,7 +342,192 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
     final w = MediaQuery.of(context).size.width;
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(child: hasFinished ? _resultsView(w) : _scannerView(w)),
+      // While measuring we use a different layout: the top 60% of the screen
+      // is pure white (the "screen flash" that illuminates the fingertip
+      // pressed on the front camera), and all controls dock at the bottom.
+      body: hasFinished
+          ? SafeArea(child: _resultsView(w))
+          : isMeasuring
+              ? _measuringView(w)
+              : SafeArea(child: _scannerView(w)),
+    );
+  }
+
+  Widget _measuringView(double w) {
+    final remaining = _remaining;
+    return Column(
+      children: [
+        // Pure-white top — this is what reflects onto the fingertip.
+        // No widgets here at all so it's as bright as possible.
+        Expanded(
+          flex: 6,
+          child: Container(
+            color: Colors.white,
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.only(top: w * 0.04),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _fingerDetected ? '● RECORDING' : '● PLACE FINGER ON FRONT CAMERA',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: w * 0.026,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1,
+                        color: _fingerDetected ? const Color(0xFFFF2D55) : AppColors.grey200,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Bottom panel: BPM, timer, stop. Dark on white, the rest of the
+        // top half stays pure white for the screen-flash effect.
+        Container(
+          padding: EdgeInsets.fromLTRB(w * 0.08, w * 0.04, w * 0.08, w * 0.06),
+          decoration: const BoxDecoration(color: Colors.white),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (lastBpm != null) ...[
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: lastBpm!.toDouble()),
+                    duration: const Duration(milliseconds: 500),
+                    builder: (_, val, __) => RichText(
+                      text: TextSpan(children: [
+                        TextSpan(
+                          text: '${val.toInt()}',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: w * 0.16,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.splashSlate900,
+                            height: 1,
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' bpm',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: w * 0.04,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.grey400,
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  SizedBox(height: w * 0.01),
+                  Text(
+                    'Steady Sinus Rhythm',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: w * 0.032,
+                      color: AppColors.grey500,
+                    ),
+                  ),
+                ] else ...[
+                  Icon(Icons.favorite_rounded, size: w * 0.12, color: AppColors.grey200),
+                  SizedBox(height: w * 0.02),
+                  Text(
+                    'Hold steady…',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: w * 0.038,
+                      color: AppColors.grey400,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                SizedBox(height: w * 0.06),
+                AnimatedBuilder(
+                  animation: _timerCtrl,
+                  builder: (_, __) => SizedBox(
+                    width: w * 0.28,
+                    height: w * 0.28,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: w * 0.24,
+                          height: w * 0.24,
+                          child: CircularProgressIndicator(
+                            value: _timerCtrl.value,
+                            strokeWidth: w * 0.012,
+                            backgroundColor: AppColors.grey100,
+                            valueColor: const AlwaysStoppedAnimation(Color(0xFFFF2D55)),
+                            strokeCap: StrokeCap.round,
+                          ),
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '00:${remaining.toString().padLeft(2, '0')}',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: w * 0.05,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.splashSlate900,
+                              ),
+                            ),
+                            Text(
+                              'REMAINING',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: w * 0.022,
+                                color: AppColors.grey400,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: w * 0.06),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _CircleBtn(
+                      icon: Icons.close_rounded,
+                      color: AppColors.grey100,
+                      iconColor: AppColors.splashSlate900,
+                      size: w * 0.14,
+                      onTap: _reset,
+                    ),
+                    _CircleBtn(
+                      icon: Icons.save_rounded,
+                      color: AppColors.grey100,
+                      iconColor: AppColors.splashSlate900,
+                      size: w * 0.14,
+                      onTap: () {
+                        if (lastBpm != null) {
+                          _bpmTimer?.cancel();
+                          _stopCamera();
+                          _calculateFinalVitals();
+                          setState(() {
+                            isMeasuring = false;
+                            hasFinished = true;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -181,7 +581,7 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
                 ),
                 SizedBox(width: w * 0.02),
                 Text(
-                  _fingerDetected ? 'RECORDING LIVE' : 'PLACE FINGER ON CAMERA',
+                  _fingerDetected ? 'RECORDING LIVE' : 'PLACE FINGER ON FRONT CAMERA',
                   style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, fontWeight: FontWeight.w700, color: _fingerDetected ? const Color(0xFFFF2D55) : AppColors.grey400, letterSpacing: 1),
                 ),
               ],
@@ -209,7 +609,7 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
           SizedBox(height: w * 0.04),
           Text('Ready to Scan', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.05, fontWeight: FontWeight.w700, color: AppColors.splashSlate900)),
           SizedBox(height: w * 0.02),
-          Text('Cover the camera & flash\nwith your fingertip', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.033, color: AppColors.grey400, height: 1.5)),
+          Text('Place your finger on the\nfront camera (top of screen)', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.033, color: AppColors.grey400, height: 1.5)),
         ],
 
         const Spacer(),
@@ -277,7 +677,7 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
                   children: [
                     _CircleBtn(icon: Icons.close_rounded, color: AppColors.grey200, iconColor: AppColors.splashSlate900, size: w * 0.14, onTap: _reset),
                     _CircleBtn(icon: Icons.pause_rounded, color: const Color(0xFFFF2D55), iconColor: Colors.white, size: w * 0.17, onTap: () {}),
-                    _CircleBtn(icon: Icons.save_rounded, color: AppColors.grey200, iconColor: AppColors.splashSlate900, size: w * 0.14, onTap: () { if (lastBpm != null) { _calculateFinalVitals(); setState(() { isMeasuring = false; hasFinished = true; }); } }),
+                    _CircleBtn(icon: Icons.save_rounded, color: AppColors.grey200, iconColor: AppColors.splashSlate900, size: w * 0.14, onTap: () { if (lastBpm != null) { _bpmTimer?.cancel(); _stopCamera(); _calculateFinalVitals(); setState(() { isMeasuring = false; hasFinished = true; }); } }),
                   ],
                 )
               : SizedBox(
@@ -296,48 +696,6 @@ class _HeartRateMeasureScreenState extends ConsumerState<HeartRateMeasureScreen>
                 ),
         ),
 
-        // Hidden HeartBPMDialog
-        if (isMeasuring)
-          SizedBox(
-            height: 0,
-            child: HeartBPMDialog(
-              context: context,
-              onRawData: (value) {
-                if (!_fingerDetected) return;
-                setState(() {
-                  _pulseHistory.add(value.value.toDouble());
-                  if (_pulseHistory.length > 60) _pulseHistory.removeAt(0);
-                  data.add(value);
-                });
-              },
-              onBPM: (value) {
-                setState(() {
-                  _recentBpm.add(value);
-                  if (_recentBpm.length > 10) _recentBpm.removeAt(0);
-
-                  // Finger detection: need 4+ readings, all in range, AND stable (spread < 30)
-                  if (_recentBpm.length >= 4) {
-                    final valid = _recentBpm.where((b) => b >= 45 && b <= 170).toList();
-                    if (valid.length >= (_recentBpm.length * 0.7)) {
-                      final spread = valid.reduce(math.max) - valid.reduce(math.min);
-                      _fingerDetected = spread < 30;
-                    } else {
-                      _fingerDetected = false;
-                    }
-                  }
-
-                  if (_fingerDetected && value >= 45 && value <= 170) {
-                    _allBpmReadings.add(value);
-                    _bpmTimestamps.add(DateTime.now());
-                    lastBpm = value;
-                  } else if (!_fingerDetected) {
-                    lastBpm = null;
-                  }
-                });
-              },
-              child: const SizedBox.shrink(),
-            ),
-          ),
       ],
     );
   }

@@ -1,0 +1,60 @@
+@startuml activity_main
+' --------------------------------------------------------------
+' Main Activity Diagram - parallel patient and provider workflows
+' Figure 3.3 in the BTech report
+' --------------------------------------------------------------
+title Clinix - Main Activity Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam ActivityBorderColor #1F4E79
+skinparam ActivityBackgroundColor #EAF2F9
+skinparam ActivityDiamondBackgroundColor #FFF7E0
+skinparam ArrowColor #555555
+
+start
+:User opens app;
+
+if (User type?) then (Provider)
+
+  :Register account;
+  :Submit credentials\n(ID front/back, license);
+  :Make enlistment payment;
+  :Await verification;
+  if (Approved?) then (Yes)
+    :Profile activated;
+    :Set schedule & bio;
+    :Accept incoming appointments;
+    :Conduct consultation;
+    :Write prescription /\nmedical record;
+  else (No)
+    :Application rejected;
+    stop
+  endif
+
+else (Patient)
+
+  :Register / Login;
+  :Enter symptoms;
+  :AI analysis (Gemini);
+  if (Needs human provider?) then (Yes)
+    :Search nearby / recommended providers;
+    :Book appointment slot;
+    :Pay via mobile money (CamPay);
+    if (Payment confirmed?) then (Yes)
+      :Join virtual consultation\n(Agora video / audio / chat);
+      :View consultation summary;
+      :Receive prescription &\nmedication reminders;
+    else (No)
+      :Booking cancelled;
+      stop
+    endif
+  else (No)
+    :View AI recommendation;
+  endif
+
+endif
+
+stop
+@enduml

@@ -1004,109 +1004,133 @@ class _ProviderScheduleTabState extends State<_ProviderScheduleTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.grey50,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: AppColors.darkBlue900,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            expandedHeight: 150,
-            automaticallyImplyLeading: false,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.only(left: 20, bottom: 14),
-              title: Text('My Schedule',
-                  style: AppTextStyles.headlineMedium.copyWith(color: Colors.white, fontSize: 18)),
-              background: Container(
-                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                padding: const EdgeInsets.fromLTRB(20, 60, 20, 50),
-                alignment: Alignment.bottomLeft,
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.event_available_rounded, color: AppColors.sky200, size: 16),
-                        const SizedBox(width: 6),
-                        Text('$_workingDayCount working days',
-                            style: AppTextStyles.caption.copyWith(color: AppColors.sky200, fontWeight: FontWeight.w600)),
-                      ]),
-                    ),
-                  ],
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        title: Text(
+          'My Schedule',
+          style: AppTextStyles.headlineMedium.copyWith(fontSize: 18),
+        ),
+        actions: [
+          if (!_isLoading)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
+              child: FilledButton(
+                onPressed: _isSaving ? null : _saveSchedule,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.darkBlue500,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
+                child: _isSaving
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Save', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 13)),
               ),
             ),
-            actions: [
-              if (!_isLoading)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilledButton(
-                    onPressed: _isSaving ? null : _saveSchedule,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.sky500,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: _isSaving
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : Text('Save', style: AppTextStyles.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-            ],
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.darkBlue500))
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              children: [
+                _buildSummaryHeader(),
+                const SizedBox(height: 14),
+                _buildInfoBanner(),
+                const SizedBox(height: 16),
+                ..._schedules.asMap().entries.map((e) {
+                  final i = e.key;
+                  final s = e.value;
+                  return _ScheduleRow(
+                    day: s['day'] as String,
+                    dayLabel: _dayLabels[_days.indexOf(s['day'] as String)],
+                    isWorking: s['is_working'] == true,
+                    startTime: s['start_time']?.toString() ?? '08:00',
+                    endTime: s['end_time']?.toString() ?? '17:00',
+                    hours: _hours,
+                    onToggle: (v) => setState(() => _schedules[i]['is_working'] = v),
+                    onStartChanged: (v) => setState(() => _schedules[i]['start_time'] = v),
+                    onEndChanged: (v) => setState(() => _schedules[i]['end_time'] = v),
+                    onCopyToAll: () => _applyToAllWorkingDays(i),
+                  );
+                }),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildSummaryHeader() {
+    final off = _schedules.length - _workingDayCount;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.darkBlue500,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.event_available_rounded, color: Colors.white, size: 22),
           ),
-          if (_isLoading)
-            const SliverFillRemaining(child: Center(child: CircularProgressIndicator(color: AppColors.sky500)))
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    if (index == 0) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: AppColors.sky100,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Row(children: [
-                            const Icon(Icons.info_outline_rounded, color: AppColors.sky600, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Set your working hours. Patients can only book slots inside these windows.',
-                                style: AppTextStyles.caption.copyWith(color: AppColors.darkBlue900, height: 1.4),
-                              ),
-                            ),
-                          ]),
-                        ),
-                      );
-                    }
-                    final s = _schedules[index - 1];
-                    return _ScheduleRow(
-                      day: s['day'] as String,
-                      dayLabel: _dayLabels[_days.indexOf(s['day'] as String)],
-                      isWorking: s['is_working'] == true,
-                      startTime: s['start_time']?.toString() ?? '08:00',
-                      endTime: s['end_time']?.toString() ?? '17:00',
-                      hours: _hours,
-                      onToggle: (v) => setState(() => _schedules[index - 1]['is_working'] = v),
-                      onStartChanged: (v) => setState(() => _schedules[index - 1]['start_time'] = v),
-                      onEndChanged: (v) => setState(() => _schedules[index - 1]['end_time'] = v),
-                      onCopyToAll: () => _applyToAllWorkingDays(index - 1),
-                    );
-                  },
-                  childCount: _schedules.length + 1,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Working hours',
+                  style: AppTextStyles.bodyLarge.copyWith(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
                 ),
-              ),
+                const SizedBox(height: 2),
+                Text(
+                  '$_workingDayCount working · $off off',
+                  style: AppTextStyles.caption.copyWith(color: Colors.white.withOpacity(0.85), fontWeight: FontWeight.w600),
+                ),
+              ],
             ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '$_workingDayCount/7',
+              style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoBanner() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.grey50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.grey200),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded, color: AppColors.darkBlue500, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Patients can only book slots inside your working windows.',
+              style: AppTextStyles.caption.copyWith(color: AppColors.grey700, height: 1.4, fontSize: 12),
+            ),
+          ),
         ],
       ),
     );
@@ -1141,25 +1165,24 @@ class _ScheduleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      duration: const Duration(milliseconds: 180),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: isWorking ? AppColors.sky200 : AppColors.grey200),
-        boxShadow: isWorking
-            ? [BoxShadow(color: AppColors.sky500.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]
-            : null,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isWorking ? AppColors.darkBlue500.withOpacity(0.25) : AppColors.grey200,
+        ),
       ),
       child: Column(
         children: [
           Row(
             children: [
               Container(
-                width: 42, height: 42,
+                width: 44, height: 44,
                 decoration: BoxDecoration(
-                  color: isWorking ? AppColors.sky500 : AppColors.grey100,
+                  color: isWorking ? AppColors.darkBlue500 : AppColors.grey100,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(
@@ -1173,18 +1196,25 @@ class _ScheduleRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_fullDayName(day),
-                        style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w700, color: AppColors.darkBlue900)),
                     Text(
-                      isWorking ? '$startTime – $endTime' : 'Not available',
+                      _fullDayName(day),
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.darkBlue900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isWorking ? '$startTime – $endTime' : 'Day off',
                       style: AppTextStyles.caption.copyWith(
-                        color: isWorking ? AppColors.sky600 : AppColors.grey400,
-                        fontWeight: FontWeight.w600,
+                        color: isWorking ? AppColors.darkBlue500 : AppColors.grey400,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -1192,13 +1222,13 @@ class _ScheduleRow extends StatelessWidget {
               ),
               Switch.adaptive(
                 value: isWorking,
-                activeColor: AppColors.sky500,
+                activeColor: AppColors.darkBlue500,
                 onChanged: onToggle,
               ),
             ],
           ),
           if (isWorking) ...[
-            const Divider(height: 24, color: AppColors.grey100),
+            const Divider(height: 22, color: AppColors.grey100),
             Row(
               children: [
                 Expanded(
@@ -1223,7 +1253,7 @@ class _ScheduleRow extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
@@ -1231,9 +1261,9 @@ class _ScheduleRow extends StatelessWidget {
                 icon: const Icon(Icons.content_copy_rounded, size: 14),
                 label: const Text('Apply to all working days'),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.sky600,
+                  foregroundColor: AppColors.darkBlue500,
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                 ),
               ),
             ),

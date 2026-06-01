@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
 import '../../../core/theme/app_colors.dart';
@@ -21,7 +24,8 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
   GoogleMapController? _mapController;
   Position? _currentPosition;
   final Set<Marker> _markers = {};
-  BitmapDescriptor? _customMarkerIcon;
+  BitmapDescriptor? _hospitalMarker;
+  BitmapDescriptor? _pharmacyMarker;
   final Set<Polyline> _polylines = {};
   bool _isLoading = true;
   bool _isSearching = false;
@@ -57,29 +61,46 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
   }
 
   Future<void> _loadCustomMarker() async {
-    _customMarkerIcon = await _createCustomMarkerIcon();
+    _hospitalMarker = await _createCustomMarkerIcon(isPharmacy: false);
+    _pharmacyMarker = await _createCustomMarkerIcon(isPharmacy: true);
     _rebuildMarkers(); // Initial marker build if data is already there
   }
 
-  Future<BitmapDescriptor> _createCustomMarkerIcon() async {
+  Future<BitmapDescriptor> _createCustomMarkerIcon({required bool isPharmacy}) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
     const double size = 120.0;
-    
-    // Draw outer glow/shadow
-    final Paint shadowPaint = Paint()..color = AppColors.sky500.withOpacity(0.3)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+
+    // Hospital: solid blue circle, white cross.
+    // Pharmacy: white circle with thin blue ring, blue cross — visual inverse.
+    final Color glowColor = AppColors.sky500.withOpacity(0.3);
+    final Color bodyColor = isPharmacy ? Colors.white : AppColors.sky600;
+    final Color crossColor = isPharmacy ? AppColors.sky600 : Colors.white;
+
+    // Outer glow/shadow — same for both so they share the same "weight"
+    final Paint shadowPaint = Paint()
+      ..color = glowColor
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
     canvas.drawCircle(const Offset(size / 2, size / 2), size / 2.5, shadowPaint);
 
-    // Draw main circle
-    final Paint circlePaint = Paint()..color = AppColors.sky600;
+    // Main circle
+    final Paint circlePaint = Paint()..color = bodyColor;
     canvas.drawCircle(const Offset(size / 2, size / 2), size / 4, circlePaint);
 
-    // Draw a subtle cross
+    // Pharmacy gets a thin blue border so the white body reads on the map
+    if (isPharmacy) {
+      final Paint borderPaint = Paint()
+        ..color = AppColors.sky600
+        ..strokeWidth = 3
+        ..style = PaintingStyle.stroke;
+      canvas.drawCircle(const Offset(size / 2, size / 2), size / 4, borderPaint);
+    }
+
+    // Cross
     final Paint crossPaint = Paint()
-      ..color = Colors.white
+      ..color = crossColor
       ..strokeWidth = 5
       ..strokeCap = StrokeCap.round;
-
     const double crossSize = 12.0;
     canvas.drawLine(const Offset(size / 2 - crossSize, size / 2), const Offset(size / 2 + crossSize, size / 2), crossPaint);
     canvas.drawLine(const Offset(size / 2, size / 2 - crossSize), const Offset(size / 2, size / 2 + crossSize), crossPaint);
@@ -89,117 +110,193 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
     return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
   }
 
-  Future<void> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+  static Position _defaultPosition() => Position(
+        latitude: 4.0511, longitude: 9.7679, // Douala
+        timestamp: DateTime.now(),
+        accuracy: 0, altitude: 0,
+        heading: 0, speed: 0, speedAccuracy: 0,
+        altitudeAccuracy: 0, headingAccuracy: 0,
+      );
 
+  Future<void> _determinePosition() async {
     setState(() => _isLoading = true);
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location services are disabled.')),
-        );
-      }
-      setState(() => _isLoading = false);
-      return;
-    }
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permissions are denied')),
-          );
-        }
-        setState(() => _isLoading = false);
-        return;
+    }
+
+    final hasPermission = permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
+
+    Position? position;
+
+    if (serviceEnabled && hasPermission) {
+      // Fast path — use cached last-known fix if available
+      try {
+        position = await Geolocator.getLastKnownPosition();
+      } catch (_) {/* ignore */}
+
+      // Slow path — try a fresh fix; medium accuracy is faster
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 7),
+        );
+      } catch (e) {
+        print('getCurrentPosition timed out, using ${position == null ? 'default' : 'last-known'} position: $e');
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(!serviceEnabled
+              ? 'Location services are off — showing Douala area.'
+              : 'Location permission denied — showing Douala area.')),
+        );
       }
     }
 
-    if (permission == LocationPermission.deniedForever) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permissions are permanently denied, we cannot request permissions.')),
-        );
-      }
-      setState(() => _isLoading = false);
-      return;
-    }
+    final resolved = position ?? _defaultPosition();
+    if (!mounted) return;
+    setState(() {
+      _currentPosition = resolved;
+      _isLoading = false;
+    });
 
-    try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
-      );
-      if (mounted) {
-        setState(() {
-          _currentPosition = position;
-          _isLoading = false;
-        });
-        _searchNearbyClinics(position);
-        print('Location fetched successfully: ${position.latitude}, ${position.longitude}');
-      }
-    } catch (e) {
-      print('Error fetching location: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Location error: $e. Using default view.')),
-        );
-        setState(() {
-          _isLoading = false;
-          // Use default position if location fails
-          _currentPosition = Position(
-            latitude: 4.0511, longitude: 9.7679,
-            timestamp: DateTime.now(), accuracy: 0, altitude: 0,
-            heading: 0, speed: 0, speedAccuracy: 0,
-            altitudeAccuracy: 0, headingAccuracy: 0,
-          );
-        });
-      }
+    // Show cached facilities immediately (if any), then refresh in background.
+    final hadCache = await _loadFacilitiesFromCache(resolved);
+    if (!hadCache) {
+      // No cache → fetch live
+      _searchNearbyClinics(resolved);
+    } else {
+      // Refresh silently in the background after showing cached UI
+      _searchNearbyClinics(resolved, silent: true);
     }
   }
 
-  Future<void> _searchNearbyClinics(Position position) async {
-    setState(() => _isSearching = true);
+  static const _cacheTtl = Duration(days: 7);
+
+  // Round coords to ~110m so a small phone wobble still hits the same cache.
+  // The `v2` suffix invalidates earlier caches that included non-hospital/pharmacy places.
+  String _cacheKey(Position p) =>
+      'facilities_v2_${p.latitude.toStringAsFixed(3)}_${p.longitude.toStringAsFixed(3)}.json';
+
+  Future<File> _cacheFile(Position p) async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/${_cacheKey(p)}');
+  }
+
+  Future<bool> _loadFacilitiesFromCache(Position p) async {
+    try {
+      final f = await _cacheFile(p);
+      if (!await f.exists()) return false;
+      final raw = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+      final ts = DateTime.tryParse(raw['ts']?.toString() ?? '');
+      if (ts == null || DateTime.now().difference(ts) > _cacheTtl) return false;
+      final list = (raw['clinics'] as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      if (list.isEmpty) return false;
+      _clinics
+        ..clear()
+        ..addAll(list);
+      _rebuildMarkers();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _writeFacilitiesCache(Position p) async {
+    try {
+      final f = await _cacheFile(p);
+      await f.writeAsString(jsonEncode({
+        'ts': DateTime.now().toIso8601String(),
+        'clinics': _clinics,
+      }));
+    } catch (_) {/* non-fatal */}
+  }
+
+  Future<void> _searchNearbyClinics(Position position, {bool silent = false}) async {
+    if (!silent) setState(() => _isSearching = true);
+
+    // Hospitals and pharmacies only — nothing else.
+    const queries = <Map<String, String>>[
+      {'type': 'hospital', 'bucket': 'hospital'},
+      {'type': 'pharmacy', 'bucket': 'pharmacy'},
+    ];
 
     try {
-      _clinics.clear();
-      // Fetch hospitals/clinics AND pharmacies in parallel
-      final futures = ['hospital', 'pharmacy'].map((type) async {
+      final seen = <String>{}; // dedupe by place_id
+      final fresh = <Map<String, dynamic>>[];
+
+      final futures = queries.map((q) async {
         final url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
             '?location=${position.latitude},${position.longitude}'
-            '&radius=5000'
-            '&type=$type'
+            '&radius=15000' // 15 km — was 5 km, too tight for most cities
+            '&type=${q['type']}'
             '&key=$_apiKey';
         final response = await _dio.get(url);
-        if (response.data['status'] == 'OK') {
-          final List results = response.data['results'];
-          for (var result in results) {
-            _clinics.add({
-              'id': result['place_id'],
-              'name': result['name'],
-              'lat': result['geometry']['location']['lat'],
-              'lng': result['geometry']['location']['lng'],
-              'address': result['vicinity'],
-              'rating': result['rating']?.toString() ?? '0',
-              'total_ratings': result['user_ratings_total']?.toString() ?? '0',
-              'open_now': result['opening_hours']?['open_now'] ?? false,
-              'type': type,
-            });
-          }
+        if (response.data['status'] != 'OK') return;
+        final List results = response.data['results'];
+        for (var r in results) {
+          final id = r['place_id']?.toString();
+          if (id == null || seen.contains(id)) continue;
+          seen.add(id);
+          fresh.add({
+            'id': id,
+            'name': r['name'],
+            'lat': r['geometry']['location']['lat'],
+            'lng': r['geometry']['location']['lng'],
+            'address': r['vicinity'],
+            'rating': r['rating']?.toString() ?? '0',
+            'total_ratings': r['user_ratings_total']?.toString() ?? '0',
+            'open_now': r['opening_hours']?['open_now'] ?? false,
+            'type': q['bucket'],
+            'photo_ref': _firstPhotoRef(r['photos']),
+          });
         }
       });
       await Future.wait(futures);
+
+      if (fresh.isEmpty) {
+        // Don't wipe a good cache when the network call returns nothing.
+        if (!silent && mounted) setState(() => _isSearching = false);
+        return;
+      }
+
+      // Sort by distance from user — closest first
+      fresh.sort((a, b) {
+        final da = _distanceMeters(position.latitude, position.longitude,
+            (a['lat'] as num).toDouble(), (a['lng'] as num).toDouble());
+        final db = _distanceMeters(position.latitude, position.longitude,
+            (b['lat'] as num).toDouble(), (b['lng'] as num).toDouble());
+        return da.compareTo(db);
+      });
+
+      _clinics
+        ..clear()
+        ..addAll(fresh);
       setState(() => _rebuildMarkers());
+      _writeFacilitiesCache(position);
     } catch (e) {
       print('Error searching places: $e');
     } finally {
-      setState(() => _isSearching = false);
+      if (mounted) setState(() => _isSearching = false);
     }
+  }
+
+  double _distanceMeters(double lat1, double lng1, double lat2, double lng2) {
+    return Geolocator.distanceBetween(lat1, lng1, lat2, lng2);
+  }
+
+  String? _firstPhotoRef(dynamic photos) {
+    if (photos is List && photos.isNotEmpty) {
+      return photos.first['photo_reference']?.toString();
+    }
+    return null;
   }
 
   void _showPlaceFilterSheet() {
@@ -287,7 +384,7 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
   }
 
   void _rebuildMarkers() {
-    if (_customMarkerIcon == null) return;
+    if (_hospitalMarker == null || _pharmacyMarker == null) return;
 
     setState(() {
       _markers.clear();
@@ -301,9 +398,7 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
             markerId: MarkerId(clinic['id']),
             position: LatLng(clinic['lat'], clinic['lng']),
             infoWindow: InfoWindow(title: '${isPharmacy ? "💊 " : "🏥 "}${clinic['name']}'),
-            icon: isPharmacy
-                ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
-                : _customMarkerIcon!,
+            icon: isPharmacy ? _pharmacyMarker! : _hospitalMarker!,
             alpha: (_selectedClinic == null || isSelected) ? 1.0 : 0.3,
             onTap: () {
               setState(() {
@@ -462,7 +557,7 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
                       ),
                       markers: _markers,
                       polylines: _polylines,
-                      myLocationEnabled: true,
+                      myLocationEnabled: false,
                       myLocationButtonEnabled: false,
                       zoomControlsEnabled: false,
                       mapType: MapType.normal,

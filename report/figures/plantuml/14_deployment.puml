@@ -1,0 +1,76 @@
+@startuml deployment
+' --------------------------------------------------------------
+' Deployment Diagram - production topology
+' --------------------------------------------------------------
+title Clinix - Deployment Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam defaultFontSize 11
+skinparam NodeBorderColor #1F4E79
+skinparam NodeBackgroundColor #F5F9FC
+skinparam ComponentBorderColor #1F4E79
+skinparam ComponentBackgroundColor #EAF2F9
+skinparam DatabaseBorderColor #1F4E79
+skinparam DatabaseBackgroundColor #FFF7E0
+skinparam ArrowColor #555555
+
+node "Patient / Provider\nMobile Device" as Phone {
+  component "Flutter App\n(Android / iOS)" as FlutterApp
+}
+
+node "Browser" as Web {
+  component "React Admin\n(Vite build, Nginx-served)" as ReactAdmin
+}
+
+cloud "Railway / Render Cloud" as Cloud {
+  node "ASGI Container\n(Daphne)" as ASGI {
+    component "Django REST API" as DjangoAPI
+    component "Django Channels" as DjangoChannels
+  }
+  node "Worker Container" as Worker {
+    component "Celery Worker"    as CeleryW
+    component "Celery Beat"      as CeleryB
+  }
+  database "PostgreSQL\nManaged DB" as PG
+  database "Redis\nManaged Cache" as Redis
+}
+
+cloud "Firebase" as Firebase {
+  database "Cloud Storage\n(media)" as FS
+  component "FCM"                    as FCM
+  component "Auth (Google OAuth)"    as FBAuth
+}
+
+cloud "External SaaS" as Ext {
+  component "Agora RTC"   as Agora
+  component "CamPay API"  as CamPay
+  component "Twilio SMS"  as Twilio
+  component "Google AI\n(Gemini + STT)" as GAI
+  component "Google Maps" as Maps
+}
+
+FlutterApp --> DjangoAPI       : HTTPS
+FlutterApp --> DjangoChannels  : WSS
+FlutterApp --> FCM             : push registration
+FlutterApp --> Agora           : RTC stream
+FlutterApp --> FBAuth          : OAuth login
+FlutterApp --> FS              : media upload
+FlutterApp --> Maps            : map tiles
+
+ReactAdmin --> DjangoAPI       : HTTPS
+
+DjangoAPI --> PG               : ORM
+DjangoAPI --> Redis            : cache
+DjangoChannels --> Redis       : channel layer
+CeleryW   --> Redis            : broker
+CeleryB   --> Redis            : scheduler
+CeleryW   --> PG
+CeleryW   --> FS
+DjangoAPI --> CamPay           : payment initiate
+CamPay    --> DjangoAPI        : webhook
+DjangoAPI --> Twilio           : SMS OTP
+DjangoAPI --> GAI              : AI calls
+DjangoAPI --> FCM              : push notifications
+@enduml
