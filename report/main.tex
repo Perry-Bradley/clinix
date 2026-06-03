@@ -32,6 +32,15 @@
 \setlist[itemize]{leftmargin=*,topsep=2pt,itemsep=2pt}
 \setlist[enumerate]{leftmargin=*,topsep=2pt,itemsep=2pt}
 
+% --- Numbering depth (template: number chapter, section, subsection only) ---
+\setcounter{secnumdepth}{2}     % stop numbering at \subsection
+\setcounter{tocdepth}{2}        % auto-include in TOC up to \subsection
+% Note: chapter 3 uses \subsubsection*{} + \addcontentsline to force
+% unnumbered flat sub-items into the TOC.
+
+% --- Rename "Bibliography" to "REFERENCES" to match template ---
+\renewcommand{\bibname}{REFERENCES}
+
 \usepackage{xcolor}
 \definecolor{clinixblue}{HTML}{1F4E79}
 \definecolor{codegray}{HTML}{F5F5F5}
@@ -111,9 +120,12 @@
 \input{chapters/chapter4_implementation}
 \input{chapters/chapter5_conclusion}
 
-%=========== BIBLIOGRAPHY ===========
+%=========== REFERENCES ===========
 \bibliographystyle{ieeetr}
 \bibliography{refs}
 \addcontentsline{toc}{chapter}{REFERENCES}
+
+%=========== APPENDICES ===========
+\input{chapters/appendices}
 
 \end{document}

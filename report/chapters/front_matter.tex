@@ -1,44 +1,100 @@
 %================== TITLE PAGE ==================
+% Layout mirrors the official UB / College of Technology B-Tech title
+% page: bilingual two-column header, twin logos, centred title block,
+% submission line, candidate identity, academic year at the foot.
+%
+% Logos: drop ub_logo.png and cot_logo.png into figures/ and the
+% \IfFileExists guards below will pick them up automatically.
+% Until you do, a labelled grey box is shown in their place so
+% alignment is preserved.
+%==================================================
 \thispagestyle{empty}
-\begin{center}
+\begin{titlepage}
+\centering
 
-{\small\textbf{REPUBLIC OF CAMEROON} \hfill \textbf{REPUBLIQUE DU CAMEROUN}}\\
-{\small PEACE--WORK--FATHERLAND \hfill PAIX--TRAVAIL--PATRIE}\\
-{\small \rule{4cm}{0.4pt} \hfill \rule{4cm}{0.4pt}}\\
-{\small MINISTRY OF HIGHER EDUCATION \hfill MINISTÈRE DE L'ENSEIGNEMENT SUPÉRIEUR}\\
-\vspace{1.2cm}
+% ---------- Bilingual two-column header ----------
+\noindent
+\begin{minipage}[t]{0.48\textwidth}
+  \centering
+  \textbf{REPUBLIC OF CAMEROON}\\[2pt]
+  {\small PEACE--WORK--FATHERLAND}\\[2pt]
+  {\small\rule{0.55\linewidth}{0.4pt}}\\[2pt]
+  {\small MINISTRY OF HIGHER}\\
+  {\small EDUCATION}
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.48\textwidth}
+  \centering
+  \textbf{REPUBLIQUE DU CAMEROUN}\\[2pt]
+  {\small PAIX--TRAVAIL--PATRIE}\\[2pt]
+  {\small\rule{0.55\linewidth}{0.4pt}}\\[2pt]
+  {\small MINIST\`ERE DE L'ENSEIGNEMENT}\\
+  {\small SUP\'ERIEUR}
+\end{minipage}
 
-{\LARGE\bfseries UNIVERSITY OF BUEA}\\
-\vspace{0.6cm}
+\vspace{1.4cm}
 
-% Place University logos here when available:
-% \includegraphics[width=0.18\textwidth]{figures/ub_logo.png}\hspace{2cm}
-% \includegraphics[width=0.18\textwidth]{figures/cot_logo.png}
-\vspace{0.6cm}
+% ---------- University name (centred above the logos in template) ----------
+{\Large\bfseries UNIVERSITY OF BUEA \par}
 
-{\Large\bfseries COLLEGE OF TECHNOLOGY}\\[0.6cm]
-{\large\bfseries DEPARTMENT: COMPUTER ENGINEERING}\\
-{\large\bfseries OPTION: SOFTWARE}\\
+\vspace{0.8cm}
+
+% ---------- Twin logos ----------
+\noindent
+\begin{minipage}[c]{0.48\textwidth}
+  \centering
+  \IfFileExists{figures/ub_logo.png}{%
+    \includegraphics[width=0.32\linewidth]{figures/ub_logo.png}%
+  }{%
+    \fbox{\parbox{0.32\linewidth}{\centering\vspace{1.6cm} UB Logo \\ (drop \texttt{ub\_logo.png}\\ into \texttt{figures/}) \vspace{1.6cm}}}%
+  }
+\end{minipage}%
+\hfill
+\begin{minipage}[c]{0.48\textwidth}
+  \centering
+  \IfFileExists{figures/cot_logo.png}{%
+    \includegraphics[width=0.32\linewidth]{figures/cot_logo.png}%
+  }{%
+    \fbox{\parbox{0.32\linewidth}{\centering\vspace{1.6cm} COT Logo \\ (drop \texttt{cot\_logo.png}\\ into \texttt{figures/}) \vspace{1.6cm}}}%
+  }
+\end{minipage}
+
+\vspace{0.8cm}
+
+% ---------- College / Department / Option ----------
+{\Large\bfseries COLLEGE OF TECHNOLOGY \par}
+\vspace{0.4cm}
+{\large\bfseries DEPARTMENT: \quad COMPUTER ENGINEERING \par}
+\vspace{0.2cm}
+{\large\bfseries OPTION: SOFTWARE \par}
+
+\vspace{0.9cm}
+
+% ---------- Title scroll/box ----------
+{\setlength{\fboxsep}{14pt}%
+\fbox{\parbox{0.80\textwidth}{\centering
+  {\LARGE\bfseries Design \& Implementation of ``CLINIX'' \par}
+  \vspace{0.35cm}
+  {\Large\bfseries A Mobile Health Care Platform \par}
+}}}
 
 \vspace{1.0cm}
-\fbox{\parbox{0.85\textwidth}{\centering
-\vspace{0.3cm}
-{\LARGE\bfseries Design \& Implementation of ``CLINIX''}\\[0.4cm]
-{\Large\bfseries A Mobile Health Care Platform}\\
-\vspace{0.3cm}
-}}
 
-\vspace{1.2cm}
-{\normalsize B-TECH Project Report Submitted to the \textbf{Department of Computer Engineering}, College of Technology, University of Buea}\\[0.8cm]
+% ---------- Submission line ----------
+{\normalsize B-TECH Project Report Submitted to the \textbf{Department of Computer Engineering}, \textbf{College of Technology}, \textbf{University of Buea} \par}
 
-{\normalsize Presented By:}\\[0.4cm]
-{\Large\bfseries SEPO PERRY-BRADLEY DINGA}\\[0.2cm]
-{\large\bfseries CT23A145}\\
+\vspace{0.6cm}
+{\normalsize Presented By: \par}
+\vspace{0.3cm}
+{\Large\bfseries SEPO PERRY-BRADLEY DINGA \par}
+\vspace{0.15cm}
+{\Large\bfseries CT23A145 \par}
 
 \vfill
-{\normalsize ACADEMIC YEAR 2025/2026}
-\end{center}
-\clearpage
+
+{\normalsize ACADEMIC YEAR 2025/2026 \par}
+
+\end{titlepage}
 
 %================== CERTIFICATION ==================
 \addcontentsline{toc}{chapter}{CERTIFICATION}

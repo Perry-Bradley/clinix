@@ -1,0 +1,268 @@
+%==============================================================
+% APPENDICES
+% Follows the BTech template:
+%   APPENDICES
+%     Appendix 1: ...
+%     Appendix 2: ...
+%==============================================================
+\appendix
+
+\chapter*{APPENDICES}
+\addcontentsline{toc}{chapter}{APPENDICES}
+\markboth{APPENDICES}{APPENDICES}
+
+%==============================================================
+% APPENDIX 1 — Full REST API Endpoint Reference
+%==============================================================
+\section*{Appendix 1: Full REST API Endpoint Reference}
+\addcontentsline{toc}{section}{Appendix 1: Full REST API Endpoint Reference}
+\label{app:api-reference}
+
+The Clinix backend exposes the following REST endpoints under the
+\texttt{/api/v1/} prefix. All endpoints require a valid JWT
+(\texttt{Authorization: Bearer <token>}) unless explicitly marked as
+\emph{public}.
+
+\subsection*{A1.1 Authentication}
+
+\begin{longtable}{p{1.4cm} p{6.5cm} p{6.0cm}}
+\toprule
+\textbf{Method} & \textbf{Path} & \textbf{Purpose} \\
+\midrule
+\endhead
+POST  & \texttt{/auth/register/}                  & Basic email/phone signup (public). \\
+POST  & \texttt{/auth/role-selection/}            & Assign \texttt{user\_type} (patient/provider). \\
+POST  & \texttt{/auth/register/patient/}          & Patient signup + send OTP. \\
+POST  & \texttt{/auth/register/provider/}         & Provider signup + send OTP. \\
+POST  & \texttt{/auth/otp/send/}                  & Send SMS OTP (public). \\
+POST  & \texttt{/auth/otp/verify/}                & Verify SMS OTP $\rightarrow$ JWT pair. \\
+POST  & \texttt{/auth/otp/email/send/}            & Send email OTP. \\
+POST  & \texttt{/auth/otp/email/verify/}          & Verify email OTP $\rightarrow$ JWT pair. \\
+POST  & \texttt{/auth/login/}                     & Email or phone + password login (public). \\
+POST  & \texttt{/auth/token/refresh/}             & Refresh JWT access token. \\
+POST  & \texttt{/auth/logout/}                    & Blacklist current refresh token. \\
+POST  & \texttt{/auth/password/reset/}            & Request OTP for password reset. \\
+PATCH & \texttt{/auth/password/confirm/}          & Verify OTP and reset password. \\
+POST  & \texttt{/auth/google-auth/}               & Firebase ID token $\rightarrow$ JWT (public). \\
+POST  & \texttt{/auth/fcm-token/}                 & Register the device FCM token. \\
+PATCH & \texttt{/auth/provider/bio/}              & Provider updates bio and consultation fee. \\
+\bottomrule
+\end{longtable}
+
+\subsection*{A1.2 Providers}
+
+\begin{longtable}{p{1.4cm} p{6.5cm} p{6.0cm}}
+\toprule
+\textbf{Method} & \textbf{Path} & \textbf{Purpose} \\
+\midrule
+\endhead
+GET / PATCH & \texttt{/providers/profile/}                 & Provider's own profile. \\
+GET / POST  & \texttt{/providers/credentials/}             & List or upload KYC documents. \\
+GET / POST  & \texttt{/providers/schedule/}                & Get or update working schedule. \\
+GET         & \texttt{/providers/earnings/}                & Wallet balance, recent transactions. \\
+POST        & \texttt{/providers/withdraw/}                & Request payout to mobile money. \\
+GET         & \texttt{/providers/dashboard/}               & Today's appointments, pending requests, rating. \\
+GET         & \texttt{/providers/specialties/}             & Active specialties (public). \\
+GET         & \texttt{/providers/nearby/}                  & Filter approved providers by area + availability. \\
+GET         & \texttt{/providers/recommended/}             & AI-driven smart provider recommendation. \\
+GET         & \texttt{/providers/<uuid>/}                  & Public provider detail. \\
+GET / POST  & \texttt{/providers/<uuid>/reviews/}          & List or create patient reviews. \\
+\bottomrule
+\end{longtable}
+
+\subsection*{A1.3 Appointments}
+
+\begin{longtable}{p{1.4cm} p{6.5cm} p{6.0cm}}
+\toprule
+\textbf{Method} & \textbf{Path} & \textbf{Purpose} \\
+\midrule
+\endhead
+GET / POST              & \texttt{/appointments/}                 & List user's appointments or create a new one. \\
+GET                     & \texttt{/appointments/available-slots/} & Query provider's free 30-min slots (public). \\
+GET / PATCH / DELETE    & \texttt{/appointments/<uuid>/}          & Appointment detail, update, or cancel. \\
+\bottomrule
+\end{longtable}
+
+\subsection*{A1.4 Consultations}
+
+\begin{longtable}{p{1.4cm} p{6.5cm} p{6.0cm}}
+\toprule
+\textbf{Method} & \textbf{Path} & \textbf{Purpose} \\
+\midrule
+\endhead
+POST  & \texttt{/consultations/start/}                                 & Start a consultation for an appointment. \\
+GET   & \texttt{/consultations/<uuid>/}                                & Consultation detail. \\
+PATCH & \texttt{/consultations/<uuid>/end/}                            & Provider saves notes and ends consultation. \\
+POST  & \texttt{/consultations/<uuid>/prescription/}                   & Add a prescription to a consultation. \\
+POST  & \texttt{/consultations/prescriptions/}                         & Stand-alone prescription creation. \\
+POST  & \texttt{/consultations/prescriptions/<uuid>/share/}            & Grant/revoke prescription access. \\
+GET   & \texttt{/consultations/<uuid>/transcript/}                     & Fetch AI chat transcript. \\
+POST  & \texttt{/consultations/<uuid>/audio/}                          & Upload call recording (triggers AI scribe). \\
+POST  & \texttt{/consultations/<uuid>/ring/}                           & Initiate call (sends FCM to peer). \\
+POST  & \texttt{/consultations/<uuid>/ring/missed/}                    & Log a missed call. \\
+GET   & \texttt{/consultations/calls/}                                 & Call history. \\
+GET   & \texttt{/consultations/agora/token/}                           & Issue Agora RTC token. \\
+POST  & \texttt{/consultations/<uuid>/upload/}                         & Upload chat file. \\
+GET   & \texttt{/consultations/<uuid>/messages/}                       & List chat messages. \\
+GET   & \texttt{/consultations/reminders/}                             & Active medication reminders for patient. \\
+GET / POST & \texttt{/consultations/reminders/<uuid>/log/}             & Log medication adherence. \\
+GET   & \texttt{/consultations/reminders/adherence/}                   & Patient's adherence statistics. \\
+GET / POST & \texttt{/consultations/records/}                          & List or create medical records. \\
+GET / PATCH / DELETE & \texttt{/consultations/records/<uuid>/}         & Medical record CRUD. \\
+POST  & \texttt{/consultations/records/<uuid>/share/}                  & Grant/revoke record access. \\
+GET / POST & \texttt{/consultations/referrals/}                        & List or create referrals. \\
+GET / PATCH & \texttt{/consultations/referrals/<uuid>/}                & Referral detail or update. \\
+\bottomrule
+\end{longtable}
+
+\subsection*{A1.5 AI Engine}
+
+\begin{longtable}{p{1.4cm} p{6.5cm} p{6.0cm}}
+\toprule
+\textbf{Method} & \textbf{Path} & \textbf{Purpose} \\
+\midrule
+\endhead
+POST & \texttt{/ai/chat/start/}                  & Start an AI consultation session. \\
+GET  & \texttt{/ai/chat/sessions/}               & List the patient's AI sessions. \\
+POST & \texttt{/ai/chat/<uuid>/message/}         & Send a turn (text + optional image). \\
+GET  & \texttt{/ai/chat/<uuid>/}                 & Session detail with full history. \\
+POST & \texttt{/ai/chat/<uuid>/complete/}        & Finalise session, return structured assessment. \\
+POST & \texttt{/ai/chat/<uuid>/recommend/}       & Mid-session provider recommendation. \\
+\bottomrule
+\end{longtable}
+
+\subsection*{A1.6 Payments}
+
+\begin{longtable}{p{1.4cm} p{6.5cm} p{6.0cm}}
+\toprule
+\textbf{Method} & \textbf{Path} & \textbf{Purpose} \\
+\midrule
+\endhead
+POST & \texttt{/payments/initiate/}            & Start a CamPay payment, returns USSD code. \\
+GET  & \texttt{/payments/status/<uuid>/}       & Check payment status (polls CamPay). \\
+POST & \texttt{/payments/campay/webhook/}      & CamPay callback (public). \\
+GET  & \texttt{/payments/history/}             & Payment history (patient or provider filtered). \\
+GET  & \texttt{/payments/<uuid>/}              & Payment detail. \\
+POST & \texttt{/payments/subscription/}        & Provider subscription handling. \\
+\bottomrule
+\end{longtable}
+
+\subsection*{A1.7 Health Metrics}
+
+\begin{longtable}{p{1.4cm} p{6.5cm} p{6.0cm}}
+\toprule
+\textbf{Method} & \textbf{Path} & \textbf{Purpose} \\
+\midrule
+\endhead
+GET  & \texttt{/health/summary/}        & Aggregated patient vitals (latest readings + trends). \\
+POST & \texttt{/health/heart-rate/}     & Push a heart-rate / HRV / respiratory-rate reading. \\
+POST & \texttt{/health/activity/sync/}  & Sync today's step count and distance. \\
+\bottomrule
+\end{longtable}
+
+\subsection*{A1.8 WebSocket Endpoints (Channels)}
+
+\begin{longtable}{p{6.5cm} p{7.5cm}}
+\toprule
+\textbf{URL} & \textbf{Purpose} \\
+\midrule
+\endhead
+\texttt{ws://host/ws/consultation/<uuid>/chat/?token=<jwt>} & Real-time consultation chat. \\
+\texttt{ws://host/ws/dchat/<uuid>/?token=<jwt>}             & Real-time direct chat between patient and provider. \\
+\texttt{ws://host/ws/notifications/?token=<jwt>}            & In-app notification stream. \\
+\bottomrule
+\end{longtable}
+
+%==============================================================
+% APPENDIX 2 — Sample Environment Configuration
+%==============================================================
+\section*{Appendix 2: Sample Environment Configuration}
+\addcontentsline{toc}{section}{Appendix 2: Sample Environment Configuration}
+\label{app:env-config}
+
+The Django backend reads configuration from a \texttt{.env} file at
+project root using \texttt{django-environ}. The complete set of
+variables expected by Clinix is shown below. Values shown are
+placeholders; real secrets must never be committed to version
+control.
+
+\begin{lstlisting}[caption={Sample \texttt{.env} for the Clinix backend}]
+# ----- Core Django -----
+SECRET_KEY=replace-with-50-char-random-string
+DEBUG=False
+ALLOWED_HOSTS=clinix-production.up.railway.app,localhost,127.0.0.1
+
+# ----- Database (PostgreSQL) -----
+DATABASE_URL=postgres://user:pass@host:5432/clinix
+
+# ----- Cache / Channels / Celery (Redis) -----
+REDIS_URL=redis://default:pass@host:6379/0
+CELERY_BROKER_URL=redis://default:pass@host:6379/1
+CHANNEL_LAYER_REDIS_URL=redis://default:pass@host:6379/2
+
+# ----- JWT -----
+JWT_ACCESS_LIFETIME_MINUTES=60
+JWT_REFRESH_LIFETIME_DAYS=7
+
+# ----- Firebase -----
+FIREBASE_CREDENTIALS=/etc/secrets/firebase_key.json
+GCP_AUDIO_BUCKET=clinix-call-recordings
+
+# ----- Google AI (Gemini + Speech-to-Text) -----
+GEMINI_API_KEY=AIza...
+MEDLM_MODEL_ID=gemini-1.5-flash-latest
+GOOGLE_APPLICATION_CREDENTIALS=/etc/secrets/gcp-key.json
+
+# ----- Agora (video calls) -----
+AGORA_APP_ID=your-agora-app-id
+AGORA_APP_CERT=your-agora-app-certificate
+
+# ----- CamPay (mobile money) -----
+CAMPAY_BASE_URL=https://demo.campay.net/api/
+CAMPAY_USERNAME=your-campay-username
+CAMPAY_PASSWORD=your-campay-password
+CAMPAY_WEBHOOK_URL=https://your-host/api/v1/payments/campay/webhook/
+
+# ----- Twilio (SMS OTP) -----
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxx
+TWILIO_FROM_NUMBER=+12345678901
+
+# ----- Email (OTP + password reset) -----
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=noreply@clinix.cm
+EMAIL_HOST_PASSWORD=app-specific-password
+EMAIL_USE_TLS=True
+
+# ----- Front-end origins (CORS) -----
+CORS_ALLOWED_ORIGINS=https://admin.clinix.cm,http://localhost:5173
+
+# ----- Defaults -----
+DEFAULT_CONSULTATION_FEE_XAF=15000
+DEFAULT_SERVICE_CHARGE_XAF=500
+\end{lstlisting}
+
+\subsection*{A2.1 Mobile App Configuration}
+
+The Flutter mobile app reads its base URL and feature flags from
+\texttt{lib/core/constants/api\_constants.dart} and an optional
+bundled \texttt{.env} loaded via \texttt{flutter\_dotenv}:
+
+\begin{lstlisting}[caption={Sample \texttt{.env} for the Flutter mobile app}]
+API_BASE_URL=https://clinix-production.up.railway.app/api/v1/
+WS_BASE_URL=wss://clinix-production.up.railway.app/ws/
+GOOGLE_MAPS_API_KEY=AIza...
+AGORA_APP_ID=your-agora-app-id
+FIREBASE_WEB_API_KEY=AIza...
+\end{lstlisting}
+
+\subsection*{A2.2 Admin Dashboard Configuration}
+
+The React admin dashboard reads its API base URL from a Vite
+\texttt{.env} file at build time:
+
+\begin{lstlisting}[caption={Sample \texttt{.env} for the React admin dashboard}]
+VITE_API_BASE_URL=https://clinix-production.up.railway.app/api/v1
+VITE_APP_TITLE=Clinix Admin
+\end{lstlisting}

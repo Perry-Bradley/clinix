@@ -12,10 +12,10 @@ This chapter examines existing digital-health systems that inform the design of 
 \label{sec:lit-cameroon}
 
 \subsection{Waspito}
-Waspito is a Cameroonian telemedicine start-up founded in Douala in 2020. The platform connects patients to verified medical doctors through short video consultations and an in-app text-based ``health community'' where users can post anonymous questions answered by clinicians. After early traction in Cameroon, Waspito expanded into C\^ote~d'Ivoire and other Francophone African markets.
+Waspito~\cite{waspito} is a Cameroonian telemedicine start-up founded in Douala in 2020. The platform connects patients to verified medical doctors through short video consultations and an in-app text-based ``health community'' where users can post anonymous questions answered by clinicians. After early traction in Cameroon, Waspito expanded into C\^ote~d'Ivoire and other Francophone African markets.
 
-\paragraph{Tech stack}
-A native mobile application (Android and iOS) backed by a cloud-hosted REST API. Public sources indicate use of WebRTC for video consultations and integration with local mobile-money providers (MTN Mobile Money, Orange Money) for payment.
+\paragraph{Programming languages and stack}
+\textbf{Mobile:} native Android in \textbf{Java/Kotlin} and native iOS in \textbf{Swift} (with Objective-C interop). \textbf{Backend:} cloud-hosted REST API, likely \textbf{Node.js (JavaScript/TypeScript)} or \textbf{Python}, exposing JSON over HTTPS. \textbf{Real-time:} WebRTC for video. \textbf{Payments:} HTTP integrations with MTN Mobile Money and Orange Money in XAF.
 
 \paragraph{Features}
 \begin{itemize}
@@ -40,10 +40,10 @@ A native mobile application (Android and iOS) backed by a cloud-hosted REST API.
 \end{itemize}
 
 \subsection{GiftedMom}
-GiftedMom is a Yaound\'e-based health-tech initiative founded by Alain Nteff that focuses on maternal and child health. It started as an SMS- and USSD-based reminder service for pregnant women in low-connectivity regions and has since added a smartphone application and online consultation features. It is one of the most-cited Cameroonian e-health success stories internationally.
+GiftedMom~\cite{giftedmom} is a Yaound\'e-based health-tech initiative founded by Alain Nteff that focuses on maternal and child health. It started as an SMS- and USSD-based reminder service for pregnant women in low-connectivity regions and has since added a smartphone application and online consultation features. It is one of the most-cited Cameroonian e-health success stories internationally.
 
-\paragraph{Tech stack}
-A hybrid stack designed for low-bandwidth contexts: SMS / USSD gateways (for feature-phone users), a web back-end, and a mobile application for smartphone users. Notification dispatch is heavily reliant on local telecom SMS APIs.
+\paragraph{Programming languages and stack}
+A hybrid stack designed for low-bandwidth contexts. \textbf{Backend:} \textbf{PHP} or \textbf{Python} server logic talking to telecom SMS/USSD gateways. \textbf{Web admin:} \textbf{JavaScript} (likely jQuery/early React). \textbf{Mobile app:} native Android in \textbf{Java/Kotlin}. \textbf{Database:} \textbf{MySQL} or \textbf{PostgreSQL}. The SMS/USSD layer is the critical path and is implemented against telco-specific HTTP APIs.
 
 \paragraph{Features}
 \begin{itemize}
@@ -68,10 +68,10 @@ A hybrid stack designed for low-bandwidth contexts: SMS / USSD gateways (for fea
 \end{itemize}
 
 \subsection{Cardiopad (HIMORE Medical)}
-Cardiopad is a Cameroonian medical-tablet system invented by Arthur Zang and produced by HIMORE Medical, designed to bring cardiac diagnostics to rural areas. A nurse in a remote village performs an ECG on the patient using the Cardiopad, and the recorded signal is transmitted over the mobile network to a cardiologist in a city for interpretation. Although technically a device-plus-platform rather than a pure mobile app, it is a defining example of Cameroonian telemedicine.
+Cardiopad~\cite{cardiopad} is a Cameroonian medical-tablet system invented by Arthur Zang and produced by HIMORE Medical, designed to bring cardiac diagnostics to rural areas. A nurse in a remote village performs an ECG on the patient using the Cardiopad, and the recorded signal is transmitted over the mobile network to a cardiologist in a city for interpretation. Although technically a device-plus-platform rather than a pure mobile app, it is a defining example of Cameroonian telemedicine.
 
-\paragraph{Tech stack}
-A custom Android-based tablet with attached ECG sensors, paired with a server back-end that buffers ECG transmissions and routes them to cardiologists for asynchronous interpretation. Communication uses GSM/GPRS rather than assuming Wi-Fi or 4G.
+\paragraph{Programming languages and stack}
+\textbf{Tablet firmware/middleware:} embedded \textbf{C/C++} for the ECG sensor driver and signal-acquisition layer. \textbf{Tablet application:} native Android in \textbf{Java} (Cardiopad pre-dates the Kotlin era). \textbf{Server back-end:} \textbf{Java} (Spring) or \textbf{PHP} for the transmission relay that routes ECG signals to cardiologists. \textbf{Network:} GSM/GPRS bearer rather than Wi-Fi or 4G.
 
 \paragraph{Features}
 \begin{itemize}
@@ -95,10 +95,10 @@ A custom Android-based tablet with attached ECG sensors, paired with a server ba
 \end{itemize}
 
 \subsection{Healthlane}
-Healthlane is a Cameroonian-founded health-tech company that began as a digital primary-care platform and later pivoted toward health-financing for African users. In its primary-care phase, it offered patients a digital ``health concierge'' that booked appointments, tracked records, and connected users to vetted clinics, supported by a network of provider partnerships.
+Healthlane~\cite{healthlane} is a Cameroonian-founded health-tech company that began as a digital primary-care platform and later pivoted toward health-financing for African users. In its primary-care phase, it offered patients a digital ``health concierge'' that booked appointments, tracked records, and connected users to vetted clinics, supported by a network of provider partnerships.
 
-\paragraph{Tech stack}
-A cloud-hosted web platform with mobile applications for iOS and Android, integrated with Stripe and African mobile-money rails. Public reporting notes use of standard modern stacks (React/Node-style web + native mobile apps).
+\paragraph{Programming languages and stack}
+\textbf{Web:} \textbf{JavaScript/TypeScript} with \textbf{React} on the front-end and \textbf{Node.js} on the back-end. \textbf{Mobile:} cross-platform via \textbf{React Native} (also JavaScript/TypeScript) or native Android (\textbf{Kotlin}) and iOS (\textbf{Swift}). \textbf{Payments:} \textbf{Stripe} for cards and direct API integrations to African mobile-money rails.
 
 \paragraph{Features}
 \begin{itemize}
@@ -125,10 +125,10 @@ A cloud-hosted web platform with mobile applications for iOS and Android, integr
 \label{sec:lit-africa}
 
 \subsection{DabaDoc (Morocco, Pan-African)}
-DabaDoc is a Casablanca-headquartered platform offering doctor-appointment booking and telemedicine consultations across multiple Francophone African markets (Morocco, Algeria, Tunisia, and West Africa). It bridges traditional in-person bookings with on-demand video and chat consultations.
+DabaDoc~\cite{dabadoc} is a Casablanca-headquartered platform offering doctor-appointment booking and telemedicine consultations across multiple Francophone African markets (Morocco, Algeria, Tunisia, and West Africa). It bridges traditional in-person bookings with on-demand video and chat consultations.
 
-\paragraph{Tech stack}
-A cloud-hosted web platform plus native iOS/Android apps. WebRTC is used for video, with multilingual interfaces (French, Arabic, English).
+\paragraph{Programming languages and stack}
+\textbf{Web:} \textbf{JavaScript} (React or Vue) front-end with a \textbf{Node.js} or \textbf{PHP (Laravel)} back-end. \textbf{Mobile:} native iOS in \textbf{Swift} and native Android in \textbf{Kotlin}. \textbf{Real-time:} WebRTC for video. Multilingual UI (French, Arabic, English) via JSON resource files.
 
 \paragraph{Features}
 Doctor directory and search, real-time appointment booking, video and chat consultations, and an integrated calendar for physicians.
@@ -140,10 +140,10 @@ Large Francophone reach with multi-country coverage; strong UX polish; establish
 Limited penetration in Cameroon specifically; pricing and provider network are not optimised for the Cameroonian XAF mobile-money market.
 
 \subsection{babyl Rwanda}
-babyl is the Rwandan operation of Babylon Health (a UK-founded telemedicine company), running one of Africa's largest digital primary-care services. Subscribers consult clinicians through audio calls and chat, and the service is partially subsidised under Rwanda's national health-insurance scheme.
+babyl~\cite{babyl_rwanda} is the Rwandan operation of Babylon Health (a UK-founded telemedicine company), running one of Africa's largest digital primary-care services. Subscribers consult clinicians through audio calls and chat, and the service is partially subsidised under Rwanda's national health-insurance scheme.
 
-\paragraph{Tech stack}
-An Android-first mobile app supported by a national call-centre, WebRTC-style audio, and integration with Rwanda's public health-insurance system (Mutuelle de Sant\'e).
+\paragraph{Programming languages and stack}
+Inherited from the Babylon Health technology base. \textbf{Mobile (Android-first):} native Android in \textbf{Java/Kotlin}. \textbf{Back-end:} \textbf{TypeScript/Node.js} micro-services with some \textbf{Python} for the AI components. Audio calling uses a WebRTC-style stack, and a call-centre layer bridges to lower-end phones. Insurance integration uses HTTP APIs into Rwanda's Mutuelle de Sant\'e.
 
 \paragraph{Features}
 On-demand audio consultations with general practitioners, e-prescriptions delivered to local pharmacies, and follow-up SMS care plans.
@@ -155,10 +155,10 @@ National scale (millions of registered users); insurance-integrated billing; mat
 Audio-only (no video); deeply tied to Rwandan health insurance, which is not directly transferable to Cameroon; limited AI-symptom-triage features in the consumer flow.
 
 \subsection{Reliance Health (Nigeria)}
-Reliance Health is a Lagos-headquartered company that combines health-insurance underwriting, telemedicine, and a network of partner clinics across Nigeria and (more recently) other African markets. Patients access doctors through chat and video consultations within an insurance subscription.
+Reliance Health~\cite{reliance_health} is a Lagos-headquartered company that combines health-insurance underwriting, telemedicine, and a network of partner clinics across Nigeria and (more recently) other African markets. Patients access doctors through chat and video consultations within an insurance subscription.
 
-\paragraph{Tech stack}
-A modern web + native-mobile stack with REST APIs and chat-first consultation flows. Payments are integrated with Nigerian banking rails and emerging cross-border products.
+\paragraph{Programming languages and stack}
+\textbf{Back-end:} \textbf{Node.js (TypeScript)} or \textbf{Python} for the insurance and consultation services, with REST APIs over HTTPS. \textbf{Web:} \textbf{React/TypeScript}. \textbf{Mobile:} \textbf{React Native (JavaScript/TypeScript)}. \textbf{Payments:} integrations with Nigerian banking rails (Paystack/Flutterwave) and emerging cross-border products.
 
 \paragraph{Features}
 Insurance enrolment, chat and video telemedicine, prescription delivery, lab-test ordering, and a curated clinic network.
@@ -170,10 +170,10 @@ Tight integration of insurance and care delivery; strong vertical model (payer +
 Designed around insurance-financed care, which is a smaller fraction of the market in Cameroon than in Nigeria; less optimised for one-off mobile-money consultations.
 
 \subsection{mPharma (Ghana)}
-mPharma is a Ghanaian health-tech company operating across multiple African countries. It focuses on the pharmacy side of healthcare: medication inventory management for pharmacies, drug-price negotiation, and patient-facing prescription services through partner pharmacies (and, more recently, ``mutti'' health centres).
+mPharma~\cite{mpharma} is a Ghanaian health-tech company operating across multiple African countries. It focuses on the pharmacy side of healthcare: medication inventory management for pharmacies, drug-price negotiation, and patient-facing prescription services through partner pharmacies (and, more recently, ``mutti'' health centres).
 
-\paragraph{Tech stack}
-Inventory-management software for partner pharmacies plus a patient-facing mobile experience built around its membership ``mutti'' product.
+\paragraph{Programming languages and stack}
+\textbf{Pharmacy inventory web app:} \textbf{JavaScript/TypeScript} (React) on top of a \textbf{Node.js} or \textbf{Python (Django)} back-end. \textbf{Mobile (``mutti'' membership):} \textbf{React Native} or native Android in \textbf{Kotlin}. \textbf{Database:} \textbf{PostgreSQL} or similar relational store for the supply-chain ledger.
 
 \paragraph{Features}
 Pharmacy supply-chain management, prescription discounts for members, partner-pharmacy locator, and chronic-medication subscription delivery.
@@ -188,10 +188,10 @@ Pharmacy- and medication-centric; does not provide direct doctor-consultation or
 \label{sec:lit-global}
 
 \subsection{Teladoc Health (United States, Global)}
-Teladoc is one of the world's largest telehealth providers, offering primary care, mental-health, chronic-care, and expert-second-opinion services through video and chat. It serves as an industry benchmark for scale, regulatory maturity, and provider-network management.
+Teladoc~\cite{teladoc} is one of the world's largest telehealth providers, offering primary care, mental-health, chronic-care, and expert-second-opinion services through video and chat. It serves as an industry benchmark for scale, regulatory maturity, and provider-network management.
 
-\paragraph{Tech stack}
-A multi-region cloud platform with HIPAA-compliant infrastructure, native mobile applications, web portals, and analytics on top of a vast clinician network.
+\paragraph{Programming languages and stack}
+A multi-region, HIPAA-compliant cloud platform. \textbf{Back-end:} \textbf{Java (Spring)} and \textbf{Go} micro-services, with substantial \textbf{Python} for analytics and ML. \textbf{Web:} \textbf{TypeScript/React}. \textbf{Mobile:} native iOS in \textbf{Swift} and native Android in \textbf{Kotlin}.
 
 \paragraph{Features}
 Video and audio consultations, mental-health therapy, chronic-disease management, integration with U.S.\ employer health-benefits, and at-home monitoring devices.
@@ -203,10 +203,10 @@ Breadth of services, scale, mature compliance posture, and large clinician netwo
 Cost model assumes employer or insurance coverage; not adapted to the Cameroonian out-of-pocket / mobile-money reality; some users find the consumer UI less modern than newer entrants.
 
 \subsection{K Health (United States, Global)}
-K Health is a U.S.-based telemedicine application that uses an AI engine trained on millions of de-identified medical records to perform symptom triage before connecting the patient with a human clinician. It is one of the closest international analogues to Clinix's hybrid AI/human model.
+K Health~\cite{k_health} is a U.S.-based telemedicine application that uses an AI engine trained on millions of de-identified medical records to perform symptom triage before connecting the patient with a human clinician. It is one of the closest international analogues to Clinix's hybrid AI/human model.
 
-\paragraph{Tech stack}
-A mobile-first platform with a proprietary symptom-checker model, integrated chat and video consultations with U.S.-licensed clinicians, and subscription billing.
+\paragraph{Programming languages and stack}
+\textbf{AI engine:} a proprietary symptom-checker model implemented in \textbf{Python} (TensorFlow / PyTorch). \textbf{Back-end:} \textbf{Python} and \textbf{Node.js (TypeScript)} micro-services. \textbf{Mobile:} native iOS in \textbf{Swift} and native Android in \textbf{Kotlin}. \textbf{Web:} \textbf{TypeScript/React}.
 
 \paragraph{Features}
 AI symptom check, chat-first consultations escalating to video if needed, chronic-care management, and mental-health support.
@@ -261,4 +261,4 @@ The reviewed systems collectively reveal four gaps in the Cameroonian digital-he
 Clinix distinguishes itself through context-specific adaptation: a \textbf{hybrid AI/human consultation model}, a \textbf{multi-tier verification system} for every listed provider, \textbf{bandwidth-optimised design} for intermittent connectivity, \textbf{cultural and linguistic adaptation} (English/French at launch), \textbf{integrated mapping} with home-visit support, \textbf{progressive feature rollout}, \textbf{mobile-money-native payments} (CamPay/XAF), and a \textbf{dual-sided value proposition} that opens a legitimate income channel for verified providers while improving patient access. Where competing systems address subsets of these dimensions, Clinix addresses all of them in a single, locally engineered platform.
 
 \paragraph{Note on sources.}
-The descriptions of third-party platforms in this chapter are compiled from publicly available product pages, news reports, and academic literature current at the time of writing. Because health-tech start-ups frequently pivot, the reader is advised to verify the current operational status and feature set of each platform against its official channels and the relevant national app stores.
+The descriptions of third-party platforms in this chapter are compiled from publicly available product pages, news reports, engineering blog posts, job listings, and academic literature current at the time of writing. Programming-language and stack attributions are best-effort inferences from public information (such as the platforms' job postings and tech-blog content); the closed-source nature of these systems means a complete internal architecture cannot be verified externally. Because health-tech start-ups frequently pivot, the reader is advised to verify the current operational status, feature set, and underlying technology stack of each platform against its official channels and the relevant national app stores.

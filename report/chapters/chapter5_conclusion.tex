@@ -1,37 +1,33 @@
 %==============================================================
-% CHAPTER 5 — CONCLUSION, RECOMMENDATIONS AND FUTURE WORK
+% CHAPTER 5 — CONCLUSIONS AND RECOMMENDATIONS
+% Template numbering:
+%   5.1 Conclusions
+%   5.2 Recommendations
+%   5.3 Perspectives for Further Study
 %==============================================================
-\chapter{CONCLUSION, RECOMMENDATIONS AND FUTURE WORK}
+\chapter{CONCLUSIONS AND RECOMMENDATIONS}
 
-\section{Summary of the Work}
+\section{Conclusions}
 
 This project set out to design and implement Clinix, a comprehensive mobile health platform that addresses the most pressing pain points in Cameroon's healthcare experience: hospital congestion, uneven specialist access, untrusted self-advertised practitioners, weak medication adherence, and the absence of an AI-driven first opinion before patients commit to lab tests or specialist visits.
 
-The platform was delivered as three coordinated sub-systems --- a Flutter mobile application that hosts both patient and provider experiences, a Django REST and Channels backend with Celery and Redis behind it, and a React administrative dashboard --- glued together by JWT authentication, WebSocket real-time channels, Agora-based WebRTC, CamPay mobile-money payments, and a Google Gemini AI consultation engine. Every objective stated in Chapter~I was reflected in a concrete artefact in the implemented system, and every functional requirement listed in Chapter~III was exercised through the test cases reported in Chapter~IV.
-
-\section{Achievements}
+The platform was delivered as three coordinated sub-systems --- a Flutter mobile application that hosts both patient and provider experiences, a Django REST and Channels backend with Celery and Redis behind it, and a React administrative dashboard --- glued together by JWT authentication, WebSocket real-time channels, Agora-based WebRTC, CamPay mobile-money payments, and a Google Gemini AI consultation engine. Every objective stated in Chapter~I was reflected in a concrete artefact in the implemented system, and every functional requirement listed in Chapter~III was exercised through the unit, integration, and system test cases reported in Chapter~IV.
 
 The following achievements stand out:
 
 \begin{itemize}
   \item \textbf{A working verification layer for healthcare providers.} Every listed provider passes a mandatory credential-upload step and an admin review before becoming visible to patients, directly addressing the trust gap created by unverified online practitioners.
   \item \textbf{A hybrid AI / human consultation model.} A Gemini-backed symptom checker reasons over text, images, and silent vitals context, then recommends a specialty and ranks verified providers, leaving the final clinical decision with a qualified human.
+  \item \textbf{AI-driven provider recommendation with transparent scoring.} The same AI session that triages a patient also drives a ranked, explanation-bearing list of verified providers tailored to the patient's specialty needs, location, language, budget, and provider availability.
   \item \textbf{Cameroonian-native payment rails.} CamPay integration in XAF, covering MTN Mobile Money and Orange Money, removes the credit-card barrier that disqualifies most global telehealth platforms in the local market.
   \item \textbf{End-to-end clinical documentation.} Consultations produce real-time chat transcripts, optional Agora call recordings, AI-drafted medical records, structured prescriptions, automatic medication reminders, and patient-controlled sharing with other providers.
   \item \textbf{A two-sided platform.} Verified doctors and nurses get a private workspace, a wallet, a withdrawal flow, and a freelancing channel beyond the overloaded public hospital network.
   \item \textbf{A localised, bandwidth-aware user experience.} Bilingual English/French strings, lightweight payloads, graceful audio-only fallback, and offline-tolerant secure storage tailor the experience to real Cameroonian connectivity and device conditions.
 \end{itemize}
 
-\section{Challenges Encountered}
+Several non-trivial engineering challenges shaped the final design. Reliable incoming calls required combining high-priority data-only FCM messages with \texttt{flutter\_callkit\_incoming} and a deterministic 30-second missed-call fallback so devices ring through Do-Not-Disturb modes. Privacy-respecting AI required server-side prompt assembly that strips personal identifiers, silent vitals context, and AI drafts marked unpublished until a doctor reviews them. Hosting both patient and provider experiences in a single Flutter binary required careful feature isolation under \texttt{features/patient/} and \texttt{features/provider/} with role-aware routing in \texttt{app\_router.dart}. Finally, CamPay's USSD-driven flow cannot return success synchronously, so the payment subsystem had to support both the webhook callback and a polling fallback with idempotent reconciliation.
 
-Several non-trivial engineering challenges shaped the final design:
-
-\begin{itemize}
-  \item \textbf{Reliable incoming calls.} Standard FCM notifications are not sufficient for a call experience that competes with the native phone dialler. The combination of high-priority data-only FCM messages, \texttt{flutter\_callkit\_incoming}, and a deterministic 30-second missed-call fallback was required to ring devices through Do-Not-Disturb modes.
-  \item \textbf{Privacy-respecting AI.} Sending raw, identified clinical data to an external LLM was unacceptable. The chosen design --- server-side prompt assembly that strips personal identifiers, silent vitals context, AI drafts marked unpublished until a doctor reviews them, and reliance on a pre-trained external model so that no patient data ever feeds a training pipeline --- preserves patient privacy without sacrificing AI usefulness.
-  \item \textbf{Two apps in one binary.} Maintaining both patient and provider experiences in a single Flutter codebase required careful feature isolation under \texttt{features/patient/} and \texttt{features/provider/}, role-aware routing in \texttt{app\_router.dart}, and a shared real-time and authentication core.
-  \item \textbf{Mobile-money asynchrony.} CamPay's USSD-driven flow cannot return success synchronously. The system therefore had to support both the webhook callback and a polling fallback, with idempotent reconciliation that produces the same final state regardless of which arrives first.
-\end{itemize}
+Clinix is therefore more than a telemedicine application. It is, at once, a \emph{trust layer} that filters out unverified practitioners, a \emph{triage layer} that uses AI to help patients decide whether they truly need a hospital visit, a \emph{logistics layer} that brings lab tests and home nursing to a patient's door, and a \emph{professional workspace} that lets qualified Cameroonian healthcare workers freelance under structured rules. The project demonstrates that it is feasible, with disciplined engineering and locally relevant integrations, to build a digital-health experience that is genuinely usable in Cameroon today --- not a transplanted Western telemedicine app, but a system designed from first principles around real Cameroonian patients, providers, networks, and payment habits.
 
 \section{Recommendations}
 
@@ -42,25 +38,20 @@ Based on the implementation and testing experience, the following recommendation
   \item \textbf{For mobile operators and CamPay:} stabilise webhook delivery and document a typical worst-case settlement window; the platform's reconciliation logic currently has to handle a wide variance in callback timing.
   \item \textbf{For hospital and clinic administrators:} expose a minimal public schedule API so that Clinix's mapping module can present real-time facility availability during emergencies.
   \item \textbf{For future BTech projects in this domain:} reuse Clinix's three-tier separation (Flutter app, Django REST + Channels, React admin), but invest early in automated end-to-end tests --- the cost of regressions in a real-time, payment-bearing system grows quickly.
+  \item \textbf{For Clinix's own roadmap:} prioritise completing the bilingual UI migration and adding a Recharts-based analytics panel to the admin dashboard before pushing into new feature areas.
 \end{itemize}
 
-\section{Future Work}
+\section{Perspectives for Further Study}
 
 The architecture deliberately leaves room for the following extensions:
 
 \begin{itemize}
   \item \textbf{Complete bilingual UI.} Migrate hard-coded English strings in the Flutter app to \texttt{.arb}-based ARB files, and add French translations for every screen and notification template.
   \item \textbf{Refined provider-recommendation scoring.} The current recommender weights specialty match, rating, distance, language, fee, and online status with hand-tuned coefficients. The next iteration will instrument the recommendation outcomes (booked / not booked / completed / rated) so the weights can be tuned empirically from real platform behaviour without ever training on clinical content.
-  \item \textbf{Insurance and corporate billing.} Add a third-party-payer layer to the Payment model so employers and insurers can sponsor consultations.
+  \item \textbf{Insurance and corporate billing.} Add a third-party-payer layer to the \texttt{Payment} model so employers and insurers can sponsor consultations.
   \item \textbf{Analytics dashboard.} Integrate Recharts in the React admin to visualise consultation volume, provider performance, payment success rates, and adherence trends.
   \item \textbf{Local-language expansion.} Add Pidgin English and at least two national languages alongside English and French, with culturally adapted phrasing for sensitive medical topics.
-  \item \textbf{Pharmacy integration.} Extend prescriptions with a partner-pharmacy delivery option similar to GoodRx Care's vertical integration, leveraging the existing \texttt{pharmacy} role hinted at in \texttt{Prescription.shared\_with}.
-  \item \textbf{Native iOS optimisation.} The current build runs on iOS, but call-screen integration and Health Connect alternatives (HealthKit) deserve a focused hardening pass.
-  \item \textbf{Formal data-protection certification.} Pursue compliance with Cameroonian Law No.\ 2010/012 on cybersecurity and cybercrime and, where appropriate, alignment with GDPR equivalents for cross-border deployments.
+  \item \textbf{Pharmacy integration.} Extend prescriptions with a partner-pharmacy delivery option similar to GoodRx Care's vertical integration, leveraging the existing \texttt{shared\_with} relation on \texttt{Prescription}.
+  \item \textbf{Native iOS hardening.} The current build runs on iOS, but call-screen integration and the Health Connect alternative (HealthKit) deserve a focused hardening pass.
+  \item \textbf{Formal data-protection certification.} Pursue compliance with Cameroonian Law No.~2010/012 on cybersecurity and cybercrime~\cite{cameroon_law_2010_012} and, where appropriate, alignment with GDPR equivalents for cross-border deployments.
 \end{itemize}
-
-\section{Conclusion}
-
-Clinix is more than a telemedicine application. It is, at once, a \emph{trust layer} that filters out unverified practitioners, a \emph{triage layer} that uses AI to help patients decide whether they truly need a hospital visit, a \emph{logistics layer} that brings lab tests and home nursing to a patient's door, and a \emph{professional workspace} that lets qualified Cameroonian healthcare workers freelance under structured rules.
-
-The platform demonstrates that it is feasible, with disciplined engineering and locally relevant integrations, to build a digital-health experience that is genuinely usable in Cameroon today --- not a transplanted Western telemedicine app, but a system designed from first principles around real Cameroonian patients, providers, networks, and payment habits. The remaining work is principally polish, scale, and policy; the foundation is in place.

@@ -1,5 +1,14 @@
 %==============================================================
 % CHAPTER 3 — MATERIALS AND METHODS USED
+% Numbering follows the official BTech template exactly:
+%   3.1 Introduction
+%   3.2 Methods Used
+%     3.2.1 Development Methodology Used
+%     3.2.2 System Analysis  (flat, named sub-items in TOC)
+%   3.3 System Design
+%     (flat, named sub-items in TOC)
+% Named sub-items use \subsection*{} + \addcontentsline so they
+% appear in the TOC without decimal numbering.
 %==============================================================
 \chapter{MATERIALS AND METHODS USED}
 
@@ -9,9 +18,9 @@ This chapter outlines the development methodology, system analysis, and design a
 
 \section{Methods Used}
 
-\subsection{Development Methodology}
+\subsection{Development Methodology Used}
 
-Clinix employs an \textbf{Agile-Scrum hybrid methodology} adapted for academic project constraints:
+Clinix employs an \textbf{Agile-Scrum hybrid methodology}~\cite{schwaber2020scrum} adapted for academic project constraints:
 
 \begin{itemize}
   \item \textbf{Sprints:} Two-week development cycles with specific deliverables.
@@ -24,7 +33,9 @@ This approach balances the flexibility of Agile with the structured milestones r
 
 \subsection{System Analysis}
 
-\subsubsection{External Interface Requirements}
+% ---------- External Interface Requirements ----------
+\subsubsection*{External Interface Requirements}
+\addcontentsline{toc}{subsubsection}{External Interface Requirements}
 
 \paragraph{User Interfaces}
 \begin{itemize}
@@ -44,14 +55,16 @@ This approach balances the flexibility of Agile with the structured milestones r
 \paragraph{Software Interfaces}
 \begin{itemize}
   \item Google Maps API for location services.
-  \item Firebase Cloud Messaging for push notifications.
-  \item Agora RTC SDK for real-time video/audio calling.
-  \item Google Gemini and Google Cloud Speech-to-Text for AI consultation and call transcription.
-  \item CamPay API for MTN Mobile Money and Orange Money payments.
-  \item PostgreSQL database accessed through the Django ORM.
+  \item Firebase Cloud Messaging~\cite{firebase_docs} for push notifications.
+  \item Agora RTC SDK~\cite{agora_docs} for real-time video/audio calling, built on WebRTC~\cite{webrtc_w3c}.
+  \item Google Gemini~\cite{gemini_docs} and Google Cloud Speech-to-Text for AI consultation and call transcription.
+  \item CamPay API~\cite{campay_docs} for MTN Mobile Money and Orange Money payments.
+  \item PostgreSQL~\cite{postgres_docs} database accessed through the Django ORM~\cite{django_docs}.
 \end{itemize}
 
-\subsubsection{Features or Modules of the System}
+% ---------- Features or Modules of the System ----------
+\subsubsection*{Features or Modules of the System}
+\addcontentsline{toc}{subsubsection}{Features or Modules of the System}
 
 \begin{itemize}
   \item \textbf{User Authentication Module:} Registration, login, profile management, password recovery, OTP-based verification, and Google OAuth.
@@ -64,16 +77,20 @@ This approach balances the flexibility of Agile with the structured milestones r
   \item \textbf{Administrative Module:} User management, analytics, reporting, and verification dashboard.
   \item \textbf{Notification System:} Appointment reminders, consultation updates, security alerts.
   \item \textbf{AI Diagnostic Engine:} Symptom analysis, preliminary assessment, escalation protocols.
+  \item \textbf{AI Provider Recommendation Module:} Maps the AI session's structured assessment to a ranked list of verified providers by specialty match, rating, distance, language, fee, and online status.
   \item \textbf{Home-Care Module:} Lab-test bookings and home-treatment bookings delivered by verified nurses.
 \end{itemize}
 
-\subsubsection{Functional Requirements}
+% ---------- Functional Requirements ----------
+\subsubsection*{Functional Requirements}
+\addcontentsline{toc}{subsubsection}{Functional Requirements}
 
 \begin{itemize}
   \item The system shall allow patients to register using phone-number or email verification.
   \item The system shall enable healthcare providers to submit credentials for verification.
   \item The system shall support appointment scheduling with available time-slot detection.
   \item The system shall provide AI-powered symptom checking with escalation to human providers.
+  \item The system shall recommend verified providers based on the AI session's structured assessment.
   \item The system shall integrate real-time video/audio calling using WebRTC technology.
   \item The system shall display nearby healthcare providers on an interactive map.
   \item The system shall generate and store consultation records securely.
@@ -82,31 +99,35 @@ This approach balances the flexibility of Agile with the structured milestones r
   \item The system shall provide analytics to superadmins for platform monitoring.
 \end{itemize}
 
-\subsubsection{Non-functional Requirements}
+% ---------- Non-functional Requirements ----------
+\subsubsection*{Non-functional Requirements}
+\addcontentsline{toc}{subsubsection}{Non-functional Requirements}
 
 \begin{itemize}
   \item \textbf{Performance:} App loading time $<$~3 seconds; video-call latency $<$~200~ms.
-  \item \textbf{Security:} End-to-end encryption for consultations, JWT-based authentication, secure credential storage, compliance with Cameroonian data-protection laws.
+  \item \textbf{Security:} End-to-end encryption for consultations, JWT-based authentication, secure credential storage, defences against the OWASP Top Ten~\cite{owasp_top10}, and compliance with Cameroonian data-protection law~\cite{cameroon_law_2010_012}.
   \item \textbf{Usability:} Intuitive navigation, support for English and French, accommodation of varying digital literacy.
   \item \textbf{Reliability:} 99\% uptime for critical services and graceful degradation during connectivity issues.
   \item \textbf{Scalability:} Support for at least 100 concurrent users and modular architecture for feature addition.
   \item \textbf{Maintainability:} Clean code structure, comprehensive documentation, modular feature-based design.
 \end{itemize}
 
-\subsubsection{Data Flow Diagrams (DFD)}
+% ---------- DFDS ----------
+\subsubsection*{DFDs}
+\addcontentsline{toc}{subsubsection}{DFDs}
 
 \paragraph{Level 0 Context Diagram}
 The Data Flow Diagram Level 0 (Context Diagram) presents the high-level view of the Clinix system and its interaction with external entities. As illustrated in Figure~\ref{fig:dfd0}, the system interfaces with four primary external entities: Patient, Healthcare Provider, Superadmin, and Payment Gateway. The Patient entity exchanges information such as symptom requests, appointments, consultation data, and receives results and notifications from the system. Healthcare Providers interact with the system by sending requests, appointments, consultation data, and verification documents, while receiving reports and verification confirmations. The Superadmin manages the system through verification processes and receives reports, while the Payment Gateway handles payment requests and sends confirmations. This context diagram establishes the system boundaries and demonstrates that Clinix serves as the central processing hub that mediates all interactions between these stakeholders, ensuring secure and efficient healthcare service delivery.
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.8\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.0: DFD Level 0 — Context Diagram]} \vspace{2cm}}}
-  \caption{Data Flow Diagram Level 0 — Context Diagram}
+  \fbox{\parbox{0.8\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.0: DFD Level 0 --- Context Diagram]} \vspace{2cm}}}
+  \caption{Data Flow Diagram Level 0 --- Context Diagram}
   \label{fig:dfd0}
 \end{figure}
 
 \paragraph{Level 1 DFD}
-The Data Flow Diagram Level 1 decomposes the Clinix system into four major processes that handle distinct functional areas, as shown in Figure~\ref{fig:dfd1}. Process~1 (Authentication) manages user login and registration, storing and retrieving user credentials from the User Database. Process~2 (Appointment Management) coordinates the scheduling process between patients and providers, maintaining appointment records in the Appointment Database. Process~3 (AI Consultation) facilitates the symptom-analysis workflow where patient symptoms are processed and medical records are generated and stored in the Medical Records Database. Process~4 (Provider Verification) handles the onboarding of healthcare providers by processing their credentials and verification documentation. The diagram reveals the data flows between these processes and their respective data stores, demonstrating how information moves through the system to support each functional requirement.
+The Data Flow Diagram Level 1 decomposes the Clinix system into the major processes that handle distinct functional areas, as shown in Figure~\ref{fig:dfd1}. Process~1 (Authentication) manages user login and registration, storing and retrieving user credentials from the User Database. Process~2 (Appointment Management) coordinates the scheduling process between patients and providers, maintaining appointment records in the Appointment Database. Process~3 (AI Consultation \& Triage) facilitates the symptom-analysis workflow where patient symptoms are processed and medical records are generated and stored in the Medical Records Database. Process~4 (Provider Verification) handles the onboarding of healthcare providers by processing their credentials and verification documentation. Process~5 (Payment Processing) reconciles CamPay callbacks and updates the appointment status on success. The diagram reveals the data flows between these processes and their respective data stores.
 
 \begin{figure}[H]
   \centering
@@ -115,15 +136,17 @@ The Data Flow Diagram Level 1 decomposes the Clinix system into four major proce
   \label{fig:dfd1}
 \end{figure}
 
-\subsubsection{Use Case Analysis and Diagrams}
+% ---------- Use Case Analysis and Diagrams ----------
+\subsubsection*{Use Case Analysis and Diagrams}
+\addcontentsline{toc}{subsubsection}{Use Case Analysis and Diagrams}
 
 The Clinix use-case diagram (Figure~\ref{fig:usecase}) defines three main user roles with distinct privileges:
 
 \begin{itemize}
-  \item \textbf{Patients} can register/login, perform AI symptom checks, book appointments, conduct virtual consultations, make payments, and access medical records.
-  \item \textbf{Healthcare Providers} can log in, accept appointments, conduct consultations, and upload prescriptions.
-  \item \textbf{Superadmins} verify provider credentials and manage overall system operations.
-  \item \textbf{The Payment Gateway} appears as an external system actor handling payment processing.
+  \item \textbf{Patients} can register/login, perform AI symptom checks, view AI-driven provider recommendations, book appointments, conduct virtual consultations, make payments, and access medical records.
+  \item \textbf{Healthcare Providers} can log in, accept appointments, conduct consultations, write prescriptions, create medical records, and create referrals.
+  \item \textbf{Superadmins} verify provider credentials, manage users, manage specialties and lab tests, approve withdrawals, and view platform analytics.
+  \item \textbf{The Payment Gateway} (CamPay) appears as an external system actor handling payment processing.
 \end{itemize}
 
 This model establishes clear role-based access control, defines functional requirements from each stakeholder's perspective, and ensures the system design comprehensively addresses all user needs.
@@ -135,16 +158,18 @@ This model establishes clear role-based access control, defines functional requi
   \label{fig:usecase}
 \end{figure}
 
-\subsubsection{Activity Diagrams}
+% ---------- Activity Diagrams ----------
+\subsubsection*{Activity Diagrams}
+\addcontentsline{toc}{subsubsection}{Activity Diagrams}
 
 The Clinix activity diagram (Figure~\ref{fig:activity}) maps two parallel user workflows that converge during consultations.
 
 \begin{itemize}
-  \item \textbf{Healthcare Providers} follow a path of registration $\rightarrow$ credential submission $\rightarrow$ payment $\rightarrow$ verification (leading to either approval or rejection).
-  \item \textbf{Patients} follow registration/login $\rightarrow$ symptom entry $\rightarrow$ AI analysis $\rightarrow$ decision point. If provider consultation is needed, they search for nearby providers $\rightarrow$ book appointments $\rightarrow$ attend virtual consultations (via mobile-money payment) $\rightarrow$ view consultation summaries with AI recommendations.
+  \item \textbf{Healthcare Providers} follow a path of registration $\rightarrow$ credential submission $\rightarrow$ verification (leading to either approval or rejection) $\rightarrow$ schedule and bio setup $\rightarrow$ accepting incoming appointments.
+  \item \textbf{Patients} follow registration/login $\rightarrow$ symptom entry $\rightarrow$ AI analysis $\rightarrow$ decision point. If provider consultation is needed, they receive an AI-driven ranked list of verified providers $\rightarrow$ book an appointment $\rightarrow$ pay via mobile money $\rightarrow$ attend the virtual consultation $\rightarrow$ view the consultation summary, prescription, and medication reminders.
 \end{itemize}
 
-The diagram uses merge and join nodes to show how these separate workflows synchronise, particularly when patients and providers connect during consultations. This design ensures the system handles multiple concurrent user paths while maintaining smooth user experiences and efficient service delivery.
+The diagram uses merge and join nodes to show how these separate workflows synchronise, particularly when patients and providers connect during consultations.
 
 \begin{figure}[H]
   \centering
@@ -153,7 +178,9 @@ The diagram uses merge and join nodes to show how these separate workflows synch
   \label{fig:activity}
 \end{figure}
 
-\subsubsection{Cost Evaluation}
+% ---------- Cost Evaluation ----------
+\subsubsection*{Cost Evaluation}
+\addcontentsline{toc}{subsubsection}{Cost Evaluation}
 
 \paragraph{Development Costs}
 \begin{itemize}
@@ -172,7 +199,9 @@ The diagram uses merge and join nodes to show how these separate workflows synch
 
 \paragraph{Total Estimated Annual Cost} USD~650--850.
 
-\subsubsection{Project Schedule}
+% ---------- Project Schedule ----------
+\subsubsection*{Project Schedule}
+\addcontentsline{toc}{subsubsection}{Project Schedule}
 
 \begin{itemize}
   \item \textbf{Phase~1 (Week 1):} Requirements analysis, literature review, and initial design.
@@ -185,9 +214,11 @@ The diagram uses merge and join nodes to show how these separate workflows synch
 
 \section{System Design}
 
-\subsection{Tools and Materials Used}
+% ---------- Tools and Material Used ----------
+\subsubsection*{Tools and Material Used}
+\addcontentsline{toc}{subsubsection}{Tools and Material Used}
 
-\subsubsection{Hardware Requirements}
+\paragraph{1. Hardware Requirements}
 \begin{itemize}
   \item Development machines (minimum): Intel i5 processor, 8~GB RAM, 256~GB storage.
   \item Testing devices: Android smartphones (various versions), iOS devices.
@@ -195,46 +226,44 @@ The diagram uses merge and join nodes to show how these separate workflows synch
   \item Backup systems: external drives for code and documentation backup.
 \end{itemize}
 
-\subsubsection{Software Requirements}
-
-\paragraph{Development Tools}
+\paragraph{2. Software Requirements}
 \begin{itemize}
-  \item Flutter SDK 3.0+ for cross-platform mobile development.
-  \item Django 4.2+ with Django REST Framework for backend API development.
-  \item React 19 with Vite and TypeScript for the administrative dashboard.
-  \item PostgreSQL 14+ for database management.
-  \item Redis for cache, Django Channels, and Celery broker.
+  \item Flutter SDK 3.0+~\cite{flutter_docs} for cross-platform mobile development, with Riverpod~\cite{riverpod_docs} for state management, go\_router~\cite{gorouter_pkg} for navigation, and Dio~\cite{dio_pkg} for HTTP.
+  \item Django 4.2+~\cite{django_docs} with Django REST Framework~\cite{drf_docs} for backend API development; Channels~\cite{channels_docs} for WebSockets; Celery~\cite{celery_docs} for asynchronous tasks.
+  \item React 19~\cite{react_docs} with Vite~\cite{vite_docs} and TypeScript for the administrative dashboard; TanStack Query~\cite{tanstack_query} for data fetching.
+  \item PostgreSQL 14+~\cite{postgres_docs} for database management.
+  \item Redis~\cite{redis_docs} for cache, Django Channels, and Celery broker.
+  \item Twilio~\cite{twilio_docs} for SMS OTP delivery.
   \item Visual Studio Code with Flutter/Django/React extensions.
   \item Git for version control.
+  \item Postman for REST API testing and drf-spectacular for OpenAPI documentation.
+  \item Figma for UI/UX design; PlantUML for diagram creation.
 \end{itemize}
 
-\paragraph{Testing Tools}
+% ---------- System Acquisition Strategy ----------
+\subsubsection*{System Acquisition Strategy}
+\addcontentsline{toc}{subsubsection}{System Acquisition Strategy}
+
+The system follows a \textbf{hybrid acquisition strategy} combining custom development, open-source components, and third-party services:
+
 \begin{itemize}
-  \item Flutter testing framework.
-  \item Postman for API testing.
-  \item drf-spectacular for automatically generated OpenAPI documentation.
+  \item \textbf{Custom development.} The core platform code (Django backend, Flutter mobile app, React admin dashboard) is built entirely in-house, ensuring full control over clinical-workflow logic and patient-data handling.
+  \item \textbf{Open-source libraries.} Verified, maintained libraries are integrated for common functions: Django, DRF, Channels, Celery, Flutter SDK, Riverpod, go\_router, Dio, React, TanStack Query, Tailwind CSS, and Lucide React.
+  \item \textbf{Third-party APIs and SaaS.} Specialised capabilities are leveraged from external providers: Google Maps for mapping, Firebase for OAuth/Storage/Cloud Messaging, Agora for real-time WebRTC, Google Gemini for AI consultation, Google Cloud Speech-to-Text for transcription, Twilio for SMS, and CamPay for mobile-money payments.
+  \item \textbf{Cloud platforms.} Platform-as-a-Service is used for hosting and scalability: Railway/Render for the Django ASGI application and worker; managed PostgreSQL and Redis instances; Firebase Cloud Storage for media and KYC documents.
 \end{itemize}
 
-\paragraph{Design Tools}
-\begin{itemize}
-  \item Figma for UI/UX design.
-  \item PlantUML for diagram creation.
-\end{itemize}
+This strategy prioritises engineering velocity (by reusing battle-tested components) while keeping all sensitive clinical logic and patient-data handling under direct project control.
 
-\paragraph{System Acquisition Strategy}
-\begin{itemize}
-  \item \textbf{Third-party APIs:} integration of specialised services (Google Maps, CamPay, Agora, Firebase, Gemini).
-  \item \textbf{Open-source libraries:} use of verified, maintained libraries for common functions.
-  \item \textbf{Cloud services:} Platform-as-a-Service for hosting and scalability.
-\end{itemize}
-
-\subsubsection{Class Diagrams}
+% ---------- Class Diagrams ----------
+\subsubsection*{Class Diagrams}
+\addcontentsline{toc}{subsubsection}{Class Diagrams}
 
 The Clinix system class diagram (Figure~\ref{fig:class}) shows an object-oriented healthcare platform with three main user types inheriting from a base \texttt{User} class: \textbf{Patient} (can request consultations and view records), \textbf{HealthcareProvider} (manages credentials and conducts consultations), and \textbf{Superadmin} (verifies providers and manages the system).
 
 Key supporting components include \textbf{Appointment} (scheduling), \textbf{Consultation} (medical encounters and prescriptions), \textbf{MedicalRecord} (patient health history), and \textbf{Location} (geographic data). AI-driven triage is modelled by \textbf{AIConsultationSession} (a server-side conversation against the integrated Gemini model that produces a structured assessment including a recommended specialty) and the \textbf{ProviderRecommender} (which consumes that assessment to rank verified providers by specialty match, rating, distance, language, fee, and online status). The \textbf{ProviderSubscription} entity handles provider-side payment management.
 
-The relationships show patients and providers connecting through appointments, which lead to consultations that generate medical records. The design emphasises role-based access control, maintainability, and clear separation between clinical workflow and AI-learning components.
+The relationships show patients and providers connecting through appointments, which lead to consultations that generate medical records.
 
 \begin{figure}[H]
   \centering
@@ -243,13 +272,13 @@ The relationships show patients and providers connecting through appointments, w
   \label{fig:class}
 \end{figure}
 
-\subsubsection{Sequence Diagrams}
+% ---------- Sequence Diagrams ----------
+\subsubsection*{Sequence Diagrams}
+\addcontentsline{toc}{subsubsection}{Sequence Diagrams}
 
 The sequence diagram (Figure~\ref{fig:sequence}) shows a patient-consultation workflow starting when a patient enters symptoms into the mobile app. The \textbf{AI Consultation Engine} (Google Gemini, accessed server-side through the Django API) analyses the conversation turn by turn, optionally taking attached images into account, and returns a final structured assessment containing a summary, a triage priority, a recommended medical specialty, possible causes, and red-flag indicators.
 
 If professional help is needed, the \textbf{Provider Recommender} consumes the recommended specialty from the AI assessment together with the patient's location, language preference, and consultation-fee budget, and returns a ranked list of verified providers. The patient picks one and the \textbf{Django API} schedules an appointment, notifies the provider, and stores details in \textbf{PostgreSQL}. After the virtual consultation, the provider creates a diagnosis or prescription that is saved as a medical record.
-
-The diagram emphasises that all AI processing happens against a pre-trained external model: Clinix does not train or fine-tune any model locally. Privacy is preserved by never persisting patient identifiers in the AI prompt and by storing structured assessments rather than raw conversation transcripts beyond their session lifetime.
 
 \begin{figure}[H]
   \centering
@@ -258,44 +287,31 @@ The diagram emphasises that all AI processing happens against a pre-trained exte
   \label{fig:sequence}
 \end{figure}
 
-\subsubsection{System Architecture}
+% ---------- System Architecture ----------
+\subsubsection*{System Architecture}
+\addcontentsline{toc}{subsubsection}{System Architecture}
 
 Clinix adopts a \textbf{three-tier architecture}:
 
 \begin{itemize}
-  \item \textbf{Presentation Tier:} Flutter mobile applications (patient \& provider modes in a single codebase) and a React-based admin dashboard.
-  \item \textbf{Application Tier:} Django REST API handling business logic, authentication, and service integration; supplemented by Django Channels (WebSocket) and Celery (asynchronous tasks).
-  \item \textbf{Data Tier:} PostgreSQL database with encrypted sensitive data, Redis cache for performance and message broker, and Firebase Cloud Storage for media and call recordings.
+  \item \textbf{Presentation Tier.} Flutter mobile applications (patient and provider experiences in a single codebase, differentiated by user role) and a React-based administrative dashboard.
+  \item \textbf{Application Tier.} A Django REST API handles business logic, authentication, and external-service integration; Django Channels provides WebSocket consumers for chat and real-time call signalling; Celery workers run asynchronous tasks (notifications, AI transcription, reminders); a dedicated AI Consultation Service wraps the Gemini client; a Provider Recommender service ranks verified providers from the AI assessment.
+  \item \textbf{Data Tier.} PostgreSQL stores all structured relational data (users, patients, providers, appointments, consultations, medical records, payments); Redis serves as the application cache, the Channels channel layer, and the Celery broker; Firebase Cloud Storage holds large media artefacts (profile photos, KYC documents, prescription PDFs, and call recordings).
 \end{itemize}
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.75\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.6: System Architecture]} \vspace{2cm}}}
+  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.6: System Architecture]} \vspace{2cm}}}
   \caption{System Architecture}
   \label{fig:sysarch}
 \end{figure}
 
-\subsubsection{Database Architecture}
-
-The Clinix database uses a distributed architecture with three storage layers coordinated by the \textbf{Django REST API} (which serves both the Flutter mobile app and the React web admin):
-
-\begin{itemize}
-  \item \textbf{PostgreSQL} --- primary relational database storing structured data (users, patients, providers, appointments, consultations, medical records, payments).
-  \item \textbf{Redis} --- in-memory store used as a cache for frequently accessed data, as the channel layer for Django Channels (WebSocket), and as the broker for Celery tasks.
-  \item \textbf{Cloud Storage} --- handles large files like medical images, KYC documents, and call-recording audio with scalable, secure storage.
-\end{itemize}
-
-\begin{figure}[H]
-  \centering
-  \fbox{\parbox{0.75\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.7: Database Architecture]} \vspace{2cm}}}
-  \caption{Database Architecture}
-  \label{fig:dbarch}
-\end{figure}
-
-\subsubsection{User Interface Design}
+% ---------- User Interface Design ----------
+\subsubsection*{User Interface Design}
+\addcontentsline{toc}{subsubsection}{User Interface Design}
 
 \begin{itemize}
-  \item \textbf{Design Principles:} Simplicity, consistency, accessibility, cultural appropriateness.
+  \item \textbf{Design Principles:} Simplicity, consistency, accessibility, and cultural appropriateness, informed by Nielsen's usability heuristics~\cite{nielsen1994usability}.
   \item \textbf{Colour Scheme:} Professional healthcare palette (blues and whites) with high contrast for readability.
   \item \textbf{Navigation:} Bottom navigation bar (mobile), intuitive icons, minimal hierarchical depth.
   \item \textbf{Accessibility Features:} Adjustable text sizes, voice feedback option, high-contrast mode.
@@ -304,19 +320,21 @@ The Clinix database uses a distributed architecture with three storage layers co
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.8.1: Mobile App Design --- 1]} \vspace{2cm}}}
+  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.7: Mobile App Design --- 1]} \vspace{2cm}}}
   \caption{Mobile App Design --- 1}
   \label{fig:mobileui1}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.8.2: Mobile App Design --- 2]} \vspace{2cm}}}
+  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.8: Mobile App Design --- 2]} \vspace{2cm}}}
   \caption{Mobile App Design --- 2}
   \label{fig:mobileui2}
 \end{figure}
 
-\subsubsection{ER Diagrams}
+% ---------- ER Diagrams ----------
+\subsubsection*{ER Diagrams}
+\addcontentsline{toc}{subsubsection}{ER Diagrams}
 
 The Clinix ER diagram (Figure~\ref{fig:erd}) models the database schema with \textbf{users} as the central entity (storing authentication and profile data).
 
@@ -326,8 +344,11 @@ The Clinix ER diagram (Figure~\ref{fig:erd}) models the database schema with \te
   \item \textbf{appointments} --- many-to-one with both patients and providers (managing scheduling).
   \item \textbf{consultations} --- one-to-one with \texttt{appointments} (recording medical encounters).
   \item \textbf{medical\_records} --- many-to-one with \texttt{consultations} (storing health history with symptoms, diagnosis, treatment).
-  \item \textbf{provider\_subscriptions} --- one-to-many with providers (tracking payments).
-  \item \textbf{locations} --- linked to providers (geographic data).
+  \item \textbf{prescriptions} --- many-to-one with \texttt{consultations}; each prescription auto-generates \textbf{medication\_reminders}.
+  \item \textbf{payments} --- many-to-one with \texttt{appointments}; the same row is reused for ``pay-first'' bookings (lab tests, home care).
+  \item \textbf{provider\_subscriptions} --- one-to-many with providers (tracking subscription payments).
+  \item \textbf{locations} --- linked to providers (geographic data used for distance-based recommendation).
+  \item \textbf{verification\_requests} --- many-to-one with providers (one row per credential document submitted for review).
 \end{itemize}
 
 The model demonstrates proper normalisation, referential integrity through foreign-key constraints, and supports efficient querying for the application's needs.
@@ -339,34 +360,13 @@ The model demonstrates proper normalisation, referential integrity through forei
   \label{fig:erd}
 \end{figure}
 
-\subsubsection{AI Provider Recommendation Architecture}
-
-Clinix integrates a pre-trained, general-purpose multimodal large language model (Google Gemini) and uses it as a clinical-reasoning layer that turns a free-form symptom conversation into a structured, machine-readable recommendation. The platform reasons only with what the patient explicitly shares in a single session, and what survives the session is a small structured assessment rather than the raw conversation transcript.
-
-\paragraph{Architecture Components}
-The recommendation pipeline consists of four cooperating components:
-
-\begin{itemize}
-  \item \textbf{AI Consultation Session.} A server-side conversation, identified by an \texttt{AISymptomSession} record, in which Gemini and the patient exchange messages (optionally with attached images). The patient's most recent vitals (heart rate, HRV, respiratory rate, daily activity) are injected silently as context so that the model can reason over physiological state without alarming the patient.
-  \item \textbf{Structured Assessment Generator.} A dedicated end-of-session call (\texttt{POST /api/v1/ai/chat/<id>/complete/}) that asks Gemini to return a JSON object containing a summary, a triage priority (Low/Medium/High), a recommended medical specialty, two to five possible causes, and a red-flag boolean. This object is the contract between the AI layer and everything downstream.
-  \item \textbf{Provider Recommender.} A scoring service backed by \texttt{GET /api/v1/providers/recommended/} that consumes the recommended specialty from the assessment and filters only \texttt{approved} verified providers. Each candidate is scored on specialty match, rating, years of experience, haversine distance from the patient's location, language overlap with \texttt{User.language\_pref}, consultation fee versus the patient's budget, and recent online status (\texttt{last\_seen} within five minutes).
-  \item \textbf{Transparent Ranked Output.} The top providers are returned to the mobile app together with human-readable \texttt{match\_reasons} (e.g.\ ``General practitioner online now, 1.2~km from you, speaks English and French''), so the patient understands why each option appears.
-\end{itemize}
-
-A mid-session shortcut also exists: \texttt{POST /api/v1/ai/chat/<id>/recommend/} returns a provider recommendation \emph{without} closing the session, so the AI can suggest a doctor while the patient is still describing symptoms.
-
-\begin{figure}[H]
-  \centering
-  \fbox{\parbox{0.7\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.10: AI Provider Recommendation Architecture]} \vspace{2cm}}}
-  \caption{AI Provider Recommendation Architecture}
-  \label{fig:airecommend}
-\end{figure}
-
-\subsubsection{Data Dictionary}
+% ---------- Data Dictionary ----------
+\subsubsection*{Data Dictionary}
+\addcontentsline{toc}{subsubsection}{Data Dictionary}
 
 \noindent Key tables and fields:
 
-\begin{longtable}{p{3.2cm} p{10.5cm}}
+\begin{longtable}{p{3.4cm} p{10.3cm}}
 \toprule
 \textbf{Table} & \textbf{Fields} \\
 \midrule
@@ -378,7 +378,8 @@ A mid-session shortcut also exists: \texttt{POST /api/v1/ai/chat/<id>/recommend/
 \texttt{consultations} & \texttt{consultation\_id (PK)}, \texttt{appointment\_id (FK)}, \texttt{ai\_transcript}, \texttt{provider\_notes}, \texttt{diagnosis}, \texttt{webrtc\_session\_id}, \texttt{recording\_url} \\
 \texttt{medical\_records} & \texttt{record\_id (PK)}, \texttt{patient\_id (FK)}, \texttt{consultation\_id (FK)}, \texttt{symptoms}, \texttt{diagnosis}, \texttt{treatment}, \texttt{is\_ai\_draft}, \texttt{is\_published} \\
 \texttt{prescriptions} & \texttt{prescription\_id (PK)}, \texttt{consultation\_id (FK)}, \texttt{patient\_id (FK)}, \texttt{provider\_id (FK)}, \texttt{medications (JSON)}, \texttt{instructions}, \texttt{valid\_until} \\
-\texttt{payments} & \texttt{payment\_id (PK)}, \texttt{appointment\_id (FK)}, \texttt{amount}, \texttt{currency}, \texttt{payment\_method}, \texttt{transaction\_ref}, \texttt{status}, \texttt{provider\_payout} \\
+\texttt{ai\_symptom\_sessions} & \texttt{session\_id (PK)}, \texttt{patient\_id (FK)}, \texttt{is\_active}, \texttt{triage\_score}, \texttt{ai\_analysis (JSON)}, \texttt{recommendation}, \texttt{suggested\_specialization}, \texttt{created\_at} \\
+\texttt{payments} & \texttt{payment\_id (PK)}, \texttt{appointment\_id (FK, nullable)}, \texttt{amount}, \texttt{currency}, \texttt{payment\_method}, \texttt{transaction\_ref}, \texttt{status}, \texttt{provider\_payout} \\
 \texttt{verification\_requests} & \texttt{request\_id (PK)}, \texttt{provider\_id (FK)}, \texttt{document\_type}, \texttt{document\_url}, \texttt{reviewed\_by}, \texttt{status}, \texttt{reviewed\_at} \\
 \bottomrule
 \end{longtable}
