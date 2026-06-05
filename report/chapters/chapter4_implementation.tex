@@ -1,5 +1,5 @@
 %==============================================================
-% CHAPTER 4 — IMPLEMENTATION, RESULTS AND TESTING
+% CHAPTER 4 - IMPLEMENTATION, RESULTS AND TESTING
 % Numbering follows the official BTech template exactly:
 %   4.1 Introduction
 %   4.2 Implementation
@@ -18,7 +18,7 @@
 
 \section{Introduction}
 
-This chapter presents the actual implementation of the Clinix platform, demonstrating how the design decisions from Chapter~III were translated into working software. Section~\ref{sec:impl-implementation} walks through each of the three sub-systems --- the Django backend, the Flutter mobile application, and the React administrative dashboard --- and closes with the integration outcomes observed end-to-end. Section~\ref{sec:impl-testing} reports the testing strategy across unit, integration, and system levels.
+This chapter presents the actual implementation of the Clinix platform, demonstrating how the design decisions from Chapter~III were translated into working software. Section~\ref{sec:impl-implementation} walks through each of the three sub-systems, the Django backend, the Flutter mobile application, and the React administrative dashboard, and closes with the integration outcomes observed end-to-end. Section~\ref{sec:impl-testing} reports the testing strategy across unit, integration, and system levels.
 
 \section{Implementation}
 \label{sec:impl-implementation}
@@ -27,7 +27,7 @@ The Clinix platform is composed of three coordinated sub-systems built around a 
 
 \subsection{Backend Implementation (Django REST + Channels)}
 
-% --------- Technology Stack ---------
+% ---- Technology Stack ----
 \subsubsection*{Technology Stack}
 
 The backend is implemented as a Python~3.12 project built around Django~4.2~\cite{django_docs} and the Django REST Framework~\cite{drf_docs}. Table~\ref{tab:backend-stack} lists the core components and their roles.
@@ -37,25 +37,25 @@ The backend is implemented as a Python~3.12 project built around Django~4.2~\cit
 \caption{Backend technology stack}
 \label{tab:backend-stack}
 \small
-\begin{tabularx}{\textwidth}{p{3.5cm} p{3.5cm} X}
-\toprule
-\textbf{Component} & \textbf{Technology} & \textbf{Role in Clinix} \\
-\midrule
-Web framework & Django 4.2.13 & Application framework, ORM, admin \\
-REST API & DRF 3.15.2 & Serialisers, viewsets, routers \\
-Authentication & djangorestframework-simplejwt 5.3.1 & JWT issuance, rotation, blacklist \\
-Real-time & Django Channels 4.1.0 + channels-redis 4.2.0 & WebSocket consumers for chat and calls \\
-Async tasks & Celery 5.4.0 + Redis 5.0.8 & Background jobs, scheduled reminders \\
-ASGI server & Daphne 4.1.2 & Async-aware production server \\
-Database & PostgreSQL (psycopg2-binary 2.9.9) & Primary data store \\
-API docs & drf-spectacular 0.27.2 & OpenAPI 3.0 schema \\
-Static files & WhiteNoise 6.7.0 & Compressed, hashed static serving \\
-Configuration & django-environ 0.11.2 & \texttt{.env} loading \\
-\bottomrule
+\begin{tabularx}{\textwidth}{|p{3.5cm}|p{3.5cm}|X|}
+\hline
+\textbf{Component} & \textbf{Technology} & \textbf{Role in Clinix} \\ \hline
+
+Web framework & Django 4.2.13 & Application framework, ORM, admin \\ \hline
+REST API & DRF 3.15.2 & Serialisers, viewsets, routers \\ \hline
+Authentication & djangorestframework-simplejwt 5.3.1 & JWT issuance, rotation, blacklist \\ \hline
+Real-time & Django Channels 4.1.0 + channels-redis 4.2.0 & WebSocket consumers for chat and calls \\ \hline
+Async tasks & Celery 5.4.0 + Redis 5.0.8 & Background jobs, scheduled reminders \\ \hline
+ASGI server & Daphne 4.1.2 & Async-aware production server \\ \hline
+Database & PostgreSQL (psycopg2-binary 2.9.9) & Primary data store \\ \hline
+API docs & drf-spectacular 0.27.2 & OpenAPI 3.0 schema \\ \hline
+Static files & WhiteNoise 6.7.0 & Compressed, hashed static serving \\ \hline
+Configuration & django-environ 0.11.2 & \texttt{.env} loading \\ \hline
+
 \end{tabularx}
 \end{table}
 
-% --------- Application Structure ---------
+% ---- Application Structure ----
 \subsubsection*{Application Structure}
 
 The backend is organised into focused Django apps under \texttt{backend/apps/}, each owning one bounded part of the domain (Table~\ref{tab:backend-apps}).
@@ -65,28 +65,28 @@ The backend is organised into focused Django apps under \texttt{backend/apps/}, 
 \caption{Django apps and their responsibilities}
 \label{tab:backend-apps}
 \small
-\begin{tabularx}{\textwidth}{p{3.2cm} X}
-\toprule
-\textbf{App} & \textbf{Responsibility} \\
-\midrule
-\texttt{accounts} & Custom \texttt{User} model (UUID, multi-auth), registration, login, OTP, Google OAuth via Firebase, JWT, FCM-token registration. \\
-\texttt{patients} & Patient profile model and endpoints (DOB, gender, blood type, allergies, chronic conditions, next of kin). \\
-\texttt{providers} & \texttt{HealthcareProvider}, \texttt{Specialty}, \texttt{ProviderSchedule}, \texttt{ProviderCredential}, \texttt{ProviderReview}; nearby/recommended search, schedule, KYC uploads. \\
-\texttt{appointments} & \texttt{Appointment} model, slot search, clash detection, lifecycle (pending~$\rightarrow$~confirmed~$\rightarrow$~completed/cancelled). \\
-\texttt{consultations} & Consultation lifecycle, real-time chat, prescriptions, medical records, referrals, medication reminders, Agora token issuance, AI-scribe pipeline. \\
-\texttt{ai\_engine} & Gemini-based AI symptom triage, multimodal chat sessions, structured assessment, doctor recommendation. \\
-\texttt{payments} & CamPay integration (MTN MoMo + Orange Money), provider wallet, withdrawals, platform settings. \\
-\texttt{notifications} & Unified notification model, FCM dispatch, WebSocket delivery, SMS hook. \\
-\texttt{direct\_chat} & 1-to-1 messaging between provider and patient outside an active consultation. \\
-\texttt{locations} & Provider service locations for proximity-based ranking and home visits. \\
-\texttt{health\_metrics} & \texttt{HeartRateReading}, \texttt{DailyActivity}; ingestion endpoints for wearable data. \\
-\texttt{lab\_tests} & Catalogue of lab tests (category, price, turnaround, sample type). \\
-\texttt{admin\_dashboard} & Aggregated stats endpoints for the React admin dashboard. \\
-\bottomrule
+\begin{tabularx}{\textwidth}{|p{3.2cm}|X|}
+\hline
+\textbf{App} & \textbf{Responsibility} \\ \hline
+
+\texttt{accounts} & Custom \texttt{User} model (UUID, multi-auth), registration, login, OTP, Google OAuth via Firebase, JWT, FCM-token registration. \\ \hline
+\texttt{patients} & Patient profile model and endpoints (DOB, gender, blood type, allergies, chronic conditions, next of kin). \\ \hline
+\texttt{providers} & \texttt{HealthcareProvider}, \texttt{Specialty}, \texttt{ProviderSchedule}, \texttt{ProviderCredential}, \texttt{ProviderReview}; nearby/recommended search, schedule, KYC uploads. \\ \hline
+\texttt{appointments} & \texttt{Appointment} model, slot search, clash detection, lifecycle (pending~$\rightarrow$~confirmed~$\rightarrow$~completed/cancelled). \\ \hline
+\texttt{consultations} & Consultation lifecycle, real-time chat, prescriptions, medical records, referrals, medication reminders, Agora token issuance, AI-scribe pipeline. \\ \hline
+\texttt{ai\_engine} & Gemini-based AI symptom triage, multimodal chat sessions, structured assessment, doctor recommendation. \\ \hline
+\texttt{payments} & CamPay integration (MTN MoMo + Orange Money), provider wallet, withdrawals, platform settings. \\ \hline
+\texttt{notifications} & Unified notification model, FCM dispatch, WebSocket delivery, SMS hook. \\ \hline
+\texttt{direct\_chat} & 1-to-1 messaging between provider and patient outside an active consultation. \\ \hline
+\texttt{locations} & Provider service locations for proximity-based ranking and home visits. \\ \hline
+\texttt{health\_metrics} & \texttt{HeartRateReading}, \texttt{DailyActivity}; ingestion endpoints for wearable data. \\ \hline
+\texttt{lab\_tests} & Catalogue of lab tests (category, price, turnaround, sample type). \\ \hline
+\texttt{admin\_dashboard} & Aggregated stats endpoints for the React admin dashboard. \\ \hline
+
 \end{tabularx}
 \end{table}
 
-% --------- Data Model ---------
+% ---- Data Model ----
 \subsubsection*{Data Model}
 
 All domain models use UUID primary keys, soft-typed enums via \texttt{TextChoices}, and explicit indexes on hot paths (e.g.\ \texttt{(provider, created\_at)} on consultations, \texttt{(reminder, scheduled\_time)} unique on medication logs). The core entities and their key relationships are:
@@ -100,35 +100,23 @@ All domain models use UUID primary keys, soft-typed enums via \texttt{TextChoice
   \item \texttt{AISymptomSession} $\rightarrow$ \texttt{AIChatMessage} (with optional image attachments).
 \end{itemize}
 
-% --------- REST API Surface ---------
+The \texttt{Appointment} entity's life-cycle gates everything downstream: a booking starts \texttt{pending}, transitions to \texttt{confirmed} only on payment success, becomes \texttt{in\_progress} when the provider joins the call, and finally settles as \texttt{completed}, \texttt{cancelled}, or \texttt{no\_show}.
+
+The data layer is physically split across three coordinated stores, PostgreSQL for relational data, Redis for cache / channel layer / Celery broker, and Firebase Cloud Storage for media and KYC documents, as illustrated in Figure~\ref{fig:db-arch}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\textwidth]{figures/database_architecture.png}
+  \caption{Database Architecture}
+  \label{fig:db-arch}
+\end{figure}
+
+% ---- REST API Surface ----
 \subsubsection*{REST API Surface}
 
-The API is versioned under \texttt{/api/v1/}. Table~\ref{tab:api-routes} lists the principal route groups; each viewset exposes the standard JSON contract with JWT-authenticated requests. A complete endpoint reference is provided in Appendix~\ref{app:api-reference}.
+The API is versioned under \texttt{/api/v1/}, organised into ten route groups that mirror the Django apps: \texttt{auth} for registration, login, OTP and JWT token management; \texttt{providers} for provider profiles, credentials, schedule, earnings, and the AI-driven recommendation endpoint; \texttt{appointments} for booking, available-slot search, and life-cycle management; \texttt{consultations} for the consultation life-cycle, real-time chat, Agora token issuance, medical records, prescriptions, referrals, and the AI-scribe pipeline; \texttt{ai} for the symptom-checker sessions; \texttt{payments} for CamPay initiation, status polling, and webhook callbacks; \texttt{dchat} for direct messaging; \texttt{health} for wearable vitals ingestion; \texttt{lab-tests} for the catalogue; and \texttt{admin} for moderated platform-wide actions. A complete endpoint reference is provided in Appendix~\ref{app:api-reference}.
 
-\begin{table}[H]
-\centering
-\caption{Principal REST API route groups}
-\label{tab:api-routes}
-\small
-\begin{tabularx}{\textwidth}{p{4.5cm} X}
-\toprule
-\textbf{Path prefix} & \textbf{Representative endpoints} \\
-\midrule
-\texttt{/auth/} & \texttt{register/}, \texttt{login/}, \texttt{role-selection/}, \texttt{otp/send/}, \texttt{otp/verify/}, \texttt{otp/email/...}, \texttt{token/refresh/}, \texttt{logout/}, \texttt{google-auth/}, \texttt{fcm-token/}, \texttt{provider/bio/} \\
-\texttt{/providers/} & \texttt{profile/}, \texttt{credentials/}, \texttt{schedule/}, \texttt{earnings/}, \texttt{withdraw/}, \texttt{dashboard/}, \texttt{nearby/}, \texttt{recommended/}, \texttt{specialties/}, \texttt{<id>/reviews/} \\
-\texttt{/appointments/} & \texttt{list/create}, \texttt{<id>/}, \texttt{available-slots/} \\
-\texttt{/consultations/} & \texttt{start/}, \texttt{<id>/}, \texttt{<id>/end/}, \texttt{<id>/messages/}, \texttt{<id>/upload/}, \texttt{<id>/audio/}, \texttt{<id>/ring/}, \texttt{agora/token/}, \texttt{records/}, \texttt{prescriptions/}, \texttt{reminders/}, \texttt{referrals/} \\
-\texttt{/ai/} & \texttt{chat/start/}, \texttt{chat/sessions/}, \texttt{chat/<id>/message/}, \texttt{chat/<id>/complete/}, \texttt{chat/<id>/recommend/} \\
-\texttt{/payments/} & \texttt{initiate/}, \texttt{status/<id>/}, \texttt{campay/webhook/}, \texttt{history/} \\
-\texttt{/dchat/} & Direct-chat conversations and history; WebSocket for live delivery. \\
-\texttt{/health/} & \texttt{summary/}, \texttt{heart-rate/}, \texttt{activity/sync/} \\
-\texttt{/lab-tests/} & Public catalogue (read-only) and admin CRUD. \\
-\texttt{/admin/} & Aggregated stats, user management, verification queue, withdrawals. \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-% --------- Authentication ---------
+% ---- Authentication ----
 \subsubsection*{Authentication and Session Management}
 
 Authentication is JWT-based using \texttt{djangorestframework-simplejwt}. The configured token life-cycle is:
@@ -141,7 +129,7 @@ Authentication is JWT-based using \texttt{djangorestframework-simplejwt}. The co
 
 Four authentication entry points all converge on the same JWT pair: (i)~email or phone number plus password (\texttt{/auth/login/}); (ii)~phone OTP via Twilio SMS (\texttt{/auth/otp/send/} then \texttt{/auth/otp/verify/}); (iii)~email OTP for password reset and verification; and (iv)~Google OAuth, where the mobile app obtains a Firebase ID token, posts it to \texttt{/auth/google-auth/}, and the backend verifies it with \texttt{firebase\_admin} before issuing JWTs. WebSocket connections authenticate via a custom \texttt{JWTAuthMiddlewareStack} that reads the access token from the connection URL.
 
-% --------- Real-Time ---------
+% ---- Real-Time ----
 \subsubsection*{Real-Time and Asynchronous Layer}
 
 Three categories of real-time work are handled outside the synchronous request/response cycle:
@@ -152,19 +140,19 @@ Three categories of real-time work are handled outside the synchronous request/r
   \item \textbf{Celery tasks.} A Redis-backed Celery~\cite{celery_docs} worker processes \texttt{send\_notification}, \texttt{transcribe\_and\_draft\_record}, and reminder fan-outs. A Celery Beat scheduler runs \texttt{send-appointment-reminders} hourly and \texttt{send-medication-reminders} every fifteen minutes.
 \end{itemize}
 
-% --------- AI Consultation Engine ---------
+% ---- AI Consultation Engine ----
 \subsubsection*{AI Consultation Engine}
 
 The AI consultation module (\texttt{apps/ai\_engine/}) is built on Google Gemini~\cite{gemini_docs} (default model \texttt{gemini-1.5-flash-latest}, configurable via \texttt{MEDLM\_MODEL\_ID}). The engine has four design properties worth highlighting:
 
 \begin{enumerate}
-  \item \textbf{System-prompted clinician persona.} The system prompt enforces short, focused turns (typically 30--50 words), one question at a time, contextual to Cameroonian healthcare (e.g.\ artemether-lumefantrine for suspected malaria), and never delivers a final diagnosis --- instead returning two to five possible causes and a triage recommendation.
+  \item \textbf{System-prompted clinician persona.} The system prompt enforces short, focused turns (typically 30 to 50 words), one question at a time, contextual to Cameroonian healthcare (e.g.\ artemether-lumefantrine for suspected malaria), and never delivers a final diagnosis, instead returning two to five possible causes and a triage recommendation.
   \item \textbf{Multimodal input.} Patients can attach images (wounds, rashes) to a chat turn. The backend decodes Base64 payloads, infers MIME type, and forwards them to Gemini alongside the conversation history.
   \item \textbf{Silent vitals context.} Before each turn, the backend reads the patient's most recent \texttt{HeartRateReading} and \texttt{DailyActivity} and injects them as a hidden system message so that the model can reason over physiological context without alarming the patient.
   \item \textbf{Structured assessment.} A separate ``complete'' call (\texttt{POST /chat/<id>/complete/}) asks Gemini to return a JSON assessment with the fields \texttt{summary}, \texttt{triage\_priority}, \texttt{recommended\_specialization}, \texttt{possible\_causes}, and \texttt{red\_flags}. This object is the bridge between the AI layer and the provider-recommendation engine.
 \end{enumerate}
 
-% --------- AI Provider Recommendation ---------
+% ---- AI Provider Recommendation ----
 \subsubsection*{AI-Driven Provider Recommendation}
 
 The structured assessment produced at the end of an AI session is the primary signal driving Clinix's doctor-recommendation feature. The recommendation is a transparent scoring function over verified providers that takes the AI's \texttt{recommended\_specialization} as its main input.
@@ -186,7 +174,7 @@ The end-to-end flow is:
 
 A mid-session recommendation is the most user-friendly path: the AI can volunteer a doctor while the patient is still describing symptoms (``Based on what you've described so far, here are three verified general practitioners online right now near you''), without forcing the patient to formally end the session. By relying on a pre-trained external model for medical reasoning and a transparent rules-based scorer for provider matching, Clinix keeps the scoring function fully auditable, which matters for clinical accountability and for the Cameroonian regulatory environment.
 
-% --------- AI Scribe ---------
+% ---- AI Scribe ----
 \subsubsection*{AI Medical-Record Scribe}
 
 When a video consultation ends, the doctor may upload the call's audio recording. The endpoint \texttt{POST /consultations/<id>/audio/} stores the file in Firebase Cloud Storage and queues the Celery task \texttt{transcribe\_and\_draft\_record}. The task:
@@ -200,7 +188,7 @@ When a video consultation ends, the doctor may upload the call's audio recording
 
 The doctor opens the draft inside the mobile app at \texttt{/provider/medical-record/new?aiDraftRecordId=<uuid>}, reviews and edits it, and flips \texttt{is\_published=True}. Patients never see un-reviewed AI drafts.
 
-% --------- Payment ---------
+% ---- Payment ----
 \subsubsection*{Payment Integration (CamPay)}
 
 Payments are handled entirely in XAF through CamPay~\cite{campay_docs}, which fronts MTN Mobile Money and Orange Money. The flow is:
@@ -214,7 +202,9 @@ Payments are handled entirely in XAF through CamPay~\cite{campay_docs}, which fr
 
 Provider withdrawals use the same wallet and a moderated \texttt{WithdrawalRequest} queue reviewed in the admin dashboard. The default platform fee is zero, so providers receive the full consultation fee.
 
-% --------- Verification ---------
+The Payment row's life-cycle reflects the asynchronous nature of mobile-money: it begins \texttt{pending}, transitions through \texttt{awaiting\_ussd} and \texttt{processing}, and resolves to \texttt{success} (after which it is \texttt{reconciled} against the appointment and wallet) or \texttt{failed} (with an optional \texttt{refunded} terminal state for manual reversals).
+
+% ---- Verification ----
 \subsubsection*{Provider Verification Flow}
 
 Verification is implemented as a state machine on \texttt{HealthcareProvider.verification\_status} with values \texttt{pending}, \texttt{approved}, \texttt{rejected}, and \texttt{suspended}. The end-to-end flow is:
@@ -222,18 +212,23 @@ Verification is implemented as a state machine on \texttt{HealthcareProvider.ver
 \begin{enumerate}
   \item Provider registers and selects the ``provider'' role; the backend creates a \texttt{HealthcareProvider} row with \texttt{verification\_status='pending'} and a placeholder license number.
   \item The provider uploads credential documents (\texttt{national\_id\_front}, \texttt{national\_id\_back}, \texttt{medical\_license}) via \texttt{POST /providers/credentials/}.
-  \item A superadmin opens the verification queue in the React admin dashboard (\texttt{/verifications}), reviews each document in the \texttt{DocumentReviewModal}, and approves or rejects.
-  \item On approval the backend stamps \texttt{verified\_by} and \texttt{verified\_at}; the provider becomes visible to patient-facing search and recommendation endpoints, all of which filter on \texttt{verification\_status='approved'}.
+  \item A superadmin opens the verification queue in the React admin dashboard (\texttt{/verifications}) and, in the \texttt{DocumentReviewModal}, performs two checks on every submission:
+    \begin{enumerate}
+      \item \textbf{Document authenticity check.} The uploaded national-identity card and medical-licence images are visually inspected for tampering, expiry, and name/photo consistency.
+      \item \textbf{Cameroon Medical Council cross-check.} The licence number and full name on the medical licence are verified against the authoritative register of practitioners maintained by the \textbf{Ordre National des M\'edecins du Cameroun (Cameroon Medical Council, CMC)}. Only providers whose credentials are confirmed against the CMC register, and, for allied professionals, against their corresponding national professional bodies (e.g.\ the Nursing Council), are eligible for approval. This step is what makes Clinix's verification meaningfully different from a self-declared online listing.
+    \end{enumerate}
+  \item If both checks pass, the superadmin approves the request: the backend stamps \texttt{verified\_by} and \texttt{verified\_at}, and the provider becomes visible to patient-facing search and recommendation endpoints, all of which filter on \texttt{verification\_status='approved'}. If either check fails, the request is rejected with a reason that the provider can see, and they may resubmit corrected documents.
+  \item A previously approved provider can later be moved to \texttt{suspended} by an admin (e.g.\ following a complaint or a CMC status change) and reinstated when the issue is resolved.
 \end{enumerate}
 
 \subsection{Mobile Application Implementation (Flutter)}
 
-% --------- Project Overview ---------
+% ---- Project Overview ----
 \subsubsection*{Project Overview}
 
 The mobile application is a single Flutter project~\cite{flutter_docs} (\texttt{clinix\_mobile}, Flutter SDK $\geq 3.0$) that hosts both the patient and provider experiences. Role information stored in secure storage after \texttt{/auth/role-selection/} drives a fork at the router so that one binary serves two distinct app personas.
 
-% --------- Architecture ---------
+% ---- Architecture ----
 \subsubsection*{Architecture}
 
 The codebase follows a \emph{feature-based clean architecture} layout (Listing~\ref{lst:lib-layout}). Each feature owns its own \texttt{presentation/}, while cross-cutting concerns live in \texttt{core/}.
@@ -260,35 +255,12 @@ lib/
   main.dart
 \end{lstlisting}
 
-% --------- Key Dependencies ---------
+% ---- Key Dependencies ----
 \subsubsection*{Key Dependencies}
 
-Table~\ref{tab:mobile-deps} groups the most important packages by purpose.
+The mobile application relies on several Flutter packages organised by purpose. State management uses Riverpod; routing is declarative and deep-link-aware via go\_router; HTTP and WebSocket connections use Dio (with a JWT auth interceptor) and web\_socket\_channel; authentication relies on the Firebase Auth and Google Sign-In packages with credentials stored in flutter\_secure\_storage. Push notifications and incoming-call handling combine Firebase Messaging, flutter\_local\_notifications, flutter\_callkit\_incoming, flutter\_ringtone\_player, and vibration. Real-time video and audio media are handled by the Agora RTC engine. Maps and location services use google\_maps\_flutter and geolocator. Health and activity tracking use the pedometer, Health Connect, and heart\_bpm packages with fl\_chart for visualisation. File handling and storage use firebase\_storage, image\_picker, cached\_network\_image, and the pdf and printing packages for clinical-document export. Localisation is wired through flutter\_localizations and intl.
 
-\begin{table}[H]
-\centering
-\caption{Key Flutter packages, grouped by purpose}
-\label{tab:mobile-deps}
-\small
-\begin{tabularx}{\textwidth}{p{3.5cm} X}
-\toprule
-\textbf{Purpose} & \textbf{Package(s) used} \\
-\midrule
-State management & \texttt{flutter\_riverpod} 2.5.1 \\
-Routing & \texttt{go\_router} 13.2.1 (30+ declarative routes, deep-link aware) \\
-HTTP \& WebSocket & \texttt{dio} 5.4.3 with auth interceptor; \texttt{web\_socket\_channel} 3.0.1 \\
-Authentication & \texttt{firebase\_auth}, \texttt{firebase\_core}, \texttt{google\_sign\_in}, \texttt{flutter\_secure\_storage} \\
-Push \& calls & \texttt{firebase\_messaging}, \texttt{flutter\_local\_notifications}, \texttt{flutter\_callkit\_incoming}, \texttt{flutter\_ringtone\_player}, \texttt{vibration} \\
-Real-time media & \texttt{agora\_rtc\_engine} 6.3.2 \\
-Maps \& location & \texttt{google\_maps\_flutter}, \texttt{geolocator}, \texttt{flutter\_polyline\_points} \\
-Health \& activity & \texttt{pedometer}, \texttt{health} (Health Connect), \texttt{heart\_bpm}, \texttt{camera}, \texttt{fl\_chart} \\
-File \& storage & \texttt{firebase\_storage}, \texttt{file\_picker}, \texttt{image\_picker}, \texttt{cached\_network\_image}, \texttt{pdf}, \texttt{printing} \\
-Localisation & \texttt{flutter\_localizations}, \texttt{intl} 0.20.0 \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-% --------- Networking Layer ---------
+% ---- Networking Layer ----
 \subsubsection*{Networking Layer}
 
 A single \texttt{Dio} instance is constructed in \texttt{core/network/dio\_client.dart} and exposed through a Riverpod \texttt{dioProvider}. It applies a 30-second timeout, JSON headers, and an interceptor that:
@@ -298,7 +270,7 @@ A single \texttt{Dio} instance is constructed in \texttt{core/network/dio\_clien
   \item On a 401 response, calls \texttt{AuthService.refreshAccessToken()}, replays the original request, and only fails open if both attempts return 401.
 \end{enumerate}
 
-% --------- Patient Experience ---------
+% ---- Patient Experience ----
 \subsubsection*{Patient Experience}
 
 The patient module exposes 24 screens organised around a five-tab home (\texttt{Home}, \texttt{Doctors}, \texttt{Facilities}, \texttt{Health}, \texttt{Profile}). The most significant flows are:
@@ -315,20 +287,20 @@ The patient module exposes 24 screens organised around a five-tab home (\texttt{
   \item \textbf{Clinical documents}: \texttt{prescriptions\_screen.dart} and \texttt{medical\_records\_screen.dart} use the \texttt{pdf} and \texttt{printing} packages to export PDF copies generated by \texttt{core/services/clinical\_pdf.dart}.
 \end{itemize}
 
-% --------- Provider Experience ---------
+% ---- Provider Experience ----
 \subsubsection*{Provider Experience}
 
 The provider module covers the doctor / nurse side of the platform:
 
 \begin{itemize}
-  \item \texttt{provider\_home\_page.dart} --- earnings, today's appointments, and quick profile editing.
-  \item \texttt{provider\_appointments\_screen.dart} --- the upcoming-and-past appointment list with one-tap join into a video consultation.
-  \item \texttt{write\_prescription\_page.dart} --- a structured prescription editor that posts to \texttt{/consultations/prescriptions/} and triggers automatic creation of medication reminders for the patient.
-  \item \texttt{medical\_record\_form\_page.dart} --- the post-consultation clinical-note form, which can be pre-filled from an AI scribe draft via \texttt{?aiDraftRecordId=<uuid>}.
-  \item \texttt{referral\_form\_page.dart} --- specialist or lab-test referrals, attached to a medical record.
+  \item \texttt{provider\_home\_page.dart}, earnings, today's appointments, and quick profile editing.
+  \item \texttt{provider\_appointments\_screen.dart}, the upcoming-and-past appointment list with one-tap join into a video consultation.
+  \item \texttt{write\_prescription\_page.dart}, a structured prescription editor that posts to \texttt{/consultations/prescriptions/} and triggers automatic creation of medication reminders for the patient.
+  \item \texttt{medical\_record\_form\_page.dart}, the post-consultation clinical-note form, which can be pre-filled from an AI scribe draft via \texttt{?aiDraftRecordId=<uuid>}.
+  \item \texttt{referral\_form\_page.dart}, specialist or lab-test referrals, attached to a medical record.
 \end{itemize}
 
-% --------- Incoming Call ---------
+% ---- Incoming Call ----
 \subsubsection*{Incoming-Call Integration}
 
 Receiving a call is intentionally as reliable as a native phone call:
@@ -342,86 +314,87 @@ Receiving a call is intentionally as reliable as a native phone call:
 
 \subsection{Administrative Dashboard Implementation (React)}
 
-% --------- Stack ---------
+% ---- Stack ----
 \subsubsection*{Stack and Layout}
 
-The admin dashboard is a single-page React~19~\cite{react_docs} application built with Vite~\cite{vite_docs}, TypeScript, and Tailwind CSS. State and data fetching are handled with TanStack Query~5~\cite{tanstack_query} only --- there is no Redux or Zustand layer. Routing uses React Router~7.
+The admin dashboard is a single-page React~19~\cite{react_docs} application built with Vite~\cite{vite_docs}, TypeScript, and Tailwind CSS, deployed behind Nginx via a multi-stage Docker build. State and data fetching are handled with TanStack Query~5~\cite{tanstack_query} only (there is no Redux or Zustand layer), HTTP calls use Axios, routing uses React Router~7 with a JWT-guarded \texttt{ProtectedRoute}, and icons come from Lucide React. The visual style uses a custom dark-navy theme with the Inter font.
 
-\begin{table}[H]
-\centering
-\caption{Admin dashboard technology stack}
-\label{tab:admin-stack}
-\small
-\begin{tabularx}{\textwidth}{p{3.6cm} X}
-\toprule
-\textbf{Concern} & \textbf{Technology} \\
-\midrule
-Framework / build & React 19.2 + Vite 8 + TypeScript 5.9 \\
-Styling & Tailwind CSS 3.4 (custom dark-navy theme, Inter font) \\
-Icons & Lucide React \\
-Data fetching & TanStack React Query 5.95 \\
-Routing & React Router DOM 7 with a JWT-guarded \texttt{ProtectedRoute} \\
-HTTP & Axios 1.13 \\
-Deployment & Multi-stage Dockerfile (Node 20 build $\rightarrow$ Nginx Alpine serve) \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-% --------- Pages ---------
+% ---- Pages ----
 \subsubsection*{Pages and Capabilities}
 
 \begin{itemize}
-  \item \texttt{Login.tsx} --- email/password login against \texttt{/auth/login/}; only \texttt{superadmin} and \texttt{admin} \texttt{user\_type}s are accepted; the JWT is persisted in \texttt{localStorage.clinix\_admin\_token}.
-  \item \texttt{Dashboard.tsx} --- KPI tiles (total patients, total providers, pending verifications, consultations) and a configurable global consultation fee, reading from \texttt{/admin/dashboard/} and \texttt{/system/settings/fee/}.
-  \item \texttt{Verifications.tsx} --- the verification queue; \texttt{DocumentReviewModal} displays uploaded ID and licence documents inline, with one-click approve/reject.
-  \item \texttt{Users.tsx} --- user directory with filter (all / patient / provider / admin), debounced search, password reset, suspend, and delete actions.
-  \item \texttt{Patients.tsx} --- full patient CRUD (demographics, phone, email, DOB, gender, blood type).
-  \item \texttt{Revenue.tsx} --- withdrawal request workflow (approve / reject / mark paid) and net-profit display.
-  \item \texttt{LabTests.tsx} --- create/edit/delete lab tests across categories (Blood, Urine, Imaging, STD, Other) with price and turnaround.
-  \item \texttt{Specialties.tsx} --- enable/disable medical specialties; the same list powers the patient mobile app's search filters.
+  \item \texttt{Login.tsx}, email/password login against \texttt{/auth/login/}; only \texttt{superadmin} and \texttt{admin} \texttt{user\_type}s are accepted; the JWT is persisted in \texttt{localStorage.clinix\_admin\_token}.
+  \item \texttt{Dashboard.tsx}, KPI tiles (total patients, total providers, pending verifications, consultations) and a configurable global consultation fee, reading from \texttt{/admin/dashboard/} and \texttt{/system/settings/fee/}.
+  \item \texttt{Verifications.tsx}, the verification queue; \texttt{DocumentReviewModal} displays uploaded ID and licence documents inline, with one-click approve/reject.
+  \item \texttt{Users.tsx}, user directory with filter (all / patient / provider / admin), debounced search, password reset, suspend, and delete actions.
+  \item \texttt{Patients.tsx}, full patient CRUD (demographics, phone, email, DOB, gender, blood type).
+  \item \texttt{Revenue.tsx}, withdrawal request workflow (approve / reject / mark paid) and net-profit display.
+  \item \texttt{LabTests.tsx}, create/edit/delete lab tests across categories (Blood, Urine, Imaging, STD, Other) with price and turnaround.
+  \item \texttt{Specialties.tsx}, enable/disable medical specialties; the same list powers the patient mobile app's search filters.
 \end{itemize}
 
-% --------- Security ---------
+% ---- Security ----
 \subsubsection*{Security Model}
 
 All admin routes are wrapped in a \texttt{ProtectedRoute} that reads the JWT from \texttt{localStorage} and redirects to \texttt{/login} if absent. A central Axios interceptor injects \texttt{Authorization: Bearer <token>} on every request and, on a 401 response, clears the token and forces a re-login. Login itself rejects any \texttt{user\_type} other than \texttt{superadmin} or \texttt{admin}, so a leaked patient JWT cannot be used to enter the dashboard.
 
 \subsection{Integration and Results}
 
-The three sub-systems converge through the same Django REST + Channels backend; the mobile app and the admin dashboard never talk to each other directly. This section reports the integration outcomes observed once all three were wired up end-to-end.
+The three sub-systems converge through the same Django REST + Channels backend; the mobile app and the admin dashboard never talk to each other directly. Figure~\ref{fig:deployment} shows the production deployment topology, client devices in the top tier, a Railway/Render cloud hosting the ASGI container, worker container, and managed PostgreSQL and Redis instances, and the external SaaS column (Firebase, Agora, CamPay, Twilio, Google Maps, Google AI). This section reports the integration outcomes observed once all three were wired up end-to-end.
 
-% --------- Functional Outcomes ---------
-\subsubsection*{Functional Outcomes}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figures/deployment.png}
+  \caption{Deployment Diagram}
+  \label{fig:deployment}
+\end{figure}
 
-The implementation delivered against every functional requirement set in Chapter~III.
+% ---- Results aligned with the four objectives ----
+\subsubsection*{Results Against Project Objectives}
 
-\begin{itemize}
-  \item \textbf{Authentication.} Four parallel entry points (password, SMS OTP, email OTP, Google OAuth) all converge on the same JWT pair, with refresh-token rotation and blacklisting.
-  \item \textbf{Provider verification.} An end-to-end pipeline from KYC upload to admin review is in place; only \texttt{approved} providers are surfaced to patients.
-  \item \textbf{Appointment scheduling.} Slot search, clash detection against provider schedules, and a pending~$\rightarrow$~confirmed life-cycle gated on successful payment are implemented.
-  \item \textbf{AI consultation.} A Gemini-backed multimodal symptom checker is operational, with silent vitals context and a structured assessment that drives doctor recommendation.
-  \item \textbf{AI-driven provider recommendation.} The structured assessment is mapped to a ranked list of verified providers with explicit \texttt{match\_reasons}, available both at session end and mid-session.
-  \item \textbf{Real-time consultation.} Agora-powered video/audio, WebSocket chat, native CallKit incoming-call UX, and an AI scribe that drafts medical records from the call audio are all functional.
-  \item \textbf{Payments.} CamPay integration covering MTN MoMo and Orange Money in XAF works end-to-end, with webhook reconciliation, provider-wallet crediting, and a moderated withdrawal queue.
-  \item \textbf{Location services.} Provider/clinic maps, distance-aware ranking via the haversine formula on \texttt{Location}, and Google Maps polyline directions are integrated in the mobile app.
-  \item \textbf{Health tracking.} Pedometer-based step counts, Health Connect vitals on Android, and camera-based heart-rate measurement (\texttt{heart\_bpm}) sync to \texttt{/health/...} endpoints and are surfaced as silent context to the AI engine.
-  \item \textbf{Administrative tools.} The React dashboard delivers all administrative use-cases: verifications, users, patients, lab tests, specialties, revenue and withdrawals, and global fee configuration.
-\end{itemize}
+This subsection reports concrete results for each of the four specific objectives stated in Section~1.4.2, demonstrating that the implementation answers what was originally promised.
 
-% --------- Non-Functional Outcomes ---------
+\paragraph{Objective 1: Multi-tier architecture for patients, providers, and administrators.}
+The platform was delivered as the three coordinated sub-systems described above: a single Flutter mobile codebase that hosts both patient and provider experiences from one binary (with role-based routing in \texttt{app\_router.dart}), a Django REST + Channels backend exposing a versioned \texttt{/api/v1/} surface and Redis-backed WebSocket consumers, and a React administrative dashboard. The deployment topology in Figure~\ref{fig:deployment} shows the runtime separation between presentation, application, and data tiers.
+
+\paragraph{Objective 2: AI-powered consultation module with multimodal input and provider recommendation.}
+The \texttt{ai\_engine} app integrates Google Gemini for turn-by-turn symptom triage. Patients can attach images (rashes, wounds) which are forwarded as multimodal input. At session end, the Structured Assessment Generator returns a JSON object containing \texttt{triage\_priority}, \texttt{recommended\_specialization}, and \texttt{possible\_causes}. The recommended specialty is consumed by the Provider Recommender, which filters \texttt{approved} providers and returns a ranked list with human-readable \texttt{match\_reasons}. Both end-of-session and mid-session recommendation paths are exposed (\texttt{/ai/chat/<id>/complete/} and \texttt{/ai/chat/<id>/recommend/}).
+
+\paragraph{Objective 3: Provider verification cross-checked against the Cameroon Medical Council.}
+Every provider account is created with \texttt{verification\_status='pending'} and remains invisible to patients until a superadmin reviews the uploaded credentials (national ID front/back, medical licence) in the React admin dashboard's verification queue. The dashboard cross-checks the submitted licence number against the Cameroon Medical Council register before approval. Only \texttt{verification\_status='approved'} providers appear in \texttt{/providers/nearby/} and \texttt{/providers/recommended/}; suspended providers disappear from search results immediately.
+
+\paragraph{Objective 4: Location services, mobile-money payments, and bilingual-ready interfaces.}
+The mobile app integrates Google Maps Flutter for nearby-clinic discovery and Google Maps polyline directions; distance-aware ranking inside the Provider Recommender uses the haversine formula on \texttt{Location} rows. Payments are end-to-end CamPay in XAF, covering MTN Mobile Money and Orange Money with both webhook reconciliation and polling fallback. The bilingual scaffold is in place through \texttt{flutter\_localizations}, \texttt{intl}, and the \texttt{User.language\_pref} field on the backend; English ships first, with the French resource bundles flagged for the next release (Section~5.3).
+
+% ---- Non-Functional Outcomes ----
 \subsubsection*{Non-Functional Outcomes}
 
-\begin{itemize}
-  \item Cold-start mobile app launch consistently completes under three seconds on a mid-range Android device on Wi-Fi, meeting the performance target.
-  \item Agora video calls observed latency below 200~ms on stable 4G, with graceful audio-only fallback when bandwidth drops, meeting the call-latency target.
-  \item All consultation traffic moves over HTTPS / WSS; tokens never traverse the network in plaintext; JWTs are stored in secure platform-specific storage (Keychain on iOS, EncryptedSharedPreferences on Android).
-  \item The platform launches in English and French via Cameroonian-relevant strings stored against \texttt{User.language\_pref}.
-\end{itemize}
+Cold-start mobile app launch consistently completes under three seconds on a mid-range Android device on Wi-Fi, meeting the performance target. Agora video calls observed latency below 200~ms on stable 4G, with graceful audio-only fallback when bandwidth drops, meeting the call-latency target. All consultation traffic moves over HTTPS and WSS; tokens never traverse the network in plaintext; JWTs are stored in secure platform-specific storage (Keychain on iOS, EncryptedSharedPreferences on Android). The platform launches in English first against \texttt{User.language\_pref}, with the French resource bundles slated for the next milestone.
 
 \section{Testing}
 \label{sec:impl-testing}
 
 Testing followed a three-level model: unit tests on individual functions and components, integration tests on collaborating modules, and system tests on the full end-to-end user journey. The same test corpus is reused for regression as new features ship.
+
+\subsection*{Test Plan}
+
+The test plan defines what is tested, at what level, with what tooling, against what acceptance criteria, and how each test traces back to the project objectives. Table~\ref{tab:test-plan} summarises the plan; the subsections that follow report the actual test cases run at each level.
+
+\begin{table}[H]
+\centering
+\caption{Test plan summary}
+\label{tab:test-plan}
+\small
+\begin{tabularx}{\textwidth}{|p{2.2cm}|p{3.2cm}|p{3.0cm}|X|p{2.0cm}|}
+\hline
+\textbf{Level} & \textbf{Scope} & \textbf{Tooling} & \textbf{Acceptance criterion} & \textbf{Maps to Obj.} \\ \hline
+Unit & Single functions, models, widgets, components & pytest (Django), \texttt{flutter\_test}, Vitest (React) & Each unit returns the expected output for valid input and the documented error for invalid input. & 1, 2, 3, 4 \\ \hline
+Integration & Collaborating modules: REST API + DB, WebSocket consumers, CamPay sandbox, AI session + recommender & DRF \texttt{APITestCase}, Channels \texttt{WebsocketCommunicator}, Postman, CamPay sandbox & End-to-end HTTP/WS exchanges produce the expected DB state, side-effects, and downstream notifications. & 1, 2, 3, 4 \\ \hline
+System & Full golden-path patient + provider + admin flow on physical devices & Manual scripted scenarios on Android and iOS against staging deployment & The ten golden-path steps complete without manual intervention and the artefacts (records, prescriptions, reminders, wallet credit) appear in the correct UI surfaces. & 1, 2, 3, 4 \\ \hline
+\end{tabularx}
+\end{table}
+
+The plan is designed so that every objective from Section~1.4.2 is exercised at every level: Objective~1 (architecture) is implicitly tested whenever a cross-tier request succeeds; Objective~2 (AI) has dedicated cases U3, I4, and S1; Objective~3 (verification) has cases I2, I3, S3, and S6; Objective~4 (location, payments, bilingual scaffold) has cases U3, U4, I5, and S5.
 
 \subsection{Unit Testing}
 
@@ -438,17 +411,17 @@ Unit tests verify the correctness of single functions, classes, or widgets in is
 \caption{Representative unit-test cases}
 \label{tab:unit-tests}
 \small
-\begin{tabularx}{\textwidth}{p{0.6cm} p{4.8cm} X p{1.4cm}}
-\toprule
-\textbf{\#} & \textbf{Unit under test} & \textbf{Expected behaviour} & \textbf{Result} \\
-\midrule
-U1 & \texttt{User.save()} & Phone number normalised, role lower-cased, UUID auto-generated & Pass \\
-U2 & \texttt{Appointment.clean()} & Raises \texttt{ValidationError} when scheduled time overlaps an existing confirmed appointment & Pass \\
-U3 & \texttt{haversine(lat1, lon1, lat2, lon2)} & Returns 0 for identical points; matches known Buea--Douala distance within 1\% & Pass \\
-U4 & \texttt{normalize\_campay\_phone()} & Strips leading 0 and prefixes ``237'' & Pass \\
-U5 & \texttt{DioClient} (Flutter) & Adds \texttt{Authorization: Bearer ...} header to every request & Pass \\
-U6 & \texttt{ProtectedRoute} (React) & Redirects to \texttt{/login} when token absent & Pass \\
-\bottomrule
+\begin{tabularx}{\textwidth}{|p{0.6cm}|p{4.8cm}|X|p{1.4cm}|}
+\hline
+\textbf{\#} & \textbf{Unit under test} & \textbf{Expected behaviour} & \textbf{Result} \\ \hline
+
+U1 & \texttt{User.save()} & Phone number normalised, role lower-cased, UUID auto-generated & Pass \\ \hline
+U2 & \texttt{Appointment.clean()} & Raises \texttt{ValidationError} when scheduled time overlaps an existing confirmed appointment & Pass \\ \hline
+U3 & \texttt{haversine(lat1, lon1, lat2, lon2)} & Returns 0 for identical points; matches known Buea, Douala distance within 1\% & Pass \\ \hline
+U4 & \texttt{normalize\_campay\_phone()} & Strips leading 0 and prefixes ``237'' & Pass \\ \hline
+U5 & \texttt{DioClient} (Flutter) & Adds \texttt{Authorization: Bearer ...} header to every request & Pass \\ \hline
+U6 & \texttt{ProtectedRoute} (React) & Redirects to \texttt{/login} when token absent & Pass \\ \hline
+
 \end{tabularx}
 \end{table}
 
@@ -468,18 +441,18 @@ Integration tests verify that collaborating modules behave correctly when wired 
 \caption{Representative integration-test cases}
 \label{tab:integration-tests}
 \small
-\begin{tabularx}{\textwidth}{p{0.6cm} p{4.8cm} X p{1.4cm}}
-\toprule
-\textbf{\#} & \textbf{Scenario} & \textbf{Expected behaviour} & \textbf{Result} \\
-\midrule
-I1 & Patient register + OTP verify & New \texttt{Patient} row created; JWT pair returned & Pass \\
-I2 & Provider uploads incomplete credentials & \texttt{verification\_status} stays \texttt{pending}; provider absent from \texttt{/providers/nearby/} & Pass \\
-I3 & Admin approves provider & Provider appears in \texttt{/providers/recommended/?specialty=Generalist} & Pass \\
-I4 & AI complete + recommend & \texttt{recommended\_specialization} from Gemini drives \texttt{/providers/recommended/} ranking & Pass \\
-I5 & CamPay sandbox payment success & \texttt{Payment} status \texttt{success}; \texttt{Appointment} status \texttt{confirmed}; \texttt{WalletTransaction} credit row created & Pass \\
-I6 & WebSocket chat in consultation & Message from patient is delivered to provider within 250~ms & Pass \\
-I7 & Expired JWT used on REST call & 401 returned; mobile interceptor refreshes and retries transparently & Pass \\
-\bottomrule
+\begin{tabularx}{\textwidth}{|p{0.6cm}|p{4.8cm}|X|p{1.4cm}|}
+\hline
+\textbf{\#} & \textbf{Scenario} & \textbf{Expected behaviour} & \textbf{Result} \\ \hline
+
+I1 & Patient register + OTP verify & New \texttt{Patient} row created; JWT pair returned & Pass \\ \hline
+I2 & Provider uploads incomplete credentials & \texttt{verification\_status} stays \texttt{pending}; provider absent from \texttt{/providers/nearby/} & Pass \\ \hline
+I3 & Admin approves provider & Provider appears in \texttt{/providers/recommended/?specialty=Generalist} & Pass \\ \hline
+I4 & AI complete + recommend & \texttt{recommended\_specialization} from Gemini drives \texttt{/providers/recommended/} ranking & Pass \\ \hline
+I5 & CamPay sandbox payment success & \texttt{Payment} status \texttt{success}; \texttt{Appointment} status \texttt{confirmed}; \texttt{WalletTransaction} credit row created & Pass \\ \hline
+I6 & WebSocket chat in consultation & Message from patient is delivered to provider within 250~ms & Pass \\ \hline
+I7 & Expired JWT used on REST call & 401 returned; mobile interceptor refreshes and retries transparently & Pass \\ \hline
+
 \end{tabularx}
 \end{table}
 
@@ -507,17 +480,17 @@ The ``golden path'' test walks one patient and one provider through:
 \caption{Representative system-test cases (end-to-end)}
 \label{tab:system-tests}
 \small
-\begin{tabularx}{\textwidth}{p{0.6cm} p{4.8cm} X p{1.4cm}}
-\toprule
-\textbf{\#} & \textbf{Scenario} & \textbf{Expected behaviour} & \textbf{Result} \\
-\midrule
-S1 & Golden path (full booking $\rightarrow$ call $\rightarrow$ record) & All ten steps above complete without manual intervention & Pass \\
-S2 & Medication reminder fires & Patient receives FCM at scheduled time; \texttt{MedicationLog} row created & Pass \\
-S3 & Admin attempts to log in with patient JWT & Rejected at \texttt{Login.tsx} because \texttt{user\_type} is not \texttt{admin} & Pass \\
-S4 & Network drop mid-call & Agora reconnects; chat queue persists messages until WebSocket reopens & Pass \\
-S5 & Pay-first lab test booking & Payment success creates the \texttt{Appointment} from \texttt{pending\_booking}; nurse sees it in their app & Pass \\
-S6 & Provider suspended in admin & Provider immediately disappears from \texttt{/providers/recommended/} results & Pass \\
-\bottomrule
+\begin{tabularx}{\textwidth}{|p{0.6cm}|p{4.8cm}|X|p{1.4cm}|}
+\hline
+\textbf{\#} & \textbf{Scenario} & \textbf{Expected behaviour} & \textbf{Result} \\ \hline
+
+S1 & Golden path (full booking $\rightarrow$ call $\rightarrow$ record) & All ten steps above complete without manual intervention & Pass \\ \hline
+S2 & Medication reminder fires & Patient receives FCM at scheduled time; \texttt{MedicationLog} row created & Pass \\ \hline
+S3 & Admin attempts to log in with patient JWT & Rejected at \texttt{Login.tsx} because \texttt{user\_type} is not \texttt{admin} & Pass \\ \hline
+S4 & Network drop mid-call & Agora reconnects; chat queue persists messages until WebSocket reopens & Pass \\ \hline
+S5 & Pay-first lab test booking & Payment success creates the \texttt{Appointment} from \texttt{pending\_booking}; nurse sees it in their app & Pass \\ \hline
+S6 & Provider suspended in admin & Provider immediately disappears from \texttt{/providers/recommended/} results & Pass \\ \hline
+
 \end{tabularx}
 \end{table}
 

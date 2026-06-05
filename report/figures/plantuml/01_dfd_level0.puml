@@ -1,37 +1,70 @@
 @startuml dfd_level0
 ' --------------------------------------------------------------
-' DFD Level 0 - Context Diagram for the Clinix System
-' Figure 3.0 in the BTech report
+' DFD Level 0 (Context Diagram) for the Clinix System
+' Yourdon/DeMarco notation, no stick-figure actors.
+' Lavender styling to match the standard textbook look.
+' Uses PlantUML CSS <style> blocks (replaces deprecated
+' skinparam padding warning).
 ' --------------------------------------------------------------
 title Clinix - Data Flow Diagram Level 0 (Context Diagram)
 
-skinparam backgroundColor #FFFFFF
-skinparam shadowing false
-skinparam defaultFontName "Inter, Helvetica, sans-serif"
-skinparam defaultFontSize 12
-skinparam ArrowColor #1F4E79
-skinparam ActorBorderColor #1F4E79
-skinparam UsecaseBorderColor #1F4E79
-skinparam UsecaseBackgroundColor #EAF2F9
+<style>
+root {
+  BackgroundColor #FFFFFF
+  FontName        "Inter, Helvetica, sans-serif"
+  FontSize        12
+  FontColor       #1F2937
+}
+rectangle {
+  BackgroundColor #E8ECFB
+  LineColor       #6B7AB3
+  LineThickness   1.4
+  FontStyle       bold
+  FontColor       #1F2937
+  RoundCorner     6
+  Padding         8
+  Margin          10
+}
+usecase {
+  BackgroundColor #DCE3F7
+  LineColor       #6B7AB3
+  LineThickness   1.6
+  FontStyle       bold
+  FontSize        12
+  FontColor       #1F2937
+  Padding         10
+  Margin          12
+}
+arrow {
+  LineColor       #6B7AB3
+  LineThickness   1.1
+  FontColor       #4A5568
+  FontSize        10
+}
+</style>
 
-left to right direction
+skinparam Nodesep 90
+skinparam Ranksep 120
 
-actor "Patient"            as Patient
-actor "Healthcare\nProvider" as Provider
-actor "Superadmin"         as Admin
-actor "Payment Gateway\n(CamPay)" as Gateway
+' ---- External entities (rectangles) ----
+rectangle "Patient"                   as Patient
+rectangle "Healthcare\nProvider"      as Provider
+rectangle "Superadmin"                as Admin
+rectangle "Payment Gateway\n(CamPay)" as Gateway
 
-usecase "0\nCLINIX SYSTEM" as System #DCE9F4
+' ---- Central process (numbered bubble) ----
+usecase "0\nClinix System" as System
 
-Patient   -down-> System : Symptoms, appointment\nrequests, payments
-System    -down-> Patient : Recommendations,\nnotifications, records
+' ---- One-way data flows with short labels ----
+Patient  --> System  : symptoms,\nappointments
+System   --> Patient : results,\nnotifications
 
-Provider  -down-> System : Credentials, schedule,\nconsultation data
-System    -down-> Provider : Appointments,\nverification status,\nearnings
+Provider --> System  : credentials,\nconsultations
+System   --> Provider : appointments,\nearnings
 
-Admin     -down-> System : Verification decisions,\nmanagement actions
-System    -down-> Admin  : Reports, analytics
+Admin    --> System  : verifications,\nmanagement
+System   --> Admin   : reports
 
-Gateway   -up->   System : Payment confirmations
-System    -up->   Gateway : Payment initiations
+Gateway  --> System  : payment\nconfirmation
+System   --> Gateway : payment\nrequest
 @enduml

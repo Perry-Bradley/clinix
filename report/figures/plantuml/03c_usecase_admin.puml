@@ -1,0 +1,49 @@
+@startuml usecase_admin
+' --------------------------------------------------------------
+' Use Case Diagram (c) - SUPERADMIN
+' Part 3 of 3 - keeps each diagram small and balanced
+' --------------------------------------------------------------
+title Clinix - Use Case Diagram (Superadmin)
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, sans-serif"
+skinparam defaultFontSize 12
+skinparam ActorBorderColor #1F4E79
+skinparam UsecaseBorderColor #1F4E79
+skinparam UsecaseBackgroundColor #EAF2F9
+skinparam ArrowColor #555555
+
+left to right direction
+
+actor Superadmin
+actor "Healthcare\nProvider" as Provider <<external>>
+
+rectangle "Clinix System (Administration)" {
+  usecase "Log in to Admin Dashboard"      as UC_Auth
+  usecase "Verify Providers"               as UC_Verify
+  usecase "Approve / Reject Credentials"   as UC_Doc
+  usecase "Manage Users / Patients"        as UC_ManageU
+  usecase "Manage Specialties"             as UC_ManageSpec
+  usecase "Manage Lab Tests"               as UC_ManageLab
+  usecase "Configure Consultation Fee"     as UC_Fee
+  usecase "Approve Withdrawals"            as UC_ApproveW
+  usecase "View Platform Analytics"        as UC_Analytics
+}
+
+Superadmin --> UC_Auth
+Superadmin --> UC_Verify
+Superadmin --> UC_ManageU
+Superadmin --> UC_ManageSpec
+Superadmin --> UC_ManageLab
+Superadmin --> UC_Fee
+Superadmin --> UC_ApproveW
+Superadmin --> UC_Analytics
+
+' Cross-actor: providers feed into verification + withdrawal queues
+Provider ..> UC_Verify     : submits credentials
+Provider ..> UC_ApproveW   : submits request
+
+UC_Verify ..> UC_Doc       : <<include>>
+
+@enduml

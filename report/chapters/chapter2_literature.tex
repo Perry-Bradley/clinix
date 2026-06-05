@@ -1,264 +1,129 @@
 %==============================================================
-% CHAPTER 2 — LITERATURE REVIEW
-% Cameroon-first review of existing digital-health systems
+% CHAPTER 2 - LITERATURE REVIEW
+% Sequential 1-10 platform reviews, all in paragraph form.
+% Cameroon-based platforms first, then African-regional, then global.
 %==============================================================
 \chapter{LITERATURE REVIEW}
 
 \section{Introduction}
 
-This chapter examines existing digital-health systems that inform the design of Clinix. The review is organised in three concentric layers. Section~\ref{sec:lit-cameroon} surveys four \textbf{Cameroon-based} platforms that operate, or have operated, in the same regulatory, payment, and connectivity environment Clinix targets. Section~\ref{sec:lit-africa} adds four prominent \textbf{African-regional} platforms whose presence in Francophone or Anglophone Sub-Saharan Africa makes them direct competitors or models. Section~\ref{sec:lit-global} closes with two \textbf{global} platforms that anchor the international state of the art. For each system the review records its origin, technical stack (where publicly disclosed), feature set, strengths, and weaknesses, and concludes with a comparative summary table. Section~\ref{sec:lit-proposed} positions Clinix against the gaps identified.
+This chapter reviews ten digital-health platforms that inform the design of Clinix. The first four are Cameroon-based and therefore operate in the same regulatory, payment, and connectivity environment Clinix targets. The next four are African-regional platforms whose presence in Francophone or Anglophone Sub-Saharan Africa makes them direct competitors or design models. The final two are global telehealth platforms that anchor the international state of the art. For each platform the review records its origin, programming-language stack (where publicly disclosed), feature set, strengths, and weaknesses. A comparative summary table and a positioning statement for Clinix close the chapter.
 
-\section{Cameroon-Based Digital Health Platforms}
-\label{sec:lit-cameroon}
+\section{Review of Existing Systems}
+
+The ten platforms reviewed below are presented in order of increasing geographical distance from Cameroon. Each platform is described in three short paragraphs covering features, strengths, and weaknesses.
 
 \subsection{Waspito}
-Waspito~\cite{waspito} is a Cameroonian telemedicine start-up founded in Douala in 2020. The platform connects patients to verified medical doctors through short video consultations and an in-app text-based ``health community'' where users can post anonymous questions answered by clinicians. After early traction in Cameroon, Waspito expanded into C\^ote~d'Ivoire and other Francophone African markets.
 
-\paragraph{Programming languages and stack}
-\textbf{Mobile:} native Android in \textbf{Java/Kotlin} and native iOS in \textbf{Swift} (with Objective-C interop). \textbf{Backend:} cloud-hosted REST API, likely \textbf{Node.js (JavaScript/TypeScript)} or \textbf{Python}, exposing JSON over HTTPS. \textbf{Real-time:} WebRTC for video. \textbf{Payments:} HTTP integrations with MTN Mobile Money and Orange Money in XAF.
+Waspito~\cite{waspito} is a Cameroonian telemedicine start-up founded in Douala in 2020 that connects patients to verified medical doctors through short video consultations and an in-app text-based ``health community'' where users post anonymous questions answered by clinicians. Its mobile app is built natively for Android in Java/Kotlin and for iOS in Swift, backed by a cloud-hosted REST API (Node.js or Python) and a WebRTC layer for video. Payments are integrated with MTN Mobile Money and Orange Money in XAF.
 
-\paragraph{Features}
-\begin{itemize}
-  \item Video and chat consultations with general practitioners and specialists.
-  \item Anonymous public ``health community'' Q\&A.
-  \item Appointment booking and consultation history.
-  \item Mobile-money payment in XAF.
-\end{itemize}
+The platform's main features are video and chat consultations with general practitioners and specialists, an anonymous health-community Q\&A, appointment booking and consultation history, and mobile-money payment. Its strengths lie in being a first-mover in Cameroon with a working bilingual (English/French) mobile app, mobile-money-native payments that match local user behaviour, and a live network of Cameroonian doctors familiar with local epidemiology.
 
-\paragraph{Strengths}
-\begin{itemize}
-  \item First-mover in Cameroon with a working bilingual (English/French) mobile app.
-  \item Mobile-money-native payments that match local user behaviour.
-  \item Live network of Cameroonian doctors familiar with local epidemiology.
-\end{itemize}
-
-\paragraph{Weaknesses}
-\begin{itemize}
-  \item Limited home-care, lab-test, and prescription-delivery integrations.
-  \item No fully featured AI symptom triage layer before consultations.
-  \item Limited transparency on the credential-verification process for listed doctors.
-\end{itemize}
+Its weaknesses, however, are notable: home-care, lab-test, and prescription-delivery integrations are limited; there is no fully featured AI symptom triage layer before consultations; and the credential-verification process for listed doctors lacks transparency from the patient's side.
 
 \subsection{GiftedMom}
-GiftedMom~\cite{giftedmom} is a Yaound\'e-based health-tech initiative founded by Alain Nteff that focuses on maternal and child health. It started as an SMS- and USSD-based reminder service for pregnant women in low-connectivity regions and has since added a smartphone application and online consultation features. It is one of the most-cited Cameroonian e-health success stories internationally.
 
-\paragraph{Programming languages and stack}
-A hybrid stack designed for low-bandwidth contexts. \textbf{Backend:} \textbf{PHP} or \textbf{Python} server logic talking to telecom SMS/USSD gateways. \textbf{Web admin:} \textbf{JavaScript} (likely jQuery/early React). \textbf{Mobile app:} native Android in \textbf{Java/Kotlin}. \textbf{Database:} \textbf{MySQL} or \textbf{PostgreSQL}. The SMS/USSD layer is the critical path and is implemented against telco-specific HTTP APIs.
+GiftedMom~\cite{giftedmom} is a Yaound\'e-based health-tech initiative founded by Alain Nteff that focuses on maternal and child health. It started as an SMS- and USSD-based reminder service for pregnant women in low-connectivity regions and has since added a smartphone application and online consultation features. The backend is built in PHP or Python and talks to telecom SMS/USSD gateways; the smartphone app is native Android in Java/Kotlin; the data store is typically MySQL or PostgreSQL.
 
-\paragraph{Features}
-\begin{itemize}
-  \item Antenatal and post-natal appointment reminders.
-  \item Vaccination schedules and immunisation alerts for infants.
-  \item Pregnancy-stage health tips delivered by SMS or in-app.
-  \item Q\&A access to health professionals for maternal questions.
-\end{itemize}
+Its features cover antenatal and post-natal appointment reminders, vaccination and immunisation alerts for infants, pregnancy-stage health tips delivered by SMS or in-app, and Q\&A access to health professionals for maternal questions. Its strengths are that it works even on basic feature phones (critical for rural Cameroon), has strong specialisation in maternal health with measurable public-health impact, and enjoys long-established partnerships with the Ministry of Public Health and donor organisations.
 
-\paragraph{Strengths}
-\begin{itemize}
-  \item Works even on basic feature phones --- critical for rural Cameroon.
-  \item Strong specialisation in a domain (maternal health) with measurable public-health impact.
-  \item Long-established partnerships with the Ministry of Public Health and donor organisations.
-\end{itemize}
-
-\paragraph{Weaknesses}
-\begin{itemize}
-  \item Narrow scope (maternal/child); does not address general telemedicine, lab tests, or chronic disease management.
-  \item No on-demand video consultation with any specialist.
-  \item AI-driven symptom triage is not part of the platform.
-\end{itemize}
+Its weaknesses are scope-related: it is narrow (maternal/child only) and does not address general telemedicine, lab tests, or chronic disease management. There is no on-demand video consultation, and AI-driven symptom triage is absent from the platform.
 
 \subsection{Cardiopad (HIMORE Medical)}
-Cardiopad~\cite{cardiopad} is a Cameroonian medical-tablet system invented by Arthur Zang and produced by HIMORE Medical, designed to bring cardiac diagnostics to rural areas. A nurse in a remote village performs an ECG on the patient using the Cardiopad, and the recorded signal is transmitted over the mobile network to a cardiologist in a city for interpretation. Although technically a device-plus-platform rather than a pure mobile app, it is a defining example of Cameroonian telemedicine.
 
-\paragraph{Programming languages and stack}
-\textbf{Tablet firmware/middleware:} embedded \textbf{C/C++} for the ECG sensor driver and signal-acquisition layer. \textbf{Tablet application:} native Android in \textbf{Java} (Cardiopad pre-dates the Kotlin era). \textbf{Server back-end:} \textbf{Java} (Spring) or \textbf{PHP} for the transmission relay that routes ECG signals to cardiologists. \textbf{Network:} GSM/GPRS bearer rather than Wi-Fi or 4G.
+Cardiopad~\cite{cardiopad} is a Cameroonian medical-tablet system invented by Arthur Zang and produced by HIMORE Medical, designed to bring cardiac diagnostics to rural areas. A nurse in a remote village performs an ECG on a patient using the Cardiopad, and the recorded signal is transmitted over the mobile network (GSM/GPRS, not Wi-Fi or 4G) to a cardiologist in a city for asynchronous interpretation. The tablet runs an Android application written in Java with an embedded C/C++ middleware layer for ECG signal acquisition; the server back-end is built in Java (Spring) or PHP.
 
-\paragraph{Features}
-\begin{itemize}
-  \item Bedside ECG acquisition by non-specialist healthcare workers.
-  \item Asynchronous remote interpretation by cardiologists.
-  \item Locally manufactured hardware (HIMORE Medical, Yaound\'e).
-\end{itemize}
+Its features are bedside ECG acquisition by non-specialist healthcare workers, asynchronous remote interpretation by cardiologists, and locally manufactured hardware. Its strengths are that it is specifically engineered for poor-connectivity rural settings, is vertically integrated (hardware plus software rather than just an app on a consumer smartphone), and is Cameroonian-made, aligning directly with the national strategy on local technology.
 
-\paragraph{Strengths}
-\begin{itemize}
-  \item Specifically engineered for poor-connectivity rural settings.
-  \item Vertically integrated (hardware + software) rather than relying only on consumer smartphones.
-  \item Cameroonian-made: directly aligned with the national strategy on local technology.
-\end{itemize}
-
-\paragraph{Weaknesses}
-\begin{itemize}
-  \item Single-specialty (cardiology); does not address general primary care, prescriptions, or home care.
-  \item Patient-facing experience is mediated entirely by a healthcare worker; there is no consumer mobile app.
-  \item Hardware cost limits how quickly it can be scaled to thousands of clinics.
-\end{itemize}
+Its weaknesses are that it is single-specialty (cardiology only), does not address general primary care, prescriptions, or home care, and that the patient-facing experience is mediated entirely by a healthcare worker, with no consumer mobile app. Hardware cost also limits how quickly it can scale to thousands of clinics.
 
 \subsection{Healthlane}
-Healthlane~\cite{healthlane} is a Cameroonian-founded health-tech company that began as a digital primary-care platform and later pivoted toward health-financing for African users. In its primary-care phase, it offered patients a digital ``health concierge'' that booked appointments, tracked records, and connected users to vetted clinics, supported by a network of provider partnerships.
 
-\paragraph{Programming languages and stack}
-\textbf{Web:} \textbf{JavaScript/TypeScript} with \textbf{React} on the front-end and \textbf{Node.js} on the back-end. \textbf{Mobile:} cross-platform via \textbf{React Native} (also JavaScript/TypeScript) or native Android (\textbf{Kotlin}) and iOS (\textbf{Swift}). \textbf{Payments:} \textbf{Stripe} for cards and direct API integrations to African mobile-money rails.
+Healthlane~\cite{healthlane} is a Cameroonian-founded health-tech company that began as a digital primary-care platform and later pivoted toward health financing for African users. In its primary-care phase, it offered patients a digital ``health concierge'' that booked appointments, tracked records, and connected users to vetted clinics. Its web stack is JavaScript/TypeScript with React on the front-end and Node.js on the back-end; mobile is cross-platform via React Native or native Android (Kotlin) and iOS (Swift); payments integrate Stripe and African mobile-money rails.
 
-\paragraph{Features}
-\begin{itemize}
-  \item Digital health-record management and appointment booking.
-  \item Curated network of verified clinics and providers.
-  \item Health-financing / subscription products for chronic-care management.
-\end{itemize}
+Its features include digital health-record management and appointment booking, a curated network of verified clinics and providers, and health-financing or subscription products for chronic-care management. Its strengths are its strong emphasis on vetting partner clinics (which aligns with Clinix's verification ethos), its Cameroonian-founded identity with regional African ambitions, and an integrated payment-and-care-financing model that addresses out-of-pocket payment realities.
 
-\paragraph{Strengths}
-\begin{itemize}
-  \item Strong emphasis on vetting partner clinics --- aligns with Clinix's verification ethos.
-  \item Cameroonian-founded with regional ambitions across Africa.
-  \item Integrated payment and care-financing model addresses out-of-pocket payment realities.
-\end{itemize}
+Its weaknesses are that strategy has shifted away from pure telemedicine toward financing (leaving consultation gaps), there is limited evidence of an AI triage layer, and coverage is concentrated in major urban centres rather than the under-served regional towns.
 
-\paragraph{Weaknesses}
-\begin{itemize}
-  \item Strategy has shifted away from pure telemedicine toward financing, leaving consultation gaps.
-  \item Limited evidence of an AI triage layer.
-  \item Coverage is concentrated in major urban centres.
-\end{itemize}
+\subsection{DabaDoc}
 
-\section{African-Regional Digital Health Platforms}
-\label{sec:lit-africa}
+DabaDoc~\cite{dabadoc} is a Casablanca-headquartered platform offering doctor-appointment booking and telemedicine consultations across multiple Francophone African markets (Morocco, Algeria, Tunisia, and parts of West Africa). It bridges traditional in-person bookings with on-demand video and chat consultations. Its web front-end is JavaScript (React or Vue) with a Node.js or PHP (Laravel) back-end; the mobile applications are native iOS in Swift and native Android in Kotlin; video uses a WebRTC stack and the UI supports French, Arabic, and English.
 
-\subsection{DabaDoc (Morocco, Pan-African)}
-DabaDoc~\cite{dabadoc} is a Casablanca-headquartered platform offering doctor-appointment booking and telemedicine consultations across multiple Francophone African markets (Morocco, Algeria, Tunisia, and West Africa). It bridges traditional in-person bookings with on-demand video and chat consultations.
+Its features cover a doctor directory and search across multiple Francophone African countries, real-time appointment booking with verified clinicians, video and chat teleconsultations, and an integrated calendar and scheduling system for physicians. Its strengths are large Francophone reach with multi-country coverage, strong UX polish and brand presence, and an established network of verified providers.
 
-\paragraph{Programming languages and stack}
-\textbf{Web:} \textbf{JavaScript} (React or Vue) front-end with a \textbf{Node.js} or \textbf{PHP (Laravel)} back-end. \textbf{Mobile:} native iOS in \textbf{Swift} and native Android in \textbf{Kotlin}. \textbf{Real-time:} WebRTC for video. Multilingual UI (French, Arabic, English) via JSON resource files.
-
-\paragraph{Features}
-Doctor directory and search, real-time appointment booking, video and chat consultations, and an integrated calendar for physicians.
-
-\paragraph{Strengths}
-Large Francophone reach with multi-country coverage; strong UX polish; established provider network.
-
-\paragraph{Weaknesses}
-Limited penetration in Cameroon specifically; pricing and provider network are not optimised for the Cameroonian XAF mobile-money market.
+Its weaknesses for the Cameroonian context are that it has limited penetration in Cameroon specifically, its pricing and provider network are not optimised for the Cameroonian XAF mobile-money market, and it does not feature integrated AI symptom triage.
 
 \subsection{babyl Rwanda}
-babyl~\cite{babyl_rwanda} is the Rwandan operation of Babylon Health (a UK-founded telemedicine company), running one of Africa's largest digital primary-care services. Subscribers consult clinicians through audio calls and chat, and the service is partially subsidised under Rwanda's national health-insurance scheme.
 
-\paragraph{Programming languages and stack}
-Inherited from the Babylon Health technology base. \textbf{Mobile (Android-first):} native Android in \textbf{Java/Kotlin}. \textbf{Back-end:} \textbf{TypeScript/Node.js} micro-services with some \textbf{Python} for the AI components. Audio calling uses a WebRTC-style stack, and a call-centre layer bridges to lower-end phones. Insurance integration uses HTTP APIs into Rwanda's Mutuelle de Sant\'e.
+babyl~\cite{babyl_rwanda} is the Rwandan operation of Babylon Health (a UK-founded telemedicine company), running one of Africa's largest digital primary-care services. Subscribers consult clinicians through audio calls and chat, and the service is partially subsidised under Rwanda's national health-insurance scheme. Inherited from the Babylon technology base, the mobile experience is Android-first in Java/Kotlin and the back-end is built on TypeScript/Node.js micro-services with some Python for the AI components. Audio calling uses a WebRTC-style stack, and integration with Rwanda's Mutuelle de Sant\'e is exposed over HTTP APIs.
 
-\paragraph{Features}
-On-demand audio consultations with general practitioners, e-prescriptions delivered to local pharmacies, and follow-up SMS care plans.
+Its features are on-demand audio consultations with general practitioners, e-prescriptions delivered to local pharmacies, follow-up SMS care plans, and tight integration with Rwanda's Mutuelle de Sant\'e for billing. Its strengths are national scale (millions of registered users), insurance-integrated billing, and a mature operational playbook for African primary care.
 
-\paragraph{Strengths}
-National scale (millions of registered users); insurance-integrated billing; mature operational playbook for African primary care.
+Its weaknesses are that it is audio-only with no video consultation option, is deeply tied to Rwandan health insurance (not directly transferable to Cameroon), and offers limited AI-symptom-triage features in the consumer flow.
 
-\paragraph{Weaknesses}
-Audio-only (no video); deeply tied to Rwandan health insurance, which is not directly transferable to Cameroon; limited AI-symptom-triage features in the consumer flow.
+\subsection{Reliance Health}
 
-\subsection{Reliance Health (Nigeria)}
-Reliance Health~\cite{reliance_health} is a Lagos-headquartered company that combines health-insurance underwriting, telemedicine, and a network of partner clinics across Nigeria and (more recently) other African markets. Patients access doctors through chat and video consultations within an insurance subscription.
+Reliance Health~\cite{reliance_health} is a Lagos-headquartered company that combines health-insurance underwriting, telemedicine, and a network of partner clinics across Nigeria and (more recently) other African markets. Patients access doctors through chat and video consultations within an insurance subscription. The back-end is Node.js (TypeScript) or Python with REST APIs over HTTPS; the web admin is React/TypeScript; the mobile experience is React Native; payments integrate with Nigerian banking rails (Paystack, Flutterwave).
 
-\paragraph{Programming languages and stack}
-\textbf{Back-end:} \textbf{Node.js (TypeScript)} or \textbf{Python} for the insurance and consultation services, with REST APIs over HTTPS. \textbf{Web:} \textbf{React/TypeScript}. \textbf{Mobile:} \textbf{React Native (JavaScript/TypeScript)}. \textbf{Payments:} integrations with Nigerian banking rails (Paystack/Flutterwave) and emerging cross-border products.
+Its features include insurance enrolment and subscription management, chat and video telemedicine consultations, prescription delivery to the home or pharmacy, lab-test ordering and results management, and a curated network of partner clinics. Its strengths are the tight integration of insurance and care delivery (payer plus provider in one company), a strong vertical model with end-to-end member experience, and active expansion into other African markets.
 
-\paragraph{Features}
-Insurance enrolment, chat and video telemedicine, prescription delivery, lab-test ordering, and a curated clinic network.
+Its weaknesses for Cameroon are that the model is designed around insurance-financed care, which is a smaller share of the market in Cameroon than in Nigeria; it is less optimised for one-off mobile-money consultations; and its Nigerian banking rails need cross-border adaptation for Cameroon.
 
-\paragraph{Strengths}
-Tight integration of insurance and care delivery; strong vertical model (payer + provider); active expansion into other African markets.
+\subsection{mPharma}
 
-\paragraph{Weaknesses}
-Designed around insurance-financed care, which is a smaller fraction of the market in Cameroon than in Nigeria; less optimised for one-off mobile-money consultations.
+mPharma~\cite{mpharma} is a Ghanaian health-tech company operating across multiple African countries that focuses on the pharmacy side of healthcare: medication inventory management for pharmacies, drug-price negotiation, and patient-facing prescription services through partner pharmacies and ``mutti'' health centres. The pharmacy inventory web app is built with TypeScript/React on top of a Node.js or Python (Django) back-end; the patient-facing mobile experience uses React Native or native Android in Kotlin; the data store is typically PostgreSQL.
 
-\subsection{mPharma (Ghana)}
-mPharma~\cite{mpharma} is a Ghanaian health-tech company operating across multiple African countries. It focuses on the pharmacy side of healthcare: medication inventory management for pharmacies, drug-price negotiation, and patient-facing prescription services through partner pharmacies (and, more recently, ``mutti'' health centres).
+Its features cover pharmacy supply-chain and inventory management for partner pharmacies, drug-price negotiation and discounts for ``mutti'' members, a partner-pharmacy locator for patients, and chronic-medication subscription delivery. Its strengths are deep integration with pharmacies (collaborating rather than competing), a proven supply-chain model in fragile-supply African markets, and strong brand recognition in the pharmacy retail space.
 
-\paragraph{Programming languages and stack}
-\textbf{Pharmacy inventory web app:} \textbf{JavaScript/TypeScript} (React) on top of a \textbf{Node.js} or \textbf{Python (Django)} back-end. \textbf{Mobile (``mutti'' membership):} \textbf{React Native} or native Android in \textbf{Kotlin}. \textbf{Database:} \textbf{PostgreSQL} or similar relational store for the supply-chain ledger.
+Its weaknesses are that the platform is pharmacy- and medication-centric with no direct doctor consultation, has no AI symptom triage layer, and has limited presence in Cameroon's pharmacy network.
 
-\paragraph{Features}
-Pharmacy supply-chain management, prescription discounts for members, partner-pharmacy locator, and chronic-medication subscription delivery.
+\subsection{Teladoc Health}
 
-\paragraph{Strengths}
-Deeply integrated with pharmacies (rather than competing with them); proven supply-chain model in fragile-supply markets.
+Teladoc Health~\cite{teladoc} is one of the world's largest telehealth providers, offering primary care, mental-health, chronic-care, and expert-second-opinion services through video and chat. It serves as an industry benchmark for scale, regulatory maturity, and provider-network management. The platform is a multi-region cloud system with HIPAA-compliant infrastructure, Java (Spring) and Go micro-services on the back-end, substantial Python for analytics and machine learning, a TypeScript/React web layer, and native mobile applications in Swift (iOS) and Kotlin (Android).
 
-\paragraph{Weaknesses}
-Pharmacy- and medication-centric; does not provide direct doctor-consultation or AI-triage features.
+Its features include video and audio consultations with primary-care physicians, mental-health therapy and psychiatry services, chronic-disease management programmes, integration with U.S.\ employer health-benefit plans, and at-home monitoring device integration. Its strengths are breadth of services, massive scale and clinician network, a mature compliance posture, and industry-benchmark operational maturity.
 
-\section{Global Telehealth Platforms (Reference Class)}
-\label{sec:lit-global}
+Its weaknesses for Cameroon are that the cost model assumes employer or insurance coverage, the platform is not adapted to the Cameroonian out-of-pocket and mobile-money reality, and its consumer UI is generally considered less modern than newer entrants.
 
-\subsection{Teladoc Health (United States, Global)}
-Teladoc~\cite{teladoc} is one of the world's largest telehealth providers, offering primary care, mental-health, chronic-care, and expert-second-opinion services through video and chat. It serves as an industry benchmark for scale, regulatory maturity, and provider-network management.
+\subsection{K Health}
 
-\paragraph{Programming languages and stack}
-A multi-region, HIPAA-compliant cloud platform. \textbf{Back-end:} \textbf{Java (Spring)} and \textbf{Go} micro-services, with substantial \textbf{Python} for analytics and ML. \textbf{Web:} \textbf{TypeScript/React}. \textbf{Mobile:} native iOS in \textbf{Swift} and native Android in \textbf{Kotlin}.
+K Health~\cite{k_health} is a U.S.-based telemedicine application that uses an AI engine trained on millions of de-identified medical records to perform symptom triage before connecting the patient with a human clinician. It is the closest international analogue to Clinix's hybrid AI/human model. Its AI engine is implemented in Python (TensorFlow and PyTorch); the back-end is a mix of Python and Node.js (TypeScript) micro-services; the mobile applications are native iOS in Swift and native Android in Kotlin; the web layer is TypeScript/React.
 
-\paragraph{Features}
-Video and audio consultations, mental-health therapy, chronic-disease management, integration with U.S.\ employer health-benefits, and at-home monitoring devices.
+Its features are an AI symptom checker trained on millions of de-identified medical records, chat-first consultations that escalate to video if needed, chronic-care management programmes, and mental-health support. Its strengths are a strong AI triage workflow that improves consultation efficiency and educates patients before they speak to a clinician, affordable subscription tiers compared with traditional telehealth, and being the closest international analogue to Clinix's hybrid AI/human model.
 
-\paragraph{Strengths}
-Breadth of services, scale, mature compliance posture, and large clinician network.
-
-\paragraph{Weaknesses}
-Cost model assumes employer or insurance coverage; not adapted to the Cameroonian out-of-pocket / mobile-money reality; some users find the consumer UI less modern than newer entrants.
-
-\subsection{K Health (United States, Global)}
-K Health~\cite{k_health} is a U.S.-based telemedicine application that uses an AI engine trained on millions of de-identified medical records to perform symptom triage before connecting the patient with a human clinician. It is one of the closest international analogues to Clinix's hybrid AI/human model.
-
-\paragraph{Programming languages and stack}
-\textbf{AI engine:} a proprietary symptom-checker model implemented in \textbf{Python} (TensorFlow / PyTorch). \textbf{Back-end:} \textbf{Python} and \textbf{Node.js (TypeScript)} micro-services. \textbf{Mobile:} native iOS in \textbf{Swift} and native Android in \textbf{Kotlin}. \textbf{Web:} \textbf{TypeScript/React}.
-
-\paragraph{Features}
-AI symptom check, chat-first consultations escalating to video if needed, chronic-care management, and mental-health support.
-
-\paragraph{Strengths}
-Strong AI triage workflow that improves consultation efficiency and educates patients before they speak to a clinician; affordable subscription tiers.
-
-\paragraph{Weaknesses}
-AI assessments require human follow-up; service is U.S.-centric and not adapted to French-language or mobile-money-centric markets.
+Its weaknesses are that AI assessments still require human follow-up, the service is U.S.-centric and not adapted to French-language or African markets, and it does not integrate mobile-money payments.
 
 \section{Comparative Summary}
 
-Table~\ref{tab:lit-summary} consolidates the reviewed platforms against the dimensions most relevant to Clinix.
+The comparative summary in Table~\ref{tab:lit-summary} consolidates the ten reviewed platforms against the dimensions most relevant to Clinix: country of origin, core focus, presence of an AI triage layer, and mobile-money support in XAF.
 
 \begin{table}[H]
 \centering
 \caption{Comparative summary of reviewed digital-health platforms}
 \label{tab:lit-summary}
 \scriptsize
-\begin{tabularx}{\textwidth}{p{2.6cm} p{1.4cm} X X X}
-\toprule
-\textbf{Platform} & \textbf{Origin} & \textbf{Core focus} & \textbf{AI triage} & \textbf{Mobile-money / XAF} \\
-\midrule
-Waspito & Cameroon & Video telemedicine, community Q\&A & Limited & Yes \\
-GiftedMom & Cameroon & Maternal-and-child health (SMS/USSD/app) & No & Partial \\
-Cardiopad & Cameroon & Remote cardiac diagnosis (hardware + software) & No & N/A \\
-Healthlane & Cameroon & Health concierge \& financing & No (focus has shifted) & Yes \\
-DabaDoc & Morocco / pan-Africa & Doctor booking + telemedicine & Limited & Partial (region-dependent) \\
-babyl Rwanda & Rwanda & Audio primary care via insurance & Limited & Insurance-mediated \\
-Reliance Health & Nigeria & Insurance + telemedicine & Limited & Nigerian rails \\
-mPharma & Ghana / pan-Africa & Pharmacy supply chain \& prescriptions & No & Partial \\
-Teladoc Health & USA / global & Telehealth at scale & Limited (B2B add-on) & No \\
-K Health & USA / global & AI-first telemedicine & Yes & No \\
-\midrule
-\textbf{Clinix (this work)} & \textbf{Cameroon} & \textbf{Integrated AI + verified human care + home care + mobile-money} & \textbf{Yes (Gemini multimodal)} & \textbf{Yes (CamPay XAF)} \\
-\bottomrule
+\begin{tabularx}{\textwidth}{|p{2.6cm}|p{1.4cm}|X|X|X|}
+\hline
+\textbf{Platform} & \textbf{Origin} & \textbf{Core focus} & \textbf{AI triage} & \textbf{Mobile-money / XAF} \\ \hline
+Waspito & Cameroon & Video telemedicine, community Q\&A & Limited & Yes \\ \hline
+GiftedMom & Cameroon & Maternal-and-child health (SMS/USSD/app) & No & Partial \\ \hline
+Cardiopad & Cameroon & Remote cardiac diagnosis (hardware + software) & No & N/A \\ \hline
+Healthlane & Cameroon & Health concierge \& financing & No (focus shifted) & Yes \\ \hline
+DabaDoc & Morocco / pan-Africa & Doctor booking + telemedicine & Limited & Partial (region-dependent) \\ \hline
+babyl Rwanda & Rwanda & Audio primary care via insurance & Limited & Insurance-mediated \\ \hline
+Reliance Health & Nigeria & Insurance + telemedicine & Limited & Nigerian rails \\ \hline
+mPharma & Ghana / pan-Africa & Pharmacy supply chain \& prescriptions & No & Partial \\ \hline
+Teladoc Health & USA / global & Telehealth at scale & Limited (B2B add-on) & No \\ \hline
+K Health & USA / global & AI-first telemedicine & Yes & No \\ \hline
+\textbf{Clinix (this work)} & \textbf{Cameroon} & \textbf{Integrated AI + verified human care + home care + mobile-money} & \textbf{Yes (Gemini multimodal)} & \textbf{Yes (CamPay XAF)} \\ \hline
 \end{tabularx}
 \end{table}
 
 \section{Proposed Solution: Clinix}
-\label{sec:lit-proposed}
 
-The reviewed systems collectively reveal four gaps in the Cameroonian digital-health landscape that Clinix is designed to close:
+The reviewed systems collectively reveal four gaps in the Cameroonian digital-health landscape that Clinix is designed to close. First, no locally built platform combines verified human consultation with an AI triage layer: Waspito and Healthlane offer human consultation; GiftedMom focuses on maternal reminders; Cardiopad serves a single specialty; and K Health proves the AI-triage model works but is not adapted to Cameroon. Second, verification remains opaque even where verified-doctor networks exist; Clinix exposes verification as an explicit state machine moderated by a superadmin in the React admin dashboard and cross-checked against the Cameroon Medical Council register. Third, home-care and lab-test logistics are fragmented; verified nurses, lab-sample collection, and home treatments are not integrated into a single Cameroonian platform, but Clinix unifies them under the same verification flow as doctors. Fourth, mobile-money is treated as an afterthought by most global platforms (which assume insurance or credit cards), whereas Clinix is mobile-money-native through CamPay with MTN Mobile Money and Orange Money as first-class XAF payment methods.
 
-\begin{enumerate}
-  \item \textbf{No locally built platform combines verified human consultation with an AI triage layer.} Waspito and Healthlane offer human consultation; GiftedMom focuses on maternal reminders; Cardiopad serves a single specialty. K Health proves the AI-triage model works but is not adapted to Cameroon.
-  \item \textbf{Verification remains opaque.} Even where verified-doctor networks exist, the verification workflow is not transparent. Clinix exposes verification as an explicit state machine moderated by a superadmin in the React admin dashboard.
-  \item \textbf{Home-care and lab-test logistics are fragmented.} Verified nurses, lab-sample collection, and home treatments are not integrated into a single Cameroonian platform. Clinix unifies them under \texttt{Appointment} types (\texttt{lab\_test}, \texttt{home\_treatment}) gated on the same verification flow as doctors.
-  \item \textbf{Mobile-money is treated as an afterthought.} Most international platforms assume insurance or credit cards. Clinix is mobile-money-native through CamPay, with MTN Mobile Money and Orange Money as first-class XAF payment methods.
-\end{enumerate}
-
-Clinix distinguishes itself through context-specific adaptation: a \textbf{hybrid AI/human consultation model}, a \textbf{multi-tier verification system} for every listed provider, \textbf{bandwidth-optimised design} for intermittent connectivity, \textbf{cultural and linguistic adaptation} (English/French at launch), \textbf{integrated mapping} with home-visit support, \textbf{progressive feature rollout}, \textbf{mobile-money-native payments} (CamPay/XAF), and a \textbf{dual-sided value proposition} that opens a legitimate income channel for verified providers while improving patient access. Where competing systems address subsets of these dimensions, Clinix addresses all of them in a single, locally engineered platform.
+Clinix distinguishes itself through context-specific adaptation: a hybrid AI/human consultation model; a multi-tier verification system for every listed provider; bandwidth-optimised design for intermittent connectivity; cultural and linguistic adaptation (English at launch with bilingual expansion planned); integrated mapping with home-visit support; progressive feature rollout; mobile-money-native payments; and a dual-sided value proposition that opens a legitimate income channel for verified providers while improving patient access. Where competing systems address subsets of these dimensions, Clinix addresses all of them in a single, locally engineered platform.
 
 \paragraph{Note on sources.}
-The descriptions of third-party platforms in this chapter are compiled from publicly available product pages, news reports, engineering blog posts, job listings, and academic literature current at the time of writing. Programming-language and stack attributions are best-effort inferences from public information (such as the platforms' job postings and tech-blog content); the closed-source nature of these systems means a complete internal architecture cannot be verified externally. Because health-tech start-ups frequently pivot, the reader is advised to verify the current operational status, feature set, and underlying technology stack of each platform against its official channels and the relevant national app stores.
+The descriptions of third-party platforms in this chapter are compiled from publicly available product pages, news reports, engineering blog posts, job listings, and academic literature current at the time of writing. Programming-language and stack attributions are best-effort inferences from public information; the closed-source nature of these systems means a complete internal architecture cannot be verified externally. Because health-tech start-ups frequently pivot, the reader is advised to verify the current operational status, feature set, and underlying technology stack of each platform against its official channels and the relevant national app stores.

@@ -1,9 +1,9 @@
-@startuml usecase
+@startuml usecase_patient
 ' --------------------------------------------------------------
-' Use Case Diagram - role-based capabilities
-' Figure 3.2 in the BTech report
+' Use Case Diagram (a) - PATIENT
+' Part 1 of 3 - keeps each diagram small and balanced
 ' --------------------------------------------------------------
-title Clinix - Use Case Diagram
+title Clinix - Use Case Diagram (Patient)
 
 skinparam backgroundColor #FFFFFF
 skinparam shadowing false
@@ -17,11 +17,9 @@ skinparam ArrowColor #555555
 left to right direction
 
 actor Patient
-actor "Healthcare\nProvider" as Provider
-actor Superadmin
 actor "Payment\nGateway" as Gateway <<external>>
 
-rectangle "Clinix System" {
+rectangle "Clinix System (Patient capabilities)" {
   usecase "Register / Login"             as UC_Auth
   usecase "AI Symptom Check"             as UC_AI
   usecase "Search Doctors / Clinics"     as UC_Search
@@ -33,17 +31,6 @@ rectangle "Clinix System" {
   usecase "View Medical Records"         as UC_ViewMR
   usecase "Track Medication Adherence"   as UC_Meds
   usecase "Book Lab Test / Home Care"    as UC_Home
-  usecase "Submit Credentials"           as UC_Submit
-  usecase "Accept Appointment"           as UC_Accept
-  usecase "Write Prescription"           as UC_WriteRx
-  usecase "Create Medical Record"        as UC_WriteMR
-  usecase "Create Referral"              as UC_Refer
-  usecase "Request Withdrawal"           as UC_Withdraw
-  usecase "Verify Providers"             as UC_Verify
-  usecase "Manage Users / Patients"      as UC_ManageU
-  usecase "Manage Specialties / Lab Tests" as UC_ManageCat
-  usecase "Approve Withdrawals"          as UC_ApproveW
-  usecase "View Platform Analytics"      as UC_Analytics
   usecase "Process Payment"              as UC_GW
 }
 
@@ -59,26 +46,9 @@ Patient --> UC_ViewMR
 Patient --> UC_Meds
 Patient --> UC_Home
 
-Provider --> UC_Auth
-Provider --> UC_Submit
-Provider --> UC_Accept
-Provider --> UC_Call
-Provider --> UC_Chat
-Provider --> UC_WriteRx
-Provider --> UC_WriteMR
-Provider --> UC_Refer
-Provider --> UC_Withdraw
-
-Superadmin --> UC_Auth
-Superadmin --> UC_Verify
-Superadmin --> UC_ManageU
-Superadmin --> UC_ManageCat
-Superadmin --> UC_ApproveW
-Superadmin --> UC_Analytics
-
-UC_Pay ..> UC_GW : <<include>>
 Gateway --> UC_GW
-
-UC_Book ..> UC_Pay : <<include>>
+UC_Pay  ..> UC_GW    : <<include>>
+UC_Book ..> UC_Pay   : <<include>>
 UC_AI   ..> UC_Search : <<extend>>
+
 @enduml

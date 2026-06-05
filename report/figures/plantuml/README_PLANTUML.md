@@ -10,7 +10,9 @@ methodology and implementation chapters.
 |---|-----------------------------------|-----------------------------------------------|---------------|
 | 01 | `01_dfd_level0.puml`             | DFD Level 0 — Context Diagram                 | Fig 3.0       |
 | 02 | `02_dfd_level1.puml`             | DFD Level 1                                   | Fig 3.1       |
-| 03 | `03_usecase.puml`                | Use Case Diagram                              | Fig 3.2       |
+| 03a| `03a_usecase_patient.puml`       | Use Case Diagram --- Patient                  | Fig 3.2(a)    |
+| 03b| `03b_usecase_provider.puml`      | Use Case Diagram --- Healthcare Provider      | Fig 3.2(b)    |
+| 03c| `03c_usecase_admin.puml`         | Use Case Diagram --- Superadmin               | Fig 3.2(c)    |
 | 04 | `04_activity_main.puml`          | Activity Diagram (main user flow)             | Fig 3.3       |
 | 05 | `05_class_diagram.puml`          | Class Diagram                                 | Fig 3.4       |
 | 06 | `06_sequence_consultation.puml`  | Sequence Diagram — patient consultation       | Fig 3.5       |
@@ -98,7 +100,9 @@ figure — that way every `\ref{fig:dfd0}` in the body keeps working.
 |----------------|--------------------------------|
 | 01             | `figures/dfd_level0.png`       |
 | 02             | `figures/dfd_level1.png`       |
-| 03             | `figures/usecase.png`          |
+| 03a            | `figures/usecase_patient.png`  |
+| 03b            | `figures/usecase_provider.png` |
+| 03c            | `figures/usecase_admin.png`    |
 | 04             | `figures/activity_main.png`    |
 | 05             | `figures/class_diagram.png`    |
 | 06             | `figures/sequence_consultation.png` |

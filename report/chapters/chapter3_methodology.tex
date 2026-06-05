@@ -1,4 +1,4 @@
-%==============================================================
+﻿%==============================================================
 % CHAPTER 3 — MATERIALS AND METHODS USED
 % Numbering follows the official BTech template exactly:
 %   3.1 Introduction
@@ -29,11 +29,48 @@ Clinix employs an \textbf{Agile-Scrum hybrid methodology}~\cite{schwaber2020scru
   \item \textbf{Testing Integration:} Test-driven development within each sprint.
 \end{itemize}
 
-This approach balances the flexibility of Agile with the structured milestones required for academic supervision.
+This approach balances the flexibility of Agile with the structured milestones required for academic supervision. The standard Agile/Scrum iteration cycle followed by the project is shown in Figure~\ref{fig:agile}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    phase/.style={
+      rectangle, draw=clinixblue, fill=clinixblue!12, very thick,
+      rounded corners=6pt, minimum width=2.4cm, minimum height=1cm,
+      font=\bfseries\small, align=center, inner sep=4pt
+    },
+    centre/.style={
+      circle, draw=clinixblue, fill=clinixblue!22, very thick,
+      minimum size=2.3cm, font=\bfseries\small, align=center
+    },
+    arc/.style={-{Stealth[length=3mm]}, semithick, draw=clinixblue!70}
+  ]
+    % Six-phase iteration arranged in a circle (60-degree steps)
+    \node[phase]  (plan)    at ( 90:4.2) {1. Plan};
+    \node[phase]  (design)  at ( 30:4.2) {2. Design};
+    \node[phase]  (develop) at (-30:4.2) {3. Develop};
+    \node[phase]  (test)    at (-90:4.2) {4. Test};
+    \node[phase]  (review)  at (210:4.2) {5. Review};
+    \node[phase]  (deploy)  at (150:4.2) {6. Deploy};
+
+    % Central label
+    \node[centre] (core) at (0,0) {Agile\\Sprint\\(2 weeks)};
+
+    % Cyclic arrows between phases
+    \draw[arc] (plan)    to[bend left=15] (design);
+    \draw[arc] (design)  to[bend left=15] (develop);
+    \draw[arc] (develop) to[bend left=15] (test);
+    \draw[arc] (test)    to[bend left=15] (review);
+    \draw[arc] (review)  to[bend left=15] (deploy);
+    \draw[arc] (deploy)  to[bend left=15] (plan);
+  \end{tikzpicture}
+  \caption{Agile / Scrum iteration cycle adopted for the project}
+  \label{fig:agile}
+\end{figure}
 
 \subsection{System Analysis}
 
-% ---------- External Interface Requirements ----------
+% ---- External Interface Requirements ----
 \subsubsection*{External Interface Requirements}
 \addcontentsline{toc}{subsubsection}{External Interface Requirements}
 
@@ -62,7 +99,7 @@ This approach balances the flexibility of Agile with the structured milestones r
   \item PostgreSQL~\cite{postgres_docs} database accessed through the Django ORM~\cite{django_docs}.
 \end{itemize}
 
-% ---------- Features or Modules of the System ----------
+% ---- Features or Modules of the System ----
 \subsubsection*{Features or Modules of the System}
 \addcontentsline{toc}{subsubsection}{Features or Modules of the System}
 
@@ -81,7 +118,7 @@ This approach balances the flexibility of Agile with the structured milestones r
   \item \textbf{Home-Care Module:} Lab-test bookings and home-treatment bookings delivered by verified nurses.
 \end{itemize}
 
-% ---------- Functional Requirements ----------
+% ---- Functional Requirements ----
 \subsubsection*{Functional Requirements}
 \addcontentsline{toc}{subsubsection}{Functional Requirements}
 
@@ -99,7 +136,7 @@ This approach balances the flexibility of Agile with the structured milestones r
   \item The system shall provide analytics to superadmins for platform monitoring.
 \end{itemize}
 
-% ---------- Non-functional Requirements ----------
+% ---- Non-functional Requirements ----
 \subsubsection*{Non-functional Requirements}
 \addcontentsline{toc}{subsubsection}{Non-functional Requirements}
 
@@ -112,7 +149,7 @@ This approach balances the flexibility of Agile with the structured milestones r
   \item \textbf{Maintainability:} Clean code structure, comprehensive documentation, modular feature-based design.
 \end{itemize}
 
-% ---------- DFDS ----------
+% ---- DFDS ----
 \subsubsection*{DFDs}
 \addcontentsline{toc}{subsubsection}{DFDs}
 
@@ -121,8 +158,61 @@ The Data Flow Diagram Level 0 (Context Diagram) presents the high-level view of 
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.8\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.0: DFD Level 0 --- Context Diagram]} \vspace{2cm}}}
-  \caption{Data Flow Diagram Level 0 --- Context Diagram}
+  \begin{tikzpicture}[
+    entity/.style={
+      rectangle, draw=clinixblue, fill=clinixblue!8, very thick,
+      rounded corners=3pt, minimum width=2.4cm, minimum height=1cm,
+      font=\bfseries\small, align=center, inner sep=4pt
+    },
+    process/.style={
+      ellipse, draw=clinixblue, fill=clinixblue!15, very thick,
+      minimum width=3cm, minimum height=1.8cm,
+      font=\bfseries\small, align=center
+    },
+    flow/.style={
+      -{Stealth[length=2.6mm]}, semithick, draw=clinixblue!70
+    },
+    % --- label tweaks: smaller font, more clearance from the line,
+    %     positioned NEAR THE ENTITY (pos=0.32) so they stay clear
+    %     of the central ellipse; allow line wrap to keep them short
+    fl/.style={
+      font=\tiny, inner sep=2pt, fill=white, align=center,
+      text width=2.6cm
+    }
+  ]
+    % Entities pushed further out + larger vertical gap between
+    % the parallel in/out arrows of each pair (16pt instead of 6pt)
+    \node[entity]  (pat)  at (-8.5, 2.5) {Patient};
+    \node[entity]  (prov) at ( 8.5, 2.5) {Healthcare\\Provider};
+    \node[entity]  (adm)  at (-8.5,-2.5) {Superadmin};
+    \node[entity]  (gw)   at ( 8.5,-2.5) {Payment\\Gateway};
+    \node[process] (sys)  at ( 0,    0 ) {0\\Clinix System};
+
+    % ===== Patient ====================
+    \draw[flow] ([yshift= 16pt]pat.east)  -- ([yshift= 16pt]sys.west)
+      node[fl, pos=0.32, above=3pt] {symptoms,\\appointments};
+    \draw[flow] ([yshift=-16pt]sys.west)  -- ([yshift=-16pt]pat.east)
+      node[fl, pos=0.68, below=3pt] {results,\\notifications};
+
+    % ===== Healthcare Provider =========
+    \draw[flow] ([yshift= 16pt]prov.west) -- ([yshift= 16pt]sys.east)
+      node[fl, pos=0.32, above=3pt] {credentials,\\consultations};
+    \draw[flow] ([yshift=-16pt]sys.east)  -- ([yshift=-16pt]prov.west)
+      node[fl, pos=0.68, below=3pt] {appointments,\\earnings};
+
+    % ===== Superadmin =================
+    \draw[flow] ([yshift= 16pt]adm.east)  -- ([yshift= 16pt]sys.west)
+      node[fl, pos=0.32, above=3pt] {decisions,\\management};
+    \draw[flow] ([yshift=-16pt]sys.west)  -- ([yshift=-16pt]adm.east)
+      node[fl, pos=0.68, below=3pt] {reports,\\analytics};
+
+    % ===== Payment Gateway ============
+    \draw[flow] ([yshift= 16pt]gw.west)   -- ([yshift= 16pt]sys.east)
+      node[fl, pos=0.32, above=3pt] {payment\\confirmation};
+    \draw[flow] ([yshift=-16pt]sys.east)  -- ([yshift=-16pt]gw.west)
+      node[fl, pos=0.68, below=3pt] {payment\\request};
+  \end{tikzpicture}
+  \caption{Data Flow Diagram Level 0, Context Diagram}
   \label{fig:dfd0}
 \end{figure}
 
@@ -131,34 +221,111 @@ The Data Flow Diagram Level 1 decomposes the Clinix system into the major proces
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.8\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.1: DFD Level 1]} \vspace{2cm}}}
+  \begin{tikzpicture}[
+    entity/.style={
+      rectangle, draw=clinixblue, fill=clinixblue!8, very thick,
+      rounded corners=3pt, minimum width=2.2cm, minimum height=0.9cm,
+      font=\bfseries\small, align=center, inner sep=3pt
+    },
+    process/.style={
+      ellipse, draw=clinixblue, fill=clinixblue!15, very thick,
+      minimum width=2.4cm, minimum height=1.4cm,
+      font=\bfseries\small, align=center
+    },
+    store/.style={
+      rectangle, draw=clinixblue, fill=white, thick,
+      minimum width=2.7cm, minimum height=0.8cm,
+      font=\small, align=center, inner sep=3pt
+    },
+    flow/.style={-{Stealth[length=2.5mm]}, semithick, draw=clinixblue!70},
+    fl/.style={font=\scriptsize, inner sep=1.5pt}
+  ]
+    % Row 1: external entities (top)
+    \node[entity] (pat)  at (-6, 3.4) {Patient};
+    \node[entity] (prov) at (-2, 3.4) {Provider};
+    \node[entity] (adm)  at ( 2, 3.4) {Superadmin};
+    \node[entity] (gw)   at ( 6, 3.4) {Payment\\Gateway};
+
+    % Row 2: numbered processes (middle)
+    \node[process] (p1) at (-6, 0) {1\\Authen-\\tication};
+    \node[process] (p2) at (-3, 0) {2\\Appointment\\Management};
+    \node[process] (p3) at ( 0, 0) {3\\AI Triage};
+    \node[process] (p4) at ( 3, 0) {4\\Provider\\Verification};
+    \node[process] (p5) at ( 6, 0) {5\\Payment\\Processing};
+
+    % Row 3: data stores (bottom)
+    \node[store] (d1) at (-6,-3) {D1: Users};
+    \node[store] (d2) at (-3,-3) {D2: Appointments};
+    \node[store] (d3) at ( 0,-3) {D3: Medical Records};
+    \node[store] (d4) at ( 3,-3) {D4: Verification};
+    \node[store] (d5) at ( 6,-3) {D5: Payment};
+
+    % Entity -> primary process
+    \draw[flow] (pat)  -- (p1) node[fl, midway, left=2pt] {login};
+    \draw[flow] (pat)  -- (p3) node[fl, midway, right=2pt] {symptoms};
+    \draw[flow] (pat)  -- (p2) node[fl, midway, left=2pt, pos=0.6] {book};
+    \draw[flow] (pat)  -- (p5) node[fl, midway, left=2pt, pos=0.7] {pay};
+
+    \draw[flow] (prov) -- (p1) node[fl, midway, right=2pt] {login};
+    \draw[flow] (prov) -- (p4) node[fl, midway, left=2pt, pos=0.7] {credentials};
+    \draw[flow] (prov) -- (p2) node[fl, midway, left=2pt] {accept};
+
+    \draw[flow] (adm)  -- (p1) node[fl, midway, right=2pt, pos=0.7] {login};
+    \draw[flow] (adm)  -- (p4) node[fl, midway, left=2pt] {approve};
+
+    \draw[flow] (gw)   -- (p5) node[fl, midway, right=2pt] {confirm};
+
+    % Process -> data store
+    \draw[flow] (p1) -- (d1);
+    \draw[flow] (p2) -- (d2);
+    \draw[flow] (p3) -- (d3);
+    \draw[flow] (p4) -- (d4);
+    \draw[flow] (p5) -- (d5);
+
+    % Inter-process: payment confirms appointment
+    \draw[flow] (p5) to[bend right=12] node[fl, midway, above] {confirm} (p2);
+  \end{tikzpicture}
   \caption{Data Flow Diagram Level 1}
   \label{fig:dfd1}
 \end{figure}
 
-% ---------- Use Case Analysis and Diagrams ----------
+% ---- Use Case Analysis and Diagrams ----
 \subsubsection*{Use Case Analysis and Diagrams}
 \addcontentsline{toc}{subsubsection}{Use Case Analysis and Diagrams}
 
-The Clinix use-case diagram (Figure~\ref{fig:usecase}) defines three main user roles with distinct privileges:
+The Clinix use-case model defines three main user roles with distinct privileges, plus the CamPay payment gateway as an external system actor. Because the system carries a large number of use cases spanning very different concerns, the use-case model is presented in three actor-scoped sub-diagrams (Figures~\ref{fig:usecase_patient}, \ref{fig:usecase_provider}, and~\ref{fig:usecase_admin}) rather than one cluttered chart.
 
 \begin{itemize}
-  \item \textbf{Patients} can register/login, perform AI symptom checks, view AI-driven provider recommendations, book appointments, conduct virtual consultations, make payments, and access medical records.
-  \item \textbf{Healthcare Providers} can log in, accept appointments, conduct consultations, write prescriptions, create medical records, and create referrals.
-  \item \textbf{Superadmins} verify provider credentials, manage users, manage specialties and lab tests, approve withdrawals, and view platform analytics.
-  \item \textbf{The Payment Gateway} (CamPay) appears as an external system actor handling payment processing.
+  \item \textbf{Patients} (Figure~\ref{fig:usecase_patient}) can register/login, perform AI symptom checks, view AI-driven provider recommendations, book appointments, make mobile-money payments, attend video/audio consultations, chat in real time, view prescriptions and medical records, track medication adherence, and book lab tests or home-care visits.
+  \item \textbf{Healthcare Providers} (Figure~\ref{fig:usecase_provider}) can log in, submit KYC credentials, accept appointments, conduct consultations, write prescriptions, create medical records (optionally from an AI-generated draft), create referrals, manage their schedule and availability, and request withdrawals from their earnings.
+  \item \textbf{Superadmins} (Figure~\ref{fig:usecase_admin}) verify providers, approve or reject submitted credentials, manage users and patients, manage specialties and lab tests, configure the platform consultation fee, approve withdrawals, and view platform analytics.
+  \item \textbf{The Payment Gateway (CamPay)} appears as an external system actor that includes \texttt{Process Payment} from the patient's mobile-money payment use case.
 \end{itemize}
 
-This model establishes clear role-based access control, defines functional requirements from each stakeholder's perspective, and ensures the system design comprehensively addresses all user needs.
+Splitting the model in this way preserves all relationships (\texttt{<<include>>} between booking, payment, and the gateway; \texttt{<<extend>>} for AI symptom check and for AI-drafted medical records) while keeping each sub-diagram readable on a single page.
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.7\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.2: Use Case Diagram]} \vspace{2cm}}}
-  \caption{Use Case Diagram}
-  \label{fig:usecase}
+  \includegraphics[width=0.95\textwidth]{figures/usecase_patient.png}
+  \caption{Use Case Diagram, Patient}
+  \label{fig:usecase_patient}
 \end{figure}
 
-% ---------- Activity Diagrams ----------
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\textwidth]{figures/usecase_provider.png}
+  \caption{Use Case Diagram, Healthcare Provider}
+  \label{fig:usecase_provider}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\textwidth]{figures/usecase_admin.png}
+  \caption{Use Case Diagram, Superadmin}
+  \label{fig:usecase_admin}
+\end{figure}
+
+% ---- Activity Diagrams ----
 \subsubsection*{Activity Diagrams}
 \addcontentsline{toc}{subsubsection}{Activity Diagrams}
 
@@ -173,48 +340,91 @@ The diagram uses merge and join nodes to show how these separate workflows synch
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.7\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.3: Activity Diagram]} \vspace{2cm}}}
+  \includegraphics[width=0.85\textwidth]{figures/activity_main.png}
   \caption{Activity Diagram}
   \label{fig:activity}
 \end{figure}
 
-% ---------- Cost Evaluation ----------
+% ---- Cost Evaluation ----
 \subsubsection*{Cost Evaluation}
 \addcontentsline{toc}{subsubsection}{Cost Evaluation}
 
-\paragraph{Development Costs}
-\begin{itemize}
-  \item Software licences: Open-source tools (minimal cost).
-  \item Development hardware: Existing university resources.
-  \item Testing devices: Android/iOS devices from the team.
-\end{itemize}
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|l|r|}
+\hline
+\textbf{Category} & \textbf{Item} & \textbf{Cost (USD)} \\ \hline
 
-\paragraph{Operational Costs (Annual)}
-\begin{itemize}
-  \item Hosting: USD~300--500 (Railway/Render).
-  \item Domain \& SSL: USD~50.
-  \item API services: Google Maps (USD~200), SMS gateway (USD~100), Agora RTC pay-as-you-go.
-  \item Maintenance: estimated 20 hours per month.
-\end{itemize}
+\multirow{3}{*}{Development (one-off)}
+  & Software licences (open source)        & 0 \\ \hline
+  & Development hardware (existing)         & 0 \\ \hline
+  & Testing devices (team-owned)            & 0 \\ \hline
 
-\paragraph{Total Estimated Annual Cost} USD~650--850.
+\multirow{5}{*}{Operational (annual)}
+  & Hosting (Railway / Render)              & 300 to 500 \\ \hline
+  & Domain \& SSL                           & 50 \\ \hline
+  & Google Maps API                         & 200 \\ \hline
+  & SMS gateway                             & 100 \\ \hline
+  & Agora RTC                               & pay-as-you-go \\ \hline
 
-% ---------- Project Schedule ----------
+\textbf{Total estimated annual} & & \textbf{650 to 850} \\ \hline
+
+\end{tabular}
+\caption{Cost evaluation}
+\label{tab:cost}
+\end{table}
+
+% ---- Project Schedule ----
 \subsubsection*{Project Schedule}
 \addcontentsline{toc}{subsubsection}{Project Schedule}
 
-\begin{itemize}
-  \item \textbf{Phase~1 (Week 1):} Requirements analysis, literature review, and initial design.
-  \item \textbf{Phase~2 (Weeks 2--5):} Core development (authentication, profiles, basic UI).
-  \item \textbf{Phase~3 (Weeks 5--6):} Feature implementation (appointments, messaging).
-  \item \textbf{Phase~4 (Weeks 7--8):} AI integration, mapping, and payment systems.
-  \item \textbf{Phase~5 (Weeks 9--10):} Testing, optimisation, and documentation.
-  \item \textbf{Phase~6 (Weeks 11--12):} Final revisions, deployment preparation, and thesis writing.
-\end{itemize}
+The project was delivered over a twelve-week schedule organised into six phases. Figure~\ref{fig:gantt} presents the schedule as a Gantt chart, with each bar showing the calendar window of a phase. Phases overlap deliberately where downstream work could start once an upstream artefact was stable enough to depend on; this is most visible between requirements analysis and core development, and between feature implementation and testing.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{ganttchart}[
+  hgrid,
+  vgrid={*1{draw=gray!30}},
+  x unit=0.95cm,
+  y unit chart=0.7cm,
+  y unit title=0.7cm,
+  bar/.append style={fill=clinixblue!75, draw=clinixblue, rounded corners=2pt},
+  bar height=0.65,
+  bar label font=\small,
+  bar label node/.append style={align=right, text width=5.5cm},
+  title height=0.9,
+  title/.style={fill=clinixblue!20, draw=clinixblue},
+  title label font=\small\bfseries,
+  group/.append style={fill=clinixblue, draw=clinixblue},
+  milestone/.append style={fill=red!70, draw=red!85!black},
+  milestone label font=\scriptsize,
+  link/.style={->, gray!70, thick}
+  ]{1}{12}
+  \gantttitle{Project Timeline (Weeks)}{12} \\
+  \gantttitlelist{1,...,12}{1} \\
+  \ganttbar[name=p1]{P1: Requirements \& Initial Design}{1}{2} \\
+  \ganttbar[name=p2]{P2: Core Development (Auth, Profiles, UI)}{2}{5} \\
+  \ganttbar[name=p3]{P3: Appointments, Chat \& Calls}{4}{6} \\
+  \ganttbar[name=p4]{P4: AI, Maps \& CamPay Payments}{6}{8} \\
+  \ganttbar[name=p5]{P5: Testing \& Optimisation}{8}{10} \\
+  \ganttbar[name=p6]{P6: Deployment \& Thesis Write-up}{10}{12} \\
+  \ganttmilestone{Final submission}{12}
+  \ganttlink{p1}{p2}
+  \ganttlink{p2}{p3}
+  \ganttlink{p3}{p4}
+  \ganttlink{p4}{p5}
+  \ganttlink{p5}{p6}
+\end{ganttchart}%
+}
+\caption{Project schedule (Gantt chart)}
+\label{fig:gantt}
+\end{figure}
 
 \section{System Design}
 
-% ---------- Tools and Material Used ----------
+% ---- Tools and Material Used ----
 \subsubsection*{Tools and Material Used}
 \addcontentsline{toc}{subsubsection}{Tools and Material Used}
 
@@ -240,7 +450,7 @@ The diagram uses merge and join nodes to show how these separate workflows synch
   \item Figma for UI/UX design; PlantUML for diagram creation.
 \end{itemize}
 
-% ---------- System Acquisition Strategy ----------
+% ---- System Acquisition Strategy ----
 \subsubsection*{System Acquisition Strategy}
 \addcontentsline{toc}{subsubsection}{System Acquisition Strategy}
 
@@ -255,7 +465,7 @@ The system follows a \textbf{hybrid acquisition strategy} combining custom devel
 
 This strategy prioritises engineering velocity (by reusing battle-tested components) while keeping all sensitive clinical logic and patient-data handling under direct project control.
 
-% ---------- Class Diagrams ----------
+% ---- Class Diagrams ----
 \subsubsection*{Class Diagrams}
 \addcontentsline{toc}{subsubsection}{Class Diagrams}
 
@@ -267,12 +477,12 @@ The relationships show patients and providers connecting through appointments, w
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.7\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.4: Class Diagram]} \vspace{2cm}}}
+  \includegraphics[width=0.95\textwidth]{figures/class_diagram.png}
   \caption{Class Diagram}
   \label{fig:class}
 \end{figure}
 
-% ---------- Sequence Diagrams ----------
+% ---- Sequence Diagrams ----
 \subsubsection*{Sequence Diagrams}
 \addcontentsline{toc}{subsubsection}{Sequence Diagrams}
 
@@ -282,12 +492,12 @@ If professional help is needed, the \textbf{Provider Recommender} consumes the r
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.5: Sequence Diagram]} \vspace{2cm}}}
-  \caption{Sequence Diagram}
+  \includegraphics[width=\textwidth]{figures/sequence_consultation.png}
+  \caption{Sequence Diagram, Patient Consultation}
   \label{fig:sequence}
 \end{figure}
 
-% ---------- System Architecture ----------
+% ---- System Architecture ----
 \subsubsection*{System Architecture}
 \addcontentsline{toc}{subsubsection}{System Architecture}
 
@@ -301,12 +511,25 @@ Clinix adopts a \textbf{three-tier architecture}:
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.6: System Architecture]} \vspace{2cm}}}
+  \includegraphics[width=\textwidth]{figures/system_architecture.png}
   \caption{System Architecture}
   \label{fig:sysarch}
 \end{figure}
 
-% ---------- User Interface Design ----------
+% ---- AI Provider Recommendation Architecture ----
+\subsubsection*{AI Provider Recommendation Architecture}
+\addcontentsline{toc}{subsubsection}{AI Provider Recommendation Architecture}
+
+A specialised architectural view (Figure~\ref{fig:airecommend}) zooms into how Clinix turns an AI symptom-chat session into a ranked list of verified providers. The Patient interacts with the \textbf{AI Symptom Checker Screen} in the Flutter mobile app. The screen forwards each turn to the server-side \textbf{AI Consultation Session Manager}, which (i)~queries the patient's \textbf{Vitals} as silent context, (ii)~sends the conversation history to the \textbf{Google Gemini Client} which calls the pre-trained \textbf{Gemini API}, and (iii)~at session end hands off to the \textbf{Structured Assessment Generator}. The structured assessment's \texttt{recommended\_specialty} is fed into the \textbf{Provider Recommender}, which filters the \textbf{Verified Providers} store down to \texttt{approved} providers, scores each candidate, and returns the top matches with a human-readable \texttt{match\_reasons} array.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\textwidth]{figures/ai_provider_recommendation.png}
+  \caption{AI Provider Recommendation Architecture}
+  \label{fig:airecommend}
+\end{figure}
+
+% ---- User Interface Design ----
 \subsubsection*{User Interface Design}
 \addcontentsline{toc}{subsubsection}{User Interface Design}
 
@@ -320,19 +543,19 @@ Clinix adopts a \textbf{three-tier architecture}:
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.7: Mobile App Design --- 1]} \vspace{2cm}}}
-  \caption{Mobile App Design --- 1}
+  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.7: Mobile App Design, 1]} \vspace{2cm}}}
+  \caption{Mobile App Design, 1}
   \label{fig:mobileui1}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.8: Mobile App Design --- 2]} \vspace{2cm}}}
-  \caption{Mobile App Design --- 2}
+  \fbox{\parbox{0.85\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.8: Mobile App Design, 2]} \vspace{2cm}}}
+  \caption{Mobile App Design, 2}
   \label{fig:mobileui2}
 \end{figure}
 
-% ---------- ER Diagrams ----------
+% ---- ER Diagrams ----
 \subsubsection*{ER Diagrams}
 \addcontentsline{toc}{subsubsection}{ER Diagrams}
 
@@ -340,46 +563,28 @@ The Clinix ER diagram (Figure~\ref{fig:erd}) models the database schema with \te
 
 \paragraph{Key Entities and Relationships}
 \begin{itemize}
-  \item \textbf{patients} and \textbf{healthcare\_providers} --- one-to-one with \texttt{users} (extending user info with health/professional data).
-  \item \textbf{appointments} --- many-to-one with both patients and providers (managing scheduling).
-  \item \textbf{consultations} --- one-to-one with \texttt{appointments} (recording medical encounters).
-  \item \textbf{medical\_records} --- many-to-one with \texttt{consultations} (storing health history with symptoms, diagnosis, treatment).
-  \item \textbf{prescriptions} --- many-to-one with \texttt{consultations}; each prescription auto-generates \textbf{medication\_reminders}.
-  \item \textbf{payments} --- many-to-one with \texttt{appointments}; the same row is reused for ``pay-first'' bookings (lab tests, home care).
-  \item \textbf{provider\_subscriptions} --- one-to-many with providers (tracking subscription payments).
-  \item \textbf{locations} --- linked to providers (geographic data used for distance-based recommendation).
-  \item \textbf{verification\_requests} --- many-to-one with providers (one row per credential document submitted for review).
+  \item \textbf{patients} and \textbf{healthcare\_providers}, one-to-one with \texttt{users} (extending user info with health/professional data).
+  \item \textbf{appointments}, many-to-one with both patients and providers (managing scheduling).
+  \item \textbf{consultations}, one-to-one with \texttt{appointments} (recording medical encounters).
+  \item \textbf{medical\_records}, many-to-one with \texttt{consultations} (storing health history with symptoms, diagnosis, treatment).
+  \item \textbf{prescriptions}, many-to-one with \texttt{consultations}; each prescription auto-generates \textbf{medication\_reminders}.
+  \item \textbf{payments}, many-to-one with \texttt{appointments}; the same row is reused for ``pay-first'' bookings (lab tests, home care).
+  \item \textbf{provider\_subscriptions}, one-to-many with providers (tracking subscription payments).
+  \item \textbf{locations}, linked to providers (geographic data used for distance-based recommendation).
+  \item \textbf{verification\_requests}, many-to-one with providers (one row per credential document submitted for review).
 \end{itemize}
 
 The model demonstrates proper normalisation, referential integrity through foreign-key constraints, and supports efficient querying for the application's needs.
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox{0.75\textwidth}{\centering \vspace{2cm} \textit{[Insert Figure 3.9: ER Diagram]} \vspace{2cm}}}
+  \includegraphics[width=0.85\textwidth]{figures/er_diagram.png}
   \caption{ER Diagram}
   \label{fig:erd}
 \end{figure}
 
-% ---------- Data Dictionary ----------
+% ---- Data Dictionary ----
 \subsubsection*{Data Dictionary}
 \addcontentsline{toc}{subsubsection}{Data Dictionary}
 
-\noindent Key tables and fields:
-
-\begin{longtable}{p{3.4cm} p{10.3cm}}
-\toprule
-\textbf{Table} & \textbf{Fields} \\
-\midrule
-\endhead
-\texttt{users} & \texttt{user\_id (PK)}, \texttt{phone\_number}, \texttt{email}, \texttt{user\_type}, \texttt{full\_name}, \texttt{language\_pref}, \texttt{fcm\_token}, \texttt{is\_verified}, \texttt{created\_at} \\
-\texttt{patients} & \texttt{patient\_id (PK, FK to users)}, \texttt{date\_of\_birth}, \texttt{gender}, \texttt{blood\_type}, \texttt{allergies}, \texttt{chronic\_conditions}, \texttt{emergency\_contact} \\
-\texttt{healthcare\_providers} & \texttt{provider\_id (PK, FK to users)}, \texttt{specialty}, \texttt{license\_number}, \texttt{years\_experience}, \texttt{consultation\_fee}, \texttt{verification\_status}, \texttt{rating}, \texttt{total\_consultations} \\
-\texttt{appointments} & \texttt{appointment\_id (PK)}, \texttt{patient\_id (FK)}, \texttt{provider\_id (FK)}, \texttt{scheduled\_at}, \texttt{duration\_minutes}, \texttt{appointment\_type}, \texttt{status} \\
-\texttt{consultations} & \texttt{consultation\_id (PK)}, \texttt{appointment\_id (FK)}, \texttt{ai\_transcript}, \texttt{provider\_notes}, \texttt{diagnosis}, \texttt{webrtc\_session\_id}, \texttt{recording\_url} \\
-\texttt{medical\_records} & \texttt{record\_id (PK)}, \texttt{patient\_id (FK)}, \texttt{consultation\_id (FK)}, \texttt{symptoms}, \texttt{diagnosis}, \texttt{treatment}, \texttt{is\_ai\_draft}, \texttt{is\_published} \\
-\texttt{prescriptions} & \texttt{prescription\_id (PK)}, \texttt{consultation\_id (FK)}, \texttt{patient\_id (FK)}, \texttt{provider\_id (FK)}, \texttt{medications (JSON)}, \texttt{instructions}, \texttt{valid\_until} \\
-\texttt{ai\_symptom\_sessions} & \texttt{session\_id (PK)}, \texttt{patient\_id (FK)}, \texttt{is\_active}, \texttt{triage\_score}, \texttt{ai\_analysis (JSON)}, \texttt{recommendation}, \texttt{suggested\_specialization}, \texttt{created\_at} \\
-\texttt{payments} & \texttt{payment\_id (PK)}, \texttt{appointment\_id (FK, nullable)}, \texttt{amount}, \texttt{currency}, \texttt{payment\_method}, \texttt{transaction\_ref}, \texttt{status}, \texttt{provider\_payout} \\
-\texttt{verification\_requests} & \texttt{request\_id (PK)}, \texttt{provider\_id (FK)}, \texttt{document\_type}, \texttt{document\_url}, \texttt{reviewed\_by}, \texttt{status}, \texttt{reviewed\_at} \\
-\bottomrule
-\end{longtable}
+The data dictionary names each persistent table in the platform and describes its purpose. Every table uses a UUID primary key; foreign-key relationships follow the cardinalities given in the ER diagram. The \textbf{users} table is the central identity record (phone, email, role, language preference). \textbf{patients} extends users with medical demographics (date of birth, gender, blood type, allergies). \textbf{healthcare\_providers} extends users with professional fields (specialty, licence number, consultation fee, verification status, rating). \textbf{appointments} stores scheduled patient--provider encounters with type (virtual, in-person, lab test, home treatment) and status. \textbf{consultations} captures the clinical interaction tied to a confirmed appointment (notes, diagnosis, WebRTC session, optional call recording). \textbf{medical\_records} and \textbf{prescriptions} are the published artefacts of a consultation. \textbf{ai\_symptom\_sessions} records the AI triage conversation, the structured assessment, and the recommended specialty. \textbf{payments} tracks every CamPay transaction (amount, method, status, provider payout). \textbf{verification\_requests} records each credential document submitted by a provider together with the admin reviewer and decision.

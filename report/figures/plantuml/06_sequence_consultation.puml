@@ -15,12 +15,14 @@ skinparam SequenceLifeLineBorderColor #888888
 
 actor Patient
 participant "Mobile App\n(Flutter)" as App
-participant "AI Engine\n(Gemini)"   as AI
+participant "AI Engine\n(Gemini)"  as AI
 participant "Django REST API" as API
 database  "PostgreSQL"          as DB
+participant "CamPay"            as CamPay
 participant "Agora\n(Video)"    as Agora
 participant "Provider App"      as Provider
 
+== AI Symptom Check ==
 Patient -> App  : Enter symptoms / image
 App     -> API  : POST /ai/chat/<id>/message
 API     -> AI   : Forward conversation + vitals
@@ -33,37 +35,45 @@ API     -> AI   : Request structured assessment
 AI      --> API : { triage, specialty, causes }
 API     --> App : Structured assessment
 
-Patient -> App  : Book appointment
+== Provider Recommendation & Booking ==
+App     -> API  : GET /providers/recommended/?specialty=...
+API     -> DB   : query verified providers
+DB      --> API : ranked providers
+API     --> App : top providers + match_reasons
+Patient -> App  : Pick provider, book slot
 App     -> API  : POST /appointments/
 API     -> DB   : Insert (status='pending')
 API     --> App : Appointment created
 
-Patient -> App  : Pay (mobile money)
+== Payment (CamPay Mobile Money) ==
+Patient -> App  : Pay
 App     -> API  : POST /payments/initiate/
+API     -> CamPay : Authenticate + collect
+CamPay  --> API : USSD code
 API     --> App : USSD code
-... User dials USSD on phone ...
-API     <-- API : CamPay webhook
-API     -> DB   : Mark payment='success'\nAppointment='confirmed'
+App     --> Patient : Display USSD code
+...patient dials USSD on phone...
+CamPay  -> API  : Webhook (status=success)
+API     -> DB   : Update Payment=success,\nAppointment=confirmed
 API     -> Provider : FCM notification
 
+== Live Video Consultation ==
 Provider -> API : Join consultation
-API     -> Agora : Issue RTC token
-Agora   --> Provider : Token
-Patient -> Agora : Join channel
+API      -> Agora : Issue RTC token
+Agora    --> Provider : Token
+Patient  -> Agora : Join channel
 Provider -> Agora : Join channel
-Agora   -- Patient   : Media stream
-Agora   -- Provider  : Media stream
+Agora    --> Patient  : Media stream (audio/video)
+Agora    --> Provider : Media stream (audio/video)
 
-... Live consultation ...
-
-Provider -> API  : POST /consultations/<id>/end\n+ notes, diagnosis
-API     -> DB   : Save consultation
-Provider -> API  : POST /consultations/<id>/audio
-API     -> API   : Celery task:\nSTT + Gemini draft
-API     -> DB    : MedicalRecord(is_ai_draft=true)
-
-Provider -> API  : Review + publish draft
-API     -> DB    : is_published=true
-API     -> App   : Notify patient
-App     --> Patient : Receive prescription &\nmedical record
+== End of Consultation & AI Scribe ==
+Provider -> API : POST /consultations/<id>/end\n(+ notes, diagnosis)
+API      -> DB  : Save consultation
+Provider -> API : POST /consultations/<id>/audio\n(call recording)
+API      -> API : Celery task:\nSTT + Gemini draft
+API      -> DB  : MedicalRecord(is_ai_draft=true)
+Provider -> API : Review + publish draft
+API      -> DB  : is_published=true
+API      -> App : Notify patient
+App      --> Patient : Receive prescription &\nmedical record
 @enduml

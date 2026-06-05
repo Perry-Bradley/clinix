@@ -1,6 +1,16 @@
 @startuml deployment
 ' --------------------------------------------------------------
 ' Deployment Diagram - production topology
+'
+' Layout strategy (matches the system-architecture cleanup):
+'   - Strict top-to-bottom flow:
+'       Clients  ->  Cloud (App tier + Data tier)
+'   - External SaaS grouped tightly in a right-hand column
+'     (Firebase as its own neighbour)
+'   - Orthogonal lines (no diagonal spaghetti)
+'   - Larger Nodesep / Ranksep for breathing room
+'   - Only the non-obvious arrow (CamPay webhook callback)
+'     is labelled; connection types are implied by the targets
 ' --------------------------------------------------------------
 title Clinix - Deployment Diagram
 
@@ -13,64 +23,83 @@ skinparam NodeBackgroundColor #F5F9FC
 skinparam ComponentBorderColor #1F4E79
 skinparam ComponentBackgroundColor #EAF2F9
 skinparam DatabaseBorderColor #1F4E79
-skinparam DatabaseBackgroundColor #FFF7E0
+skinparam DatabaseBackgroundColor #FFFFFF
+skinparam CloudBorderColor #1F4E79
+skinparam CloudBackgroundColor #FBFCFE
 skinparam ArrowColor #555555
+skinparam linetype ortho
+skinparam Nodesep 30
+skinparam Ranksep 55
+
+' =========== CLIENT TIER (top) ===========
+node "Browser" as Browser {
+  component "React Admin\n(Vite build,\nNginx-served)" as ReactAdmin
+}
 
 node "Patient / Provider\nMobile Device" as Phone {
   component "Flutter App\n(Android / iOS)" as FlutterApp
 }
 
-node "Browser" as Web {
-  component "React Admin\n(Vite build, Nginx-served)" as ReactAdmin
-}
-
+' =========== CLOUD (middle) ===========
 cloud "Railway / Render Cloud" as Cloud {
   node "ASGI Container\n(Daphne)" as ASGI {
-    component "Django REST API" as DjangoAPI
-    component "Django Channels" as DjangoChannels
+    component "Django REST API" as API
+    component "Django Channels" as Channels
   }
   node "Worker Container" as Worker {
-    component "Celery Worker"    as CeleryW
-    component "Celery Beat"      as CeleryB
+    component "Celery Worker" as CeleryW
+    component "Celery Beat"   as CeleryB
   }
-  database "PostgreSQL\nManaged DB" as PG
-  database "Redis\nManaged Cache" as Redis
+  database "PostgreSQL\n(Managed)" as PG
+  database "Redis\n(Managed)"      as Redis
 }
 
+' =========== FIREBASE (right) ===========
 cloud "Firebase" as Firebase {
-  database "Cloud Storage\n(media)" as FS
-  component "FCM"                    as FCM
-  component "Auth (Google OAuth)"    as FBAuth
+  database  "Cloud Storage\n(media + KYC +\nrecordings)" as FS
+  component "FCM\n(push)"                                as FCM
+  component "Auth\n(Google OAuth)"                       as FBAuth
 }
 
+' =========== EXTERNAL SAAS (far right column) ===========
 cloud "External SaaS" as Ext {
-  component "Agora RTC"   as Agora
-  component "CamPay API"  as CamPay
-  component "Twilio SMS"  as Twilio
-  component "Google AI\n(Gemini + STT)" as GAI
-  component "Google Maps" as Maps
+  component "Agora RTC\n(video / audio)"   as Agora
+  component "CamPay API\n(mobile money)"   as CamPay
+  component "Twilio\n(SMS OTP)"            as Twilio
+  component "Google Maps"                  as Maps
+  component "Google AI\n(Gemini + STT)"    as GAI
 }
 
-FlutterApp --> DjangoAPI       : HTTPS
-FlutterApp --> DjangoChannels  : WSS
-FlutterApp --> FCM             : push registration
-FlutterApp --> Agora           : RTC stream
-FlutterApp --> FBAuth          : OAuth login
-FlutterApp --> FS              : media upload
-FlutterApp --> Maps            : map tiles
+' ---------- Clients -> Cloud ----------
+ReactAdmin --> API
+FlutterApp --> API
+FlutterApp --> Channels
 
-ReactAdmin --> DjangoAPI       : HTTPS
+' ---------- Cloud internal ----------
+API      --> PG
+API      --> Redis
+Channels --> Redis
+CeleryW  --> Redis
+CeleryW  --> PG
+CeleryB  --> Redis
 
-DjangoAPI --> PG               : ORM
-DjangoAPI --> Redis            : cache
-DjangoChannels --> Redis       : channel layer
-CeleryW   --> Redis            : broker
-CeleryB   --> Redis            : scheduler
-CeleryW   --> PG
-CeleryW   --> FS
-DjangoAPI --> CamPay           : payment initiate
-CamPay    --> DjangoAPI        : webhook
-DjangoAPI --> Twilio           : SMS OTP
-DjangoAPI --> GAI              : AI calls
-DjangoAPI --> FCM              : push notifications
+' ---------- Cloud -> Firebase ----------
+API        --> FS
+API        --> FCM
+FlutterApp --> FBAuth
+
+' ---------- Cloud -> External SaaS ----------
+API --> Agora
+API --> CamPay
+API --> Twilio
+API --> Maps
+API --> GAI
+
+' ---------- Direct client connections (after backend issues tokens) ----------
+FlutterApp --> Agora
+FlutterApp --> Maps
+
+' ---------- Callback (the only labelled arrow) ----------
+CamPay --> API : webhook
+
 @enduml

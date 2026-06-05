@@ -1,73 +1,59 @@
 @startuml ai_provider_recommendation
 ' --------------------------------------------------------------
 ' AI Provider Recommendation Architecture (Fig 3.10)
-' Shows how an AI chat session yields a ranked list of verified providers.
+'
+' Defensive layout - flat structure, no nested grouping that
+' fights with the renderer, no orthogonal-line mode.
+' For the time-ordered version of this flow, see the patient
+' consultation sequence diagram (Fig 3.5).
 ' --------------------------------------------------------------
 title Clinix - AI Provider Recommendation Architecture
 
 skinparam backgroundColor #FFFFFF
 skinparam shadowing false
 skinparam defaultFontName "Inter, Helvetica, sans-serif"
-skinparam defaultFontSize 12
+skinparam defaultFontSize 11
 skinparam ComponentBorderColor #1F4E79
 skinparam ComponentBackgroundColor #EAF2F9
 skinparam DatabaseBorderColor #1F4E79
-skinparam DatabaseBackgroundColor #F5F9FC
+skinparam DatabaseBackgroundColor #FFFFFF
+skinparam CloudBorderColor #1F4E79
+skinparam CloudBackgroundColor #FFF7E0
 skinparam ActorBorderColor #1F4E79
 skinparam ArrowColor #555555
+skinparam Nodesep 25
+skinparam Ranksep 45
 
 actor "Patient" as Patient
 
-rectangle "Mobile App (Flutter)" #F0F7FB {
-  component "AI Symptom Checker\nScreen" as UI
-}
+component "AI Symptom Checker\nScreen\n(Flutter)"           as UI
+component "AI Consultation\nSession Manager\n(Django)"      as Session
+component "Google Gemini\nClient"                            as Gemini
+component "Structured Assessment\nGenerator"                 as Assess
+component "Provider Recommender\nscoring service"            as Reco
 
-rectangle "Clinix Backend (Django)" #F0F7FB {
-  component "AI Consultation\nSession Manager"             as Session
-  component "Google Gemini\nClient"                        as Gemini
-  component "Structured Assessment\nGenerator"             as Assess
-  component "Provider Recommender\n(scoring service)"      as Reco
-  database  "Verified Providers\n(approved only)"          as Providers
-  database  "Vitals\n(heart rate, HRV,\nactivity)"          as Vitals
-}
+database  "Verified Providers\n(approved only)"              as Providers
+database  "Patient Vitals\nheart rate / HRV / activity"      as Vitals
 
-cloud "Google Gemini API\n(pre-trained, external)" as GeminiAPI #FFF7E0
+cloud "Google Gemini API\n(pre-trained, external)"           as GeminiAPI
 
-Patient --> UI               : 1. Symptoms +/- image
-UI      --> Session          : 2. POST /ai/chat/<id>/message
-Session --> Vitals           : 3. Read latest vitals
-Vitals  --> Session          : silent context
-Session --> Gemini           : 4. prompt + history\n+ vitals (hidden)
-Gemini  --> GeminiAPI        : 5. inference
-GeminiAPI --> Gemini         : reply
-Gemini  --> Session          : next question /\nclarification
-Session --> UI               : reply
-UI      --> Patient          : conversation turn
+' ---- Client to backend ----
+Patient --> UI
+UI      --> Session
 
-... when patient ends session OR asks for a doctor ...
+' ---- Backend internal: chat turn ----
+Session --> Gemini
+Gemini  --> GeminiAPI
+Session --> Vitals    : silent context
 
-UI      --> Session          : POST /chat/<id>/complete\nor /chat/<id>/recommend
-Session --> Assess           : request structured\nassessment
-Assess  --> Gemini           : extract { summary,\n  triage_priority,\n  recommended_specialty,\n  possible_causes,\n  red_flags }
-Gemini  --> Assess           : JSON assessment
-Assess  --> Reco             : recommended_specialty +\npatient location +\nlanguage + budget
-Reco    --> Providers        : filter verification_status='approved'\nWHERE specialty matches
-Providers --> Reco           : candidate providers
-Reco    --> Reco             : score each candidate\n(specialty, rating, distance,\nlanguage, fee, online status)
-Reco    --> UI               : top-K providers\n+ match_reasons[]
-UI      --> Patient          : "Doctors that match your symptoms"
+' ---- End-of-session: structured assessment ----
+Session --> Assess
+Assess  --> Gemini
+Assess  --> Reco      : recommended_specialty
 
-note right of Reco
-  Transparent rules-based scorer.
-  No model is trained on patient data.
-  Every match is explained by a
-  human-readable match_reasons string.
-end note
+' ---- Recommendation scoring ----
+Reco    --> Providers : filter approved
 
-note bottom of Gemini
-  Pre-trained external model
-  invoked per session. Clinix
-  does not perform any model
-  training in-house.
-end note
+' ---- Result back to the patient ----
+Reco    --> UI        : top providers\n+ match_reasons
 @enduml
