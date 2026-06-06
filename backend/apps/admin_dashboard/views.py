@@ -172,8 +172,13 @@ class VerificationDetailView(APIView):
     def _absolute_url(self, request, url):
         if not url:
             return url
-        if str(url).startswith('http://') or str(url).startswith('https://'):
+        url = str(url)
+        if url.startswith('http://') or url.startswith('https://'):
             return url
+        # Ensure a leading slash so build_absolute_uri resolves from site root,
+        # not relative to the current API path.
+        if not url.startswith('/'):
+            url = '/' + url
         return request.build_absolute_uri(url)
 
     def get(self, request, pk):
