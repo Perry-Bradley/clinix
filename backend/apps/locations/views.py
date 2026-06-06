@@ -63,18 +63,47 @@ class FacilitiesListView(APIView):
 
     def get(self, request):
         # Return unique facility names from locations with phone numbers
-        facilities = Location.objects.exclude(facility_name__isnull=True).exclude(facility_name__exact="").values('facility_name', 'address', 'city', 'phone_number', 'location_id').distinct()
-        data = [
-            {
-                'facility_name': f['facility_name'],
-                'address': f['address'],
-                'city': f['city'],
-                'phone_number': f['phone_number'],
-                'location_id': str(f['location_id'])
-            }
-            for f in facilities
-        ]
-        return Response(data)
+        try:
+            facilities = Location.objects.exclude(
+                facility_name__isnull=True
+            ).exclude(
+                facility_name__exact=""
+            ).values(
+                'facility_name', 'address', 'city', 'phone_number', 'location_id'
+            ).distinct('facility_name', 'address', 'city')
+            
+            data = [
+                {
+                    'facility_name': f['facility_name'],
+                    'address': f['address'],
+                    'city': f['city'],
+                    'phone_number': f['phone_number'],
+                    'location_id': str(f['location_id'])
+                }
+                for f in facilities
+            ]
+            return Response(data)
+        except Exception as e:
+            # If distinct fails, fall back to simple query
+            facilities = Location.objects.exclude(
+                facility_name__isnull=True
+            ).exclude(
+                facility_name__exact=""
+            ).values(
+                'facility_name', 'address', 'city', 'phone_number', 'location_id'
+            )
+            
+            data = [
+                {
+                    'facility_name': f['facility_name'],
+                    'address': f['address'],
+                    'city': f['city'],
+                    'phone_number': f['phone_number'],
+                    'location_id': str(f['location_id'])
+                }
+                for f in facilities
+            ]
+            return Response(data)
 
 class AdminFacilityUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
