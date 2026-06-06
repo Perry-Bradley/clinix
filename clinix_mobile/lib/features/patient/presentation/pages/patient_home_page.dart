@@ -1105,152 +1105,367 @@ class _PatientProfileTab extends StatefulWidget {
 
 class _PatientProfileTabState extends State<_PatientProfileTab> {
   String _userName = 'User';
+  String _userEmail = '';
+  bool _notificationsEnabled = true;
 
   @override
   void initState() {
     super.initState();
-    _loadName();
+    _loadUserData();
   }
 
-  Future<void> _loadName() async {
+  Future<void> _loadUserData() async {
     final name = await AuthService.getUserName();
-    if (mounted && name != null) setState(() => _userName = name);
+    final email = await AuthService.getUserEmail();
+    if (mounted) {
+      setState(() {
+        if (name != null && name.isNotEmpty) _userName = name;
+        _userEmail = email ?? '';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
-    final topPad = MediaQuery.of(context).padding.top;
-    final initial = _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U';
+    final mq = MediaQuery.of(context);
+    final w = mq.size.width;
+    final topPad = mq.padding.top;
 
-    return Container(
-      color: Colors.white,
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          // Profile header
-          Container(
-            padding: EdgeInsets.fromLTRB(w * 0.06, topPad + w * 0.05, w * 0.06, w * 0.06),
-            decoration: const BoxDecoration(
-              gradient: AppColors.splashBackgroundGradient,
-              borderRadius: BorderRadius.only(bottomLeft: Radius.circular(28), bottomRight: Radius.circular(28)),
-            ),
-            child: Column(
-              children: [
-                SizedBox(height: w * 0.02),
-                Container(
-                  width: w * 0.2, height: w * 0.2,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
+    final initials = () {
+      final parts = _userName.trim().split(RegExp(r'\s+'));
+      if (parts.length >= 2) return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+      return _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U';
+    }();
+
+    return Scaffold(
+      backgroundColor: AppColors.grey50,
+      body: CustomScrollView(
+        slivers: [
+          // App bar
+          SliverAppBar(
+            pinned: true,
+            backgroundColor: Colors.white,
+            elevation: 0,
+            scrolledUnderElevation: 0.5,
+            shadowColor: AppColors.grey200,
+            automaticallyImplyLeading: false,
+            toolbarHeight: topPad + 56,
+            titleSpacing: 0,
+            title: Padding(
+              padding: EdgeInsets.only(top: topPad),
+              child: const Center(
+                child: Text(
+                  'Settings',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.darkBlue900,
                   ),
-                  child: Center(child: Text(initial, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.08, fontWeight: FontWeight.w700, color: Colors.white))),
                 ),
-                SizedBox(height: w * 0.035),
-                Text(_userName, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.055, fontWeight: FontWeight.w700, color: Colors.white)),
-                SizedBox(height: w * 0.01),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: w * 0.035, vertical: w * 0.012),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                  child: Text('Patient', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.03, color: Colors.white70, fontWeight: FontWeight.w500)),
-                ),
-              ],
+              ),
             ),
           ),
 
-          SizedBox(height: w * 0.04),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: w * 0.05),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: w * 0.07),
 
-          // Menu sections
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: w * 0.05),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionLabel('Health', w),
-                _ProfileTile(icon: Icons.medical_information_rounded, label: 'Medical Records', onTap: () => context.push('/patient/medical-records')),
-                _ProfileTile(icon: Icons.receipt_long_rounded, label: 'Prescriptions', onTap: () => context.push('/patient/prescriptions')),
-                _ProfileTile(icon: Icons.science_rounded, label: 'Lab Tests', onTap: () => context.push('/homecare/lab-tests')),
-
-                SizedBox(height: w * 0.02),
-                _sectionLabel('Account', w),
-                _ProfileTile(icon: Icons.payment_rounded, label: 'Payment History', onTap: () => context.push('/patient/payment-history')),
-                _ProfileTile(icon: Icons.notifications_none_rounded, label: 'Notifications', onTap: () => context.push('/notifications')),
-                _ProfileTile(icon: Icons.info_outline_rounded, label: 'About Clinix', onTap: () => context.push('/about')),
-
-                SizedBox(height: w * 0.02),
-                Divider(color: AppColors.grey100),
-                _ProfileTile(
-                  icon: Icons.logout_rounded,
-                  label: 'Log Out',
-                  isDestructive: true,
-                  onTap: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Log Out'),
-                        content: const Text('Are you sure you want to log out?'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Logout', style: TextStyle(color: AppColors.error))),
+                  // ── Profile card ───────────────────────────────────────
+                  Center(
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 80, height: 80,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [AppColors.darkBlue500, AppColors.sky500],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            initials,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: w * 0.03),
+                        Text(
+                          _userName,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.darkBlue900,
+                          ),
+                        ),
+                        if (_userEmail.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            _userEmail,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              color: AppColors.grey500,
+                            ),
+                          ),
                         ],
-                      ),
-                    );
-                    if (confirmed == true) {
-                      await AuthService.logoutAndClear(context);
-                      if (context.mounted) context.go('/login');
-                    }
-                  },
-                ),
-                SizedBox(height: w * 0.15),
-              ],
+                        SizedBox(height: w * 0.04),
+                        GestureDetector(
+                          onTap: () {},
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: AppColors.sky600,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text(
+                              'Edit profile',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: w * 0.07),
+
+                  // ── Preferences ────────────────────────────────────────
+                  _SectionLabel(label: 'Preferences'),
+                  SizedBox(height: w * 0.025),
+                  _SettingsCard(children: [
+                    _ToggleTile(
+                      icon: Icons.notifications_outlined,
+                      label: 'Notifications and sounds',
+                      value: _notificationsEnabled,
+                      onChanged: (v) => setState(() => _notificationsEnabled = v),
+                    ),
+                    _Divider(),
+                    _NavTile(
+                      icon: Icons.language_rounded,
+                      label: 'Language',
+                      value: 'English',
+                      onTap: () {},
+                    ),
+                    _Divider(),
+                    _NavTile(
+                      icon: Icons.brightness_6_outlined,
+                      label: 'Theme',
+                      value: 'Light',
+                      onTap: () {},
+                    ),
+                  ]),
+
+                  SizedBox(height: w * 0.06),
+
+                  // ── Health ─────────────────────────────────────────────
+                  _SectionLabel(label: 'Health'),
+                  SizedBox(height: w * 0.025),
+                  _SettingsCard(children: [
+                    _NavTile(
+                      icon: Icons.folder_copy_outlined,
+                      label: 'Medical Records',
+                      onTap: () => context.push('/patient/medical-records'),
+                    ),
+                    _Divider(),
+                    _NavTile(
+                      icon: Icons.medication_outlined,
+                      label: 'Prescriptions',
+                      onTap: () => context.push('/patient/prescriptions'),
+                    ),
+                    _Divider(),
+                    _NavTile(
+                      icon: Icons.science_outlined,
+                      label: 'Lab Tests',
+                      onTap: () => context.push('/homecare/lab-tests'),
+                    ),
+                  ]),
+
+                  SizedBox(height: w * 0.06),
+
+                  // ── Account ────────────────────────────────────────────
+                  _SectionLabel(label: 'Account'),
+                  SizedBox(height: w * 0.025),
+                  _SettingsCard(children: [
+                    _NavTile(
+                      icon: Icons.lock_outline_rounded,
+                      label: 'Password',
+                      onTap: () {},
+                    ),
+                    _Divider(),
+                    _NavTile(
+                      icon: Icons.payment_outlined,
+                      label: 'Payment History',
+                      onTap: () => context.push('/patient/payment-history'),
+                    ),
+                    _Divider(),
+                    _NavTile(
+                      icon: Icons.headset_mic_outlined,
+                      label: 'Support',
+                      onTap: () => context.push('/about'),
+                    ),
+                    _Divider(),
+                    _NavTile(
+                      icon: Icons.cleaning_services_outlined,
+                      label: 'Clear cache',
+                      onTap: () {},
+                    ),
+                    _Divider(),
+                    _NavTile(
+                      icon: Icons.shield_outlined,
+                      label: 'Terms and Privacy Policy',
+                      onTap: () {},
+                    ),
+                    _Divider(),
+                    _NavTile(
+                      icon: Icons.logout_rounded,
+                      label: 'Logout',
+                      isDestructive: true,
+                      onTap: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Log Out'),
+                            content: const Text('Are you sure you want to log out?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Log Out', style: TextStyle(color: AppColors.error))),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true) {
+                          await AuthService.logoutAndClear(context);
+                          if (context.mounted) context.go('/login');
+                        }
+                      },
+                    ),
+                  ]),
+
+                  SizedBox(height: mq.padding.bottom + 32),
+                ],
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _sectionLabel(String text, double w) => Padding(
-    padding: EdgeInsets.only(top: w * 0.03, bottom: w * 0.015, left: w * 0.01),
-    child: Text(text.toUpperCase(), style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, fontWeight: FontWeight.w700, color: AppColors.grey400, letterSpacing: 1.2)),
+// ── Shared settings widgets ──────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel({required this.label});
+  @override
+  Widget build(BuildContext context) => Text(
+    label,
+    style: const TextStyle(
+      fontFamily: 'Inter',
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: AppColors.grey500,
+    ),
   );
 }
 
-class _ProfileTile extends StatelessWidget {
+class _SettingsCard extends StatelessWidget {
+  final List<Widget> children;
+  const _SettingsCard({required this.children});
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: AppColors.grey200),
+    ),
+    child: Column(children: children),
+  );
+}
+
+class _Divider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => const Divider(height: 1, indent: 52, endIndent: 0, color: Color(0xFFF1F5F9));
+}
+
+class _NavTile extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String? value;
   final VoidCallback onTap;
   final bool isDestructive;
-  const _ProfileTile({required this.icon, required this.label, required this.onTap, this.isDestructive = false});
+  const _NavTile({required this.icon, required this.label, required this.onTap, this.value, this.isDestructive = false});
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
-    final c = isDestructive ? AppColors.error : AppColors.splashSlate900;
+    final color = isDestructive ? AppColors.error : AppColors.darkBlue900;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: w * 0.035, horizontal: w * 0.01),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Container(
-              padding: EdgeInsets.all(w * 0.025),
-              decoration: BoxDecoration(
-                color: (isDestructive ? AppColors.error : AppColors.splashSlate900).withOpacity(0.06),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: c, size: w * 0.05),
+            Icon(icon, size: 20, color: isDestructive ? AppColors.error : AppColors.grey500),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(label, style: TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w500, color: color)),
             ),
-            SizedBox(width: w * 0.035),
-            Expanded(child: Text(label, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.038, fontWeight: FontWeight.w500, color: c))),
-            if (!isDestructive) Icon(Icons.chevron_right_rounded, color: AppColors.grey400, size: w * 0.05),
+            if (value != null) ...[
+              Text(value!, style: const TextStyle(fontFamily: 'Inter', fontSize: 14, color: AppColors.grey400)),
+              const SizedBox(width: 6),
+            ],
+            if (!isDestructive)
+              const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.grey400),
           ],
         ),
       ),
     );
   }
+}
+
+class _ToggleTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _ToggleTile({required this.icon, required this.label, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    child: Row(
+      children: [
+        Icon(icon, size: 20, color: AppColors.grey500),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.darkBlue900)),
+        ),
+        Switch.adaptive(
+          value: value,
+          onChanged: onChanged,
+          activeColor: AppColors.sky600,
+        ),
+      ],
+    ),
+  );
 }
 
 void _showRatingPrompt(BuildContext context, String doctorName) {

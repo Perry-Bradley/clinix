@@ -67,6 +67,7 @@ class AuthService {
       refresh: response.data['refresh']?.toString() ?? '',
       userType: response.data['user_type'] ?? 'unassigned',
       fullName: response.data['full_name'],
+      email: response.data['email'],
     );
     return response.data;
   }
@@ -155,11 +156,17 @@ class AuthService {
     required String refresh,
     required String userType,
     String? fullName,
+    String? email,
   }) async {
     await _storage.write(key: 'access_token', value: access);
     await _storage.write(key: 'refresh_token', value: refresh);
     await _storage.write(key: 'user_type', value: userType);
     if (fullName != null) await _storage.write(key: 'full_name', value: fullName);
+    if (email != null) await _storage.write(key: 'email', value: email);
+  }
+
+  static Future<String?> getUserEmail() async {
+    return await _storage.read(key: 'email');
   }
 
   static Future<String?> getUserType() async {

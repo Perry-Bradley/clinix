@@ -64,31 +64,11 @@ class FacilitiesListView(APIView):
     def get(self, request):
         # Return unique facility names from locations with phone numbers
         try:
-            facilities = Location.objects.exclude(
-                facility_name__isnull=True
+            # Simple query without distinct to avoid database errors
+            facilities = Location.objects.filter(
+                facility_name__isnull=False
             ).exclude(
-                facility_name__exact=""
-            ).values(
-                'facility_name', 'address', 'city', 'phone_number', 'location_id'
-            ).distinct('facility_name', 'address', 'city')
-            
-            data = [
-                {
-                    'facility_name': f['facility_name'],
-                    'address': f['address'],
-                    'city': f['city'],
-                    'phone_number': f['phone_number'],
-                    'location_id': str(f['location_id'])
-                }
-                for f in facilities
-            ]
-            return Response(data)
-        except Exception as e:
-            # If distinct fails, fall back to simple query
-            facilities = Location.objects.exclude(
-                facility_name__isnull=True
-            ).exclude(
-                facility_name__exact=""
+                facility_name=""
             ).values(
                 'facility_name', 'address', 'city', 'phone_number', 'location_id'
             )
@@ -104,6 +84,9 @@ class FacilitiesListView(APIView):
                 for f in facilities
             ]
             return Response(data)
+        except Exception as e:
+            # Return empty list on error
+            return Response([], status=status.HTTP_200_OK)
 
 class AdminFacilityUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]

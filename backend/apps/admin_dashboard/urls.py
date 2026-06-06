@@ -7,6 +7,7 @@ from .views import (
     AdminWithdrawalListView, AdminWithdrawalActionView, AdminRevenueStatsView,
     AdminSpecialtyListCreateView, AdminSpecialtyDetailView,
     UserResetPasswordView,
+    PharmacyListView, PharmacySyncView, PharmacyPhoneView,
 )
 
 urlpatterns = [
@@ -27,4 +28,7 @@ urlpatterns = [
     path('withdrawals/', AdminWithdrawalListView.as_view(), name='admin_withdrawals'),
     path('withdrawals/<int:pk>/action/', AdminWithdrawalActionView.as_view(), name='admin_withdrawal_action'),
     path('revenue-stats/', AdminRevenueStatsView.as_view(), name='revenue_stats'),
+    path('facilities/', PharmacyListView.as_view(), name='admin_facilities'),
+    path('facilities/sync/', PharmacySyncView.as_view(), name='admin_facilities_sync'),
+    path('facilities/<int:pk>/phone/', PharmacyPhoneView.as_view(), name='admin_facility_phone'),
 ]

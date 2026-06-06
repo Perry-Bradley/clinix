@@ -21,6 +21,10 @@ from django.db.models.functions import TruncDate
 import csv
 from django.http import HttpResponse
 from django.conf import settings
+import os
+import time
+import requests as http_requests
+from apps.locations.models import Pharmacy
 
 class PlatformDashboardView(APIView):
     permission_classes = [IsSuperAdminUser]
@@ -389,3 +393,142 @@ class AdminRevenueStatsView(APIView):
         ).order_by('date')
 
         return Response(list(daily_revenue))
+
+
+# ── Pharmacy directory (Google Places sync + phone editing) ──────────────────
+
+CAMEROON_CITIES = [
+    ('Douala',      4.0511,  9.7679),
+    ('Yaounde',     3.8480, 11.5021),
+    ('Buea',        4.1527,  9.2403),
+    ('Bafoussam',   5.4737, 10.4179),
+    ('Bamenda',     5.9597, 10.1451),
+    ('Garoua',      9.3017, 13.3920),
+    ('Maroua',     10.5910, 14.3236),
+    ('Ngaoundere',  7.3276, 13.5840),
+    ('Limbe',       4.0213,  9.2014),
+    ('Kumba',       4.6364,  9.4468),
+]
+
+PLACE_TYPES_TO_SYNC = ['pharmacy', 'hospital']
+
+
+class PharmacyListView(APIView):
+    permission_classes = [IsSuperAdminUser]
+
+    def get(self, request):
+        place_type = request.query_params.get('type')  # ?type=pharmacy or ?type=hospital
+        qs = Pharmacy.objects.all()
+        if place_type in PLACE_TYPES_TO_SYNC:
+            qs = qs.filter(place_type=place_type)
+        data = [
+            {
+                'id': p.id,
+                'place_id': p.place_id,
+                'name': p.name,
+                'place_type': p.place_type,
+                'address': p.address,
+                'city': p.city,
+                'phone_number': p.phone_number,
+                'latitude': str(p.latitude) if p.latitude else None,
+                'longitude': str(p.longitude) if p.longitude else None,
+                'synced_at': p.synced_at,
+            }
+            for p in qs
+        ]
+        return Response(data)
+
+
+class PharmacySyncView(APIView):
+    """Fetch pharmacies and hospitals from Google Places API and upsert into the DB."""
+    permission_classes = [IsSuperAdminUser]
+
+    def post(self, request):
+        api_key = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+        if not api_key:
+            return Response({'error': 'GOOGLE_MAPS_API_KEY not configured'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        created = updated = 0
+        errors = []
+
+        for place_type in PLACE_TYPES_TO_SYNC:
+            for city_name, lat, lng in CAMEROON_CITIES:
+                next_page_token = None
+                for _ in range(3):  # up to 3 pages = 60 results per city per type
+                    params = {
+                        'location': f'{lat},{lng}',
+                        'radius': 50000,
+                        'type': place_type,
+                        'key': api_key,
+                    }
+                    if next_page_token:
+                        params = {'pagetoken': next_page_token, 'key': api_key}
+
+                    try:
+                        r = http_requests.get(
+                            'https://maps.googleapis.com/maps/api/place/nearbysearch/json',
+                            params=params,
+                            timeout=15,
+                        )
+                        data = r.json()
+                    except Exception as e:
+                        errors.append(f'{place_type}/{city_name}: {e}')
+                        break
+
+                    for place in data.get('results', []):
+                        place_id = place.get('place_id')
+                        if not place_id:
+                            continue
+                        name = place.get('name', '')
+                        address = place.get('vicinity', '')
+                        p_lat = place.get('geometry', {}).get('location', {}).get('lat')
+                        p_lng = place.get('geometry', {}).get('location', {}).get('lng')
+
+                        obj, was_created = Pharmacy.objects.update_or_create(
+                            place_id=place_id,
+                            defaults={
+                                'name': name,
+                                'place_type': place_type,
+                                'address': address,
+                                'city': city_name,
+                                'latitude': p_lat,
+                                'longitude': p_lng,
+                            },
+                        )
+                        if was_created:
+                            created += 1
+                        else:
+                            updated += 1
+
+                    next_page_token = data.get('next_page_token')
+                    if not next_page_token:
+                        break
+                    time.sleep(2)  # required delay before using next_page_token
+
+        return Response({
+            'created': created,
+            'updated': updated,
+            'total': Pharmacy.objects.count(),
+            'errors': errors,
+        })
+
+
+class PharmacyPhoneView(APIView):
+    """PATCH to update a pharmacy's phone number."""
+    permission_classes = [IsSuperAdminUser]
+
+    def patch(self, request, pk):
+        try:
+            pharmacy = Pharmacy.objects.get(pk=pk)
+        except Pharmacy.DoesNotExist:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        phone = request.data.get('phone_number', '').strip()
+        pharmacy.phone_number = phone or None
+        pharmacy.save(update_fields=['phone_number'])
+        return Response({
+            'id': pharmacy.id,
+            'name': pharmacy.name,
+            'place_type': pharmacy.place_type,
+            'phone_number': pharmacy.phone_number,
+        })
