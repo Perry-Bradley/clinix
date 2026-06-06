@@ -8,6 +8,7 @@ import Patients from './pages/Patients';
 import Revenue from './pages/Revenue';
 import LabTests from './pages/LabTests';
 import Specialties from './pages/Specialties';
+import Facilities from './pages/Facilities';
 
 // Mock authentication check
 const isAuthenticated = () => {
@@ -37,6 +38,7 @@ function App() {
         <Route path="revenue" element={<Revenue />} />
         <Route path="lab-tests" element={<LabTests />} />
         <Route path="specialties" element={<Specialties />} />
+        <Route path="facilities" element={<Facilities />} />
       </Route>
     </Routes>
   );

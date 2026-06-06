@@ -17,6 +17,7 @@ class Location(models.Model):
     region = models.CharField(max_length=100, blank=True, null=True)
     latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True, help_text='Contact phone number for the facility')
     is_home_visit = models.BooleanField(default=False)
 
     class Meta:

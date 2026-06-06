@@ -369,17 +369,33 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
                   
                   const SizedBox(height: 40),
 
-                  // Fixed Booking Button at bottom
+                  // Fixed Call Button at bottom
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: () => context.push('/patient/book-appointment'),
+                      onPressed: () {
+                        final phone = _clinicDetails?['formatted_phone_number']?.toString()
+                            ?? _clinicDetails?['international_phone_number']?.toString();
+                        if (phone != null && phone.isNotEmpty) {
+                          final uri = Uri.parse('tel:${phone.replaceAll(RegExp(r'\s+'), '')}');
+                          launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } else {
+                          _toast('No phone number available');
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.darkBlue900,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
-                      child: Text('Book Appointment Now', style: AppTextStyles.bodyLarge.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.phone_rounded, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text('Call Now', style: AppTextStyles.bodyLarge.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
                   ),
                 ],

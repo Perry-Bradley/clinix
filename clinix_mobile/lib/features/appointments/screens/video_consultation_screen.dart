@@ -53,6 +53,8 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   @override
   void initState() {
     super.initState();
+    // Note: Wake lock temporarily disabled due to build compatibility issues
+    // TODO: Implement alternative sleep prevention method
     _startSession();
   }
 

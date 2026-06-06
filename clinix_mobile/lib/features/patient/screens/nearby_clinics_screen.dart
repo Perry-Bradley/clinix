@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
 import '../../../core/theme/app_colors.dart';
@@ -58,6 +59,15 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
     super.initState();
     _loadCustomMarker();
     _determinePosition();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh data when screen is resumed
+    if (mounted && _currentPosition != null) {
+      _searchNearbyClinics(_currentPosition!, silent: true);
+    }
   }
 
   Future<void> _loadCustomMarker() async {
@@ -143,7 +153,7 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
       try {
         position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.medium,
-          timeLimit: const Duration(seconds: 7),
+          timeLimit: const Duration(seconds: 20),
         );
       } catch (e) {
         print('getCurrentPosition timed out, using ${position == null ? 'default' : 'last-known'} position: $e');
@@ -232,6 +242,7 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
       final seen = <String>{}; // dedupe by place_id
       final fresh = <Map<String, dynamic>>[];
 
+      // Fetch Google Places data
       final futures = queries.map((q) async {
         final url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
             '?location=${position.latitude},${position.longitude}'
@@ -256,10 +267,37 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
             'open_now': r['opening_hours']?['open_now'] ?? false,
             'type': q['bucket'],
             'photo_ref': _firstPhotoRef(r['photos']),
+            'phone_number': null, // Will be filled from backend
           });
         }
       });
       await Future.wait(futures);
+
+      // Fetch backend facilities with phone numbers (hybrid approach)
+      try {
+        final backendFacilities = await _fetchBackendFacilities();
+        // Match Google Places with backend facilities by name/address
+        for (var clinic in fresh) {
+          final googleName = clinic['name']?.toString().toLowerCase() ?? '';
+          final googleAddress = clinic['address']?.toString().toLowerCase() ?? '';
+          
+          // Try to find matching backend facility
+          for (var backendFac in backendFacilities) {
+            final backendName = backendFac['facility_name']?.toString().toLowerCase() ?? '';
+            final backendAddress = backendFac['address']?.toString().toLowerCase() ?? '';
+            
+            // Match if names are similar or addresses match
+            if ((googleName.contains(backendName) || backendName.contains(googleName)) ||
+                (googleAddress.contains(backendAddress) || backendAddress.contains(googleAddress))) {
+              clinic['phone_number'] = backendFac['phone_number'];
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        print('Error fetching backend facilities: $e');
+        // Continue without phone numbers if backend fetch fails
+      }
 
       if (fresh.isEmpty) {
         // Don't wipe a good cache when the network call returns nothing.
@@ -285,6 +323,21 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
       print('Error searching places: $e');
     } finally {
       if (mounted) setState(() => _isSearching = false);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchBackendFacilities() async {
+    try {
+      final response = await _dio.get(
+        'https://clinix-production-81cf.up.railway.app/api/v1/locations/facilities/',
+      );
+      if (response.data is List) {
+        return List<Map<String, dynamic>>.from(response.data);
+      }
+      return [];
+    } catch (e) {
+      print('Error fetching backend facilities: $e');
+      return [];
     }
   }
 
@@ -801,6 +854,15 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
               Icon(Icons.local_hospital_outlined, size: 64, color: AppColors.grey200),
               const SizedBox(height: 16),
               Text('No clinics found nearby', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400)),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => _determinePosition(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.sky600,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Refresh'),
+              ),
             ],
           ),
         ),
@@ -809,19 +871,23 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
 
     return Positioned.fill(
       top: 130,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        itemCount: clinics.length,
-        itemBuilder: (context, index) {
-          final clinic = clinics[index];
-          final isOpen = clinic['open_now'] ?? false;
-          final distance = _calculateDistance(clinic['lat'], clinic['lng']);
+      child: RefreshIndicator(
+        onRefresh: () => _determinePosition(),
+        color: AppColors.sky600,
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          itemCount: clinics.length,
+          itemBuilder: (context, index) {
+            final clinic = clinics[index];
+            final isOpen = clinic['open_now'] ?? false;
+            final distance = _calculateDistance(clinic['lat'], clinic['lng']);
+            final phoneNumber = clinic['phone_number']?.toString();
 
-          return GestureDetector(
-            onTap: () => context.push('/patient/clinic-profile/${clinic['id']}'),
-            child: Container(
-            margin: const EdgeInsets.only(bottom: 14),
-            decoration: BoxDecoration(
+            return GestureDetector(
+              onTap: () => context.push('/patient/clinic-profile/${clinic['id']}'),
+              child: Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: AppColors.grey200),
@@ -907,6 +973,26 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
                       ],
                     ],
                   ),
+                  if (phoneNumber != null && phoneNumber.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.phone_rounded, color: AppColors.sky500, size: 16),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            phoneNumber,
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.sky600,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   Row(
                     children: [
@@ -955,11 +1041,12 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
                 ],
               ),
             ),
-            ),
-          );
-        },
-      ),
-    );
+          ),
+        );
+      },
+    ),
+  ),
+  );
   }
 
   Widget _buildIconButton(IconData icon, VoidCallback onTap) {
@@ -975,6 +1062,19 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
         child: Icon(icon, color: AppColors.darkBlue900),
       ),
     );
+  }
+
+  Future<void> _launchPhoneCall(String phoneNumber) async {
+    final uri = Uri.parse('tel:$phoneNumber');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not launch call to $phoneNumber')),
+        );
+      }
+    }
   }
 
 }

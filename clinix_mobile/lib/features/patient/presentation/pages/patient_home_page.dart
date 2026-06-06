@@ -9,6 +9,7 @@ import '../../../shared/widgets/swipe_to_delete.dart';
 import '../../screens/doctors_list_screen.dart';
 import '../../screens/nearby_clinics_screen.dart';
 import '../../screens/health_dashboard_screen.dart';
+import '../../screens/messages_inbox_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/health_metric_service.dart';
 import 'package:intl/intl.dart';
@@ -31,7 +32,7 @@ class _PatientHomePageState extends State<PatientHomePage> {
     _PatientDashboard(),
     DoctorsListScreen(),
     NearbyClinicsScreen(),
-    HealthDashboardScreen(),
+    MessagesInboxScreen(isProvider: false),
     _PatientProfileTab(),
   ];
 
@@ -52,7 +53,8 @@ class _PatientHomePageState extends State<PatientHomePage> {
           BubbleNavItem(icon: Icons.home_outlined, label: 'Home'),
           BubbleNavItem(icon: Icons.medical_services_outlined, label: 'Doctors'),
           BubbleNavItem(icon: Icons.local_hospital_outlined, label: 'Facilities'),
-          BubbleNavItem(icon: Icons.favorite_outline_rounded, label: 'Health'),
+          // BubbleNavItem(icon: Icons.favorite_outline_rounded, label: 'Health'), // Commented out - health tracking hidden
+          BubbleNavItem(icon: Icons.chat_bubble_outline_rounded, label: 'Messages'),
           BubbleNavItem(icon: Icons.person_outline_rounded, label: 'Profile'),
         ],
       ),
@@ -95,7 +97,8 @@ class _PatientDashboardState extends State<_PatientDashboard> {
       final all = await AppointmentService.getMyAppointments();
       final now = DateTime.now();
       final upcoming = all.where((a) {
-        final status = a['status']?.toString() ?? '';
+        final status = a['status']?.toString().toLowerCase() ?? '';
+        // Exclude canceled/cancelled, completed, and no-show appointments
         if (status != 'pending' && status != 'confirmed') return false;
         final dateStr = a['scheduled_at']?.toString();
         if (dateStr == null) return false;
@@ -359,10 +362,7 @@ class _PatientDashboardState extends State<_PatientDashboard> {
                 children: [
                   _FeatureCard(icon: Icons.home_rounded, title: 'HomeCare', subtitle: 'Care at Home', onTap: () => context.push('/homecare')),
                   SizedBox(width: w * 0.03),
-                  _FeatureCard(icon: Icons.monitor_heart_rounded, title: 'Health', subtitle: 'Track Vitals', onTap: () {
-                    final state = context.findAncestorStateOfType<_PatientHomePageState>();
-                    state?.setState(() => state._selectedTab = 3);
-                  }),
+                  _FeatureCard(icon: Icons.calendar_month_rounded, title: 'Bookings', subtitle: 'Appointments', onTap: () => context.push('/patient/appointments')),
                 ],
               ),
               SizedBox(height: w * 0.045),
@@ -371,12 +371,13 @@ class _PatientDashboardState extends State<_PatientDashboard> {
               else
                 _BookAppointmentCard(),
               SizedBox(height: w * 0.04),
-              Consumer(
-                builder: (context, ref, child) {
-                  final summaryAsync = ref.watch(healthSummaryProvider);
-                  return _AnimatedHealthCard(summaryAsync: summaryAsync);
-                },
-              ),
+              // Consumer(
+              //   builder: (context, ref, child) {
+              //     final summaryAsync = ref.watch(healthSummaryProvider);
+              //     return _AnimatedHealthCard(summaryAsync: summaryAsync);
+              //   },
+              // ),
+              // Commented out - health tracking card with heart rate hidden
               SizedBox(height: w * 0.04),
               const _QuickServicesRow(),
               SizedBox(height: mq.padding.bottom + 16),
@@ -759,7 +760,7 @@ class _QuickServicesRow extends StatelessWidget {
       children: [
         _QuickServiceTile(icon: Icons.medication_rounded, label: 'Prescriptions', onTap: () => context.push('/patient/prescriptions')),
         SizedBox(width: w * 0.025),
-        _QuickServiceTile(icon: Icons.chat_rounded, label: 'Messages', onTap: () => context.push('/patient/messages')),
+        _QuickServiceTile(icon: Icons.science_rounded, label: 'Lab Tests', onTap: () => context.push('/homecare/lab-tests')),
         SizedBox(width: w * 0.025),
         _QuickServiceTile(icon: Icons.receipt_long_rounded, label: 'Records', onTap: () => context.push('/patient/medical-records')),
       ],

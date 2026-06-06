@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/appointment_service.dart';
+import '../services/auth_service.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/auth/presentation/pages/onboarding_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
@@ -43,6 +45,48 @@ import '../../features/provider/screens/provider_appointments_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
+  redirect: (context, state) async {
+    final currentLocation = state.uri.path;
+    
+    // Check if user is already logged in to skip splash screen
+    final token = await AuthService.getAccessToken();
+    final userType = await AuthService.getUserType();
+    final onboardingSeen = await const FlutterSecureStorage().read(key: 'onboarding_seen');
+
+    // If user is trying to access splash/login/onboarding while authenticated, redirect to home
+    if (token != null && (currentLocation == '/splash' || currentLocation == '/login' || currentLocation == '/onboarding')) {
+      if (userType == 'unassigned') {
+        return '/role-selection';
+      } else if (userType == 'provider') {
+        return '/provider/home';
+      } else {
+        return '/patient/home';
+      }
+    }
+
+    // If user is trying to access protected route while not authenticated, redirect to login
+    if (token == null && !currentLocation.startsWith('/login') && !currentLocation.startsWith('/register') && !currentLocation.startsWith('/onboarding')) {
+      return '/login';
+    }
+
+    // If on splash and onboarding not seen, go to onboarding
+    if (currentLocation == '/splash' && onboardingSeen != 'true') {
+      return '/onboarding';
+    }
+
+    // If on splash and authenticated, redirect to appropriate home
+    if (currentLocation == '/splash' && token != null) {
+      if (userType == 'unassigned') {
+        return '/role-selection';
+      } else if (userType == 'provider') {
+        return '/provider/home';
+      } else {
+        return '/patient/home';
+      }
+    }
+
+    return null; // No redirect needed
+  },
   routes: [
     GoRoute(path: '/splash', builder: (c, s) => const SplashPage()),
     GoRoute(path: '/onboarding', builder: (c, s) => const OnboardingPage()),

@@ -65,6 +65,15 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
     _loadDoctors();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh data when screen is resumed (e.g., after adding a doctor)
+    if (mounted) {
+      _loadDoctors();
+    }
+  }
+
 
   Future<void> _loadDoctors() async {
     try {
@@ -76,7 +85,7 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
       try {
         position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.medium,
-          timeLimit: const Duration(seconds: 4),
+          timeLimit: const Duration(seconds: 15),
         );
       } catch (e) {
         print('Doctors list: location unavailable, continuing without lat/lng: $e');
@@ -113,6 +122,25 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
             final role = (d['provider_role'] ?? '').toString().toLowerCase();
             return role != 'nurse';
           }).toList();
+
+          // Sort doctors by: 1) Has location (closer first), 2) Rating (higher first), 3) Name
+          results.sort((a, b) {
+            // Priority 1: Doctors with location data
+            final aHasLoc = a['distance_km'] != null;
+            final bHasLoc = b['distance_km'] != null;
+            if (aHasLoc && !bHasLoc) return -1;
+            if (!aHasLoc && bHasLoc) return 1;
+            
+            // Priority 2: Rating (higher first)
+            final aRating = (a['average_rating'] as num?)?.toDouble() ?? 0.0;
+            final bRating = (b['average_rating'] as num?)?.toDouble() ?? 0.0;
+            if (aRating != bRating) return bRating.compareTo(aRating);
+            
+            // Priority 3: Name (alphabetical)
+            final aName = (a['full_name'] ?? '').toString().toLowerCase();
+            final bName = (b['full_name'] ?? '').toString().toLowerCase();
+            return aName.compareTo(bName);
+          });
 
           _doctors = results;
           _isLoading = false;
@@ -161,7 +189,21 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(_error!, textAlign: TextAlign.center, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_error!, textAlign: TextAlign.center, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400)),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadDoctors,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.sky600,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -170,10 +212,14 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
         child: Text('No doctors match your search', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey400)),
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-      itemCount: _filteredDoctors.length,
-      itemBuilder: (ctx, i) => _DoctorCard(doctor: _filteredDoctors[i]),
+    return RefreshIndicator(
+      onRefresh: _loadDoctors,
+      color: AppColors.sky600,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+        itemCount: _filteredDoctors.length,
+        itemBuilder: (ctx, i) => _DoctorCard(doctor: _filteredDoctors[i]),
+      ),
     );
   }
 }

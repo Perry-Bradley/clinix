@@ -14,4 +14,5 @@ class LocationUpdateSerializer(serializers.ModelSerializer):
             'region',
             'address',
             'facility_name',
+            'phone_number',
         )
