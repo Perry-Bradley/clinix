@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCheck, LogOut, Bell, Settings, HeartPulse, TrendingUp, FlaskConical, Stethoscope } from 'lucide-react';
+import { LayoutDashboard, Users, UserCheck, LogOut, Bell, Settings, HeartPulse, TrendingUp, FlaskConical, Stethoscope, Building2 } from 'lucide-react';
 
 const Layout = () => {
   const navigate = useNavigate();
@@ -16,6 +16,7 @@ const Layout = () => {
     { path: '/users', icon: <Users size={18} />, label: 'Users' },
     { path: '/verifications', icon: <UserCheck size={18} />, label: 'Verifications' },
     { path: '/specialties', icon: <Stethoscope size={18} />, label: 'Specialties' },
+    { path: '/facilities', icon: <Building2 size={18} />, label: 'Facilities' },
     { path: '/revenue', icon: <TrendingUp size={18} />, label: 'Finance' },
     { path: '/lab-tests', icon: <FlaskConical size={18} />, label: 'Lab Tests' },
   ];
