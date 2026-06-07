@@ -87,7 +87,7 @@ const Dashboard = () => {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 overflow-hidden relative">
             <div className="absolute top-0 right-0 p-8 opacity-5">
-              <DollarSign size={160} className="text-dark-900" />
+              <TrendingUp size={160} className="text-dark-900" />
             </div>
             
             <div className="relative z-10">
