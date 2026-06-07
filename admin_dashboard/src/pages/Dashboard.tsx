@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Users, UserCheck, DollarSign, TrendingUp } from 'lucide-react';
+import { Activity, Users, UserCheck, TrendingUp } from 'lucide-react';
 import { API_BASE } from '../config';
 
 interface DashboardStats {
@@ -27,17 +27,12 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
     if (!res.ok) throw new Error('Network response was not ok');
     const data = await res.json();
     
-    // Also fetch global fee
-    const feeRes = await fetch(`${API_BASE}/system/settings/fee/`, { headers });
-    const feeData = feeRes.ok ? await feeRes.json() : { consultation_fee: 15000 };
-    
     return {
       total_patients: data.total_patients,
       total_providers: data.total_providers,
       pending_verifications: data.pending_verifications,
       total_consultations: data.total_consultations,
       total_revenue: data.total_revenue,
-      global_fee: feeData.consultation_fee,
     };
   } catch (error) {
     console.error("Failed fetching dashboard stats:", error);
@@ -47,7 +42,6 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
       pending_verifications: 0,
       total_consultations: 0,
       total_revenue: 0,
-      global_fee: 15000,
     };
   }
 };
