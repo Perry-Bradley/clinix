@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Users, UserCheck, DollarSign, TrendingUp, Settings, Save, RefreshCw } from 'lucide-react';
+import { Activity, Users, UserCheck, DollarSign, TrendingUp } from 'lucide-react';
 import { API_BASE } from '../config';
 
 interface DashboardStats {
@@ -9,7 +8,6 @@ interface DashboardStats {
   pending_verifications: number;
   total_consultations: number;
   total_revenue: number;
-  global_fee: number;
 }
 
 const fetchDashboardStats = async (): Promise<DashboardStats> => {
@@ -55,42 +53,10 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
 };
 
 const Dashboard = () => {
-  const [platformFee, setPlatformFee] = useState(15000);
-  const [isUpdating, setIsUpdating] = useState(false);
-
   const { data, isLoading } = useQuery<DashboardStats>({
     queryKey: ['dashboardStats'],
     queryFn: fetchDashboardStats,
   });
-
-  // Sync state once data loads
-  useEffect(() => {
-    if (data?.global_fee) {
-      setPlatformFee(data.global_fee);
-    }
-  }, [data?.global_fee]);
-
-  const handleUpdateFee = async () => {
-    setIsUpdating(true);
-    const token = localStorage.getItem('clinix_admin_token');
-    try {
-      const res = await fetch(`${API_BASE}/system/settings/fee/`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ consultation_fee: platformFee })
-      });
-      if (!res.ok) throw new Error('Update failed');
-      alert(`Success: Platform Fee updated to ${platformFee.toLocaleString()} XAF`);
-    } catch (error) {
-      alert('Failed to update platform fee');
-      console.error(error);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-64">
@@ -159,48 +125,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Fee Management Card */}
-          <div className="bg-white rounded-3xl shadow-sm border border-orange-100 p-8 relative overflow-hidden">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="p-2.5 bg-orange-100 text-orange-600 rounded-xl">
-                <Settings size={20} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-dark-900">System Transaction Controls</h3>
-                <p className="text-xs text-gray-400">Configure global consultation pricing</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2 ml-1">Universal Consultation Fee (XAF)</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-300 font-bold">XAF</div>
-                  <input 
-                    type="number"
-                    value={platformFee}
-                    onChange={(e) => setPlatformFee(Number(e.target.value))}
-                    className="w-full pl-14 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400 outline-none transition-all font-bold text-dark-900"
-                  />
-                </div>
-              </div>
-              <div className="flex space-x-2">
-                <button 
-                  onClick={handleUpdateFee}
-                  disabled={isUpdating}
-                  className="flex-1 flex items-center justify-center space-x-2 px-6 py-3.5 bg-dark-900 text-white rounded-2xl font-bold text-sm hover:bg-dark-700 transition-all shadow-lg active:scale-95 disabled:opacity-50"
-                >
-                  {isUpdating ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                  <span>{isUpdating ? 'Updating...' : 'Save Changes'}</span>
-                </button>
-              </div>
-            </div>
-            
-            <div className="mt-6 flex items-start space-x-3 p-4 bg-orange-50/50 rounded-2xl border border-orange-100/50">
-              <TrendingUp size={16} className="text-orange-500 mt-0.5" />
-              <p className="text-[11px] text-orange-700 font-medium">Changes here reflect immediately on the patient mobile checkout flow. Ensure consistency with regional medical standards.</p>
-            </div>
-          </div>
         </div>
 
         {/* Quick Actions Panel */}

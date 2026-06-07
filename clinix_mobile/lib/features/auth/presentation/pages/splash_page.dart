@@ -1,9 +1,8 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:clinix_mobile/core/services/auth_service.dart';
-import 'package:clinix_mobile/core/theme/app_colors.dart';
-import 'package:clinix_mobile/core/theme/app_text_styles.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -13,298 +12,248 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
-  late AnimationController _mainController;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _blurAnimation;
+  late AnimationController _bgPulseCtrl;
+  late AnimationController _introCtrl;
+  late AnimationController _featuresCtrl;
+  late AnimationController _orbitCtrl;
+
+  late Animation<double> _logoFade;
+  late Animation<double> _logoScale;
+  late Animation<double> _taglineFade;
+  late Animation<double> _featureSlide;
 
   @override
   void initState() {
     super.initState();
-    _mainController = AnimationController(
+
+    _bgPulseCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 3000),
+    )..repeat(reverse: true);
+
+    _orbitCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 8000),
+    )..repeat();
+
+    _introCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _mainController,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeIn),
-      ),
+    _featuresCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _mainController,
-        curve: const Interval(0.0, 0.8, curve: Curves.elasticOut),
-      ),
+    _logoFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _introCtrl, curve: const Interval(0.0, 0.6, curve: Curves.easeOut)),
+    );
+    _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _introCtrl, curve: const Interval(0.0, 0.7, curve: Curves.elasticOut)),
+    );
+    _taglineFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _introCtrl, curve: const Interval(0.5, 1.0, curve: Curves.easeOut)),
+    );
+    _featureSlide = Tween<double>(begin: 60.0, end: 0.0).animate(
+      CurvedAnimation(parent: _featuresCtrl, curve: Curves.easeOutCubic),
     );
 
-    _blurAnimation = Tween<double>(begin: 10.0, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _mainController,
-        curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
-      ),
-    );
-
-    _mainController.forward().then((_) async {
-      const storage = FlutterSecureStorage();
-      final onboardingSeen = await storage.read(key: 'onboarding_seen');
-      final token = await AuthService.getAccessToken();
-      final userType = await AuthService.getUserType();
-
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!mounted) return;
-
-        // Show onboarding on first launch (before login)
-        if (onboardingSeen != 'true') {
-          context.go('/onboarding');
-          return;
-        }
-
-        if (token == null) {
-          context.go('/login');
-          return;
-        }
-
-        if (userType == 'unassigned') {
-          context.go('/role-selection');
-        } else if (userType == 'provider') {
-          context.go('/provider/home');
-        } else {
-          context.go('/patient/home');
-        }
-      });
+    _introCtrl.forward().then((_) {
+      _featuresCtrl.forward();
+      _navigate();
     });
+  }
+
+  Future<void> _navigate() async {
+    await Future.delayed(const Duration(milliseconds: 1800));
+    const storage = FlutterSecureStorage();
+    final onboardingSeen = await storage.read(key: 'onboarding_seen');
+    final token = await AuthService.getAccessToken();
+    final userType = await AuthService.getUserType();
+    if (!mounted) return;
+    if (onboardingSeen != 'true') {
+      context.go('/onboarding');
+    } else if (token == null) {
+      context.go('/login');
+    } else if (userType == 'unassigned') {
+      context.go('/role-selection');
+    } else if (userType == 'provider') {
+      context.go('/provider/home');
+    } else {
+      context.go('/patient/home');
+    }
   }
 
   @override
   void dispose() {
-    _mainController.dispose();
+    _bgPulseCtrl.dispose();
+    _introCtrl.dispose();
+    _featuresCtrl.dispose();
+    _orbitCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF07111F),
       body: Stack(
         children: [
-          // Animated gradient background
+          // ── Animated background with gradient blobs + grid ──
           Positioned.fill(
             child: AnimatedBuilder(
-              animation: _mainController,
-              builder: (context, child) {
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Colors.white,
-                        AppColors.sky100.withOpacity(0.3),
-                        Colors.white,
-                      ],
-                      stops: const [0.0, 0.5, 1.0],
-                    ),
-                  ),
-                );
-              },
+              animation: _bgPulseCtrl,
+              builder: (_, __) => CustomPaint(
+                painter: _BackgroundPainter(_bgPulseCtrl.value),
+              ),
             ),
           ),
 
-          // Floating medical icons for visual interest
+          // ── Orbiting medical cross illustration ──
           Positioned(
-            top: 80,
-            left: 40,
-            child: AnimatedBuilder(
-              animation: _mainController,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, _mainController.value * 20),
-                  child: Opacity(
-                    opacity: _fadeAnimation.value * 0.6,
-                    child: Icon(
-                      Icons.favorite_rounded,
-                      size: 32,
-                      color: AppColors.sky300,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            top: 150,
-            right: 50,
-            child: AnimatedBuilder(
-              animation: _mainController,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, -_mainController.value * 15),
-                  child: Opacity(
-                    opacity: _fadeAnimation.value * 0.5,
-                    child: Icon(
-                      Icons.medical_services_rounded,
-                      size: 28,
-                      color: AppColors.sky200,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            bottom: 200,
-            left: 60,
-            child: AnimatedBuilder(
-              animation: _mainController,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, -_mainController.value * 10),
-                  child: Opacity(
-                    opacity: _fadeAnimation.value * 0.4,
-                    child: Icon(
-                      Icons.local_hospital_rounded,
-                      size: 36,
-                      color: AppColors.sky100,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            bottom: 280,
-            right: 70,
-            child: AnimatedBuilder(
-              animation: _mainController,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, _mainController.value * 12),
-                  child: Opacity(
-                    opacity: _fadeAnimation.value * 0.5,
-                    child: Icon(
-                      Icons.health_and_safety_rounded,
-                      size: 30,
-                      color: AppColors.sky200,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Animated content
-          Center(
-            child: AnimatedBuilder(
-              animation: _mainController,
-              builder: (context, child) {
-                return FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: ScaleTransition(
-                    scale: _scaleAnimation,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Logo block with enhanced shadow
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: AppColors.darkBlue500,
-                            borderRadius: BorderRadius.circular(28),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.darkBlue500.withOpacity(0.25),
-                                blurRadius: 40,
-                                offset: const Offset(0, 16),
-                                spreadRadius: 4,
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Image.asset(
-                              'assets/icons/clinix_logo.png',
-                              width: 70,
-                              height: 70,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        // App Name with gradient effect
-                        ShaderMask(
-                          shaderCallback: (bounds) => LinearGradient(
-                            colors: [
-                              AppColors.darkBlue900,
-                              AppColors.darkBlue500,
-                              AppColors.sky600,
-                            ],
-                          ).createShader(bounds),
-                          child: const Text(
-                            'CLINIX',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 48,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              letterSpacing: 10,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Pioneering Modern Healthcare',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.grey500,
-                            letterSpacing: 2.5,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        // Loading steps indicator
-                        _buildLoadingSteps(),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Bottom progress bar
-          Positioned(
-            bottom: 80,
+            top: size.height * 0.14,
             left: 0,
             right: 0,
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 48),
-                child: Column(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(99),
-                      child: LinearProgressIndicator(
-                        backgroundColor: AppColors.grey200,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          AppColors.darkBlue500,
+            child: SizedBox(
+              height: 280,
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_orbitCtrl, _introCtrl]),
+                builder: (_, __) => CustomPaint(
+                  painter: _OrbitPainter(
+                    _orbitCtrl.value,
+                    _introCtrl.value.clamp(0.0, 1.0),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Logo + wordmark ──
+          Positioned(
+            top: size.height * 0.28,
+            left: 0,
+            right: 0,
+            child: AnimatedBuilder(
+              animation: _introCtrl,
+              builder: (_, __) => Opacity(
+                opacity: _logoFade.value,
+                child: Transform.scale(
+                  scale: _logoScale.value,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Glowing logo circle
+                      Container(
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const RadialGradient(
+                            colors: [Color(0xFF1E6FD9), Color(0xFF0A3872)],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF1E6FD9).withOpacity(0.55),
+                              blurRadius: 48,
+                              spreadRadius: 6,
+                            ),
+                          ],
                         ),
-                        minHeight: 4,
+                        child: Center(
+                          child: Image.asset(
+                            'assets/icons/clinix_logo.png',
+                            width: 52,
+                            height: 52,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Loading your healthcare experience...',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.grey400,
-                        letterSpacing: 0.5,
+                      const SizedBox(height: 22),
+                      // CLINIX wordmark with gradient
+                      ShaderMask(
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [Color(0xFFFFFFFF), Color(0xFF93C5FD)],
+                        ).createShader(bounds),
+                        child: const Text(
+                          'CLINIX',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 44,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: 12,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Opacity(
+                        opacity: _taglineFade.value,
+                        child: const Text(
+                          'Your Health, Our Priority',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: Color(0xFF7BA7D4),
+                            letterSpacing: 1.8,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Feature service cards ──
+          Positioned(
+            bottom: 72,
+            left: 24,
+            right: 24,
+            child: AnimatedBuilder(
+              animation: _featuresCtrl,
+              builder: (_, __) => Opacity(
+                opacity: _featuresCtrl.value,
+                child: Transform.translate(
+                  offset: Offset(0, _featureSlide.value),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          _FeatureCard(
+                            icon: Icons.video_call_rounded,
+                            color: const Color(0xFF3B82F6),
+                            label: 'Virtual\nConsults',
+                          ),
+                          const SizedBox(width: 10),
+                          _FeatureCard(
+                            icon: Icons.biotech_rounded,
+                            color: const Color(0xFF10B981),
+                            label: 'Lab\nTests',
+                          ),
+                          const SizedBox(width: 10),
+                          _FeatureCard(
+                            icon: Icons.home_health_rounded,
+                            color: const Color(0xFFF59E0B),
+                            label: 'Home\nCare',
+                          ),
+                          const SizedBox(width: 10),
+                          _FeatureCard(
+                            icon: Icons.local_hospital_rounded,
+                            color: const Color(0xFFEC4899),
+                            label: 'In-Person\nVisits',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      _LoadingDots(),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -313,74 +262,268 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
       ),
     );
   }
+}
 
-  Widget _buildLoadingSteps() {
-    return AnimatedBuilder(
-      animation: _mainController,
-      builder: (context, child) {
-        final progress = _mainController.value;
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildStepDot(0, progress, Icons.check_circle_rounded),
-            _buildStepDot(1, progress, Icons.person_rounded),
-            _buildStepDot(2, progress, Icons.home_rounded),
+// ── Background: dark navy with gradient blobs + subtle grid ─────────────────
+class _BackgroundPainter extends CustomPainter {
+  final double t;
+  _BackgroundPainter(this.t);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF07111F));
+
+    // Top-right blue blob
+    canvas.drawCircle(
+      Offset(size.width * 0.78, size.height * 0.14),
+      260 + 20 * t,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFF1E3A8A).withOpacity(0.45 + 0.12 * t),
+            Colors.transparent,
           ],
-        );
-      },
+        ).createShader(Rect.fromCircle(
+          center: Offset(size.width * 0.78, size.height * 0.14),
+          radius: 280,
+        )),
+    );
+
+    // Bottom-left teal blob
+    canvas.drawCircle(
+      Offset(size.width * 0.18, size.height * 0.84),
+      200 + 15 * (1 - t),
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFF0E7490).withOpacity(0.30 + 0.10 * t),
+            Colors.transparent,
+          ],
+        ).createShader(Rect.fromCircle(
+          center: Offset(size.width * 0.18, size.height * 0.84),
+          radius: 220,
+        )),
+    );
+
+    // Subtle grid
+    final grid = Paint()
+      ..color = const Color(0xFF1E3A5F).withOpacity(0.18)
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.stroke;
+    const step = 38.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+
+    // Bottom vignette fade
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.transparent, const Color(0xFF07111F).withOpacity(0.85)],
+          stops: const [0.55, 1.0],
+        ).createShader(Offset.zero & size),
     );
   }
 
-  Widget _buildStepDot(int index, double progress, IconData icon) {
-    final isActive = progress >= (index + 1) / 3;
-    final isCurrent = progress >= index / 3 && progress < (index + 1) / 3;
-    
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      child: Column(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
+  @override
+  bool shouldRepaint(_BackgroundPainter old) => old.t != t;
+}
+
+// ── Orbiting dots around a medical cross ─────────────────────────────────────
+class _OrbitPainter extends CustomPainter {
+  final double orbitT;
+  final double introT;
+  _OrbitPainter(this.orbitT, this.introT);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final alpha = (introT * 255).round().clamp(0, 255);
+
+    // Outer orbit ring
+    canvas.drawCircle(
+      Offset(cx, cy),
+      112,
+      Paint()
+        ..color = const Color(0xFF1E6FD9).withOpacity(0.12 * introT)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+
+    // Inner orbit ring
+    canvas.drawCircle(
+      Offset(cx, cy),
+      76,
+      Paint()
+        ..color = const Color(0xFF1E6FD9).withOpacity(0.08 * introT)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+
+    // 4 outer orbiting dots (blue)
+    for (int i = 0; i < 4; i++) {
+      final angle = orbitT * 2 * math.pi + (i * math.pi / 2);
+      canvas.drawCircle(
+        Offset(cx + 112 * math.cos(angle), cy + 112 * math.sin(angle)),
+        4,
+        Paint()..color = Color.fromARGB((alpha * 0.6).round(), 30, 111, 217),
+      );
+    }
+
+    // 3 inner counter-rotating dots (teal)
+    for (int i = 0; i < 3; i++) {
+      final angle = -orbitT * 2 * math.pi + (i * 2 * math.pi / 3);
+      canvas.drawCircle(
+        Offset(cx + 76 * math.cos(angle), cy + 76 * math.sin(angle)),
+        3,
+        Paint()..color = Color.fromARGB((alpha * 0.55).round(), 16, 185, 129),
+      );
+    }
+
+    // Medical cross
+    final crossPaint = Paint()
+      ..color = Color.fromARGB(alpha, 30, 111, 217)
+      ..style = PaintingStyle.fill;
+    const cSize = 32.0;
+    const cThick = 10.0;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, cy), width: cSize, height: cThick),
+        const Radius.circular(3),
+      ),
+      crossPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, cy), width: cThick, height: cSize),
+        const Radius.circular(3),
+      ),
+      crossPaint,
+    );
+
+    // Cross glow
+    canvas.drawCircle(
+      Offset(cx, cy),
+      50,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            Color.fromARGB((alpha * 0.14).round(), 30, 111, 217),
+            Colors.transparent,
+          ],
+        ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: 50)),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_OrbitPainter old) =>
+      old.orbitT != orbitT || old.introT != introT;
+}
+
+// ── Individual service card ───────────────────────────────────────────────────
+class _FeatureCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  const _FeatureCard({required this.icon, required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F1E33),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF1E3A5F), width: 1),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF7BA7D4),
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Bouncing loading dots ─────────────────────────────────────────────────────
+class _LoadingDots extends StatefulWidget {
+  @override
+  State<_LoadingDots> createState() => _LoadingDotsState();
+}
+
+class _LoadingDotsState extends State<_LoadingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(3, (i) {
+          final phase = ((_ctrl.value - i * 0.22) % 1.0).clamp(0.0, 1.0);
+          final pulse = math.sin(phase * math.pi).clamp(0.0, 1.0);
+          final scale = 0.55 + 0.45 * pulse;
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            width: 7 * scale,
+            height: 7 * scale,
             decoration: BoxDecoration(
-              color: isActive
-                  ? AppColors.sky500
-                  : isCurrent
-                      ? AppColors.sky200
-                      : AppColors.grey200,
+              color: Color.lerp(
+                const Color(0xFF1E4070),
+                const Color(0xFF3B82F6),
+                pulse,
+              ),
               shape: BoxShape.circle,
-              boxShadow: isActive
-                  ? [
-                      BoxShadow(
-                        color: AppColors.sky500.withOpacity(0.3),
-                        blurRadius: 12,
-                        spreadRadius: 2,
-                      ),
-                    ]
-                  : null,
             ),
-            child: Icon(
-              isActive ? icon : Icons.circle_rounded,
-              size: 20,
-              color: isActive || isCurrent ? Colors.white : AppColors.grey400,
-            ),
-          ),
-          const SizedBox(height: 8),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            width: isActive ? 24 : 8,
-            height: 3,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? AppColors.sky500
-                  : isCurrent
-                      ? AppColors.sky300
-                      : AppColors.grey200,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ],
+          );
+        }),
       ),
     );
   }

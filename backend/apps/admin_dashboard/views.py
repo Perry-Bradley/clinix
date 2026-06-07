@@ -229,7 +229,25 @@ class VerificationDetailView(APIView):
 class PlatformAppointmentsView(generics.ListAPIView):
     serializer_class = AppointmentDetailSerializer
     permission_classes = [IsSuperAdminUser]
-    queryset = Appointment.objects.all().order_by('-created_at')
+
+    def get_queryset(self):
+        qs = Appointment.objects.select_related(
+            'patient', 'patient__patient_id',
+            'provider', 'provider__provider_id',
+        ).order_by('-created_at')
+        status_val = self.request.query_params.get('status')
+        appt_type = self.request.query_params.get('type')
+        search = self.request.query_params.get('search', '').strip()
+        if status_val:
+            qs = qs.filter(status=status_val)
+        if appt_type:
+            qs = qs.filter(appointment_type=appt_type)
+        if search:
+            qs = qs.filter(
+                models.Q(patient__patient_id__full_name__icontains=search) |
+                models.Q(provider__provider_id__full_name__icontains=search)
+            )
+        return qs
 
 class AnalyticsRevenueView(APIView):
     permission_classes = [IsSuperAdminUser]
@@ -562,8 +580,8 @@ CMC_DIRECTORY = ONMC_DIRECTORY
 def _parse_onmc_page(html: str) -> list:
     """
     Parse one page of onmc.app/tableau_de_lordre.
-    Each entry: <h2>NAME</h2><p>REG_NO/YEAR Médecin</p>
-    Falls back to regex if BeautifulSoup is unavailable.
+    Each entry: <h2>NAME</h2> followed by <p>REG_NO/YEAR Médecin...</p>
+    Uses multiple fallback strategies to locate the registration <p>.
     """
     entries = []
     try:
@@ -573,11 +591,24 @@ def _parse_onmc_page(html: str) -> list:
             name = ' '.join(h2.get_text().split()).strip()
             if not name or len(name) < 3:
                 continue
-            # Registration number is in the next <p> sibling
+
+            # Strategy 1: direct sibling <p>
             p = h2.find_next_sibling('p')
+
+            # Strategy 2: first <p> within the same parent container
+            if not p:
+                parent = h2.find_parent(['div', 'article', 'li', 'section', 'td'])
+                if parent:
+                    p = parent.find('p')
+
+            # Strategy 3: nearest <p> anywhere after h2 in document order
+            if not p:
+                p = h2.find_next('p')
+
             reg_raw = ' '.join(p.get_text().split()) if p else ''
-            # Strip trailing " Médecin" / " medecin"
-            reg_no = _re.sub(r'\s*[Mm][eé]decin\s*$', '', reg_raw).strip()
+            # Strip "Médecin" and everything that follows (handles "Médecin Généraliste", etc.)
+            reg_no = _re.sub(r'\s*[Mm][eé]decin.*$', '', reg_raw).strip()
+
             entries.append({
                 'name': name,
                 'specialization': 'Médecine',
@@ -585,15 +616,15 @@ def _parse_onmc_page(html: str) -> list:
                 'registration_number': reg_no,
             })
     except ImportError:
-        # Regex fallback: match <h2>NAME</h2> then <p>REG Médecin</p>
+        # Regex fallback when BeautifulSoup is unavailable
         pairs = _re.findall(
-            r'<h2[^>]*>(.*?)</h2>\s*<p[^>]*>(.*?)</p>',
+            r'<h2[^>]*>(.*?)</h2>.*?<p[^>]*>(.*?)</p>',
             html, _re.S
         )
         for raw_name, raw_p in pairs:
             name = _re.sub(r'<[^>]+>', '', raw_name).strip()
             reg_raw = _re.sub(r'<[^>]+>', '', raw_p).strip()
-            reg_no = _re.sub(r'\s*[Mm][eé]decin\s*$', '', reg_raw).strip()
+            reg_no = _re.sub(r'\s*[Mm][eé]decin.*$', '', reg_raw).strip()
             if name:
                 entries.append({
                     'name': name,
