@@ -49,8 +49,8 @@ class _BookLabTestScreenState extends State<BookLabTestScreen> {
       final res = await Dio().get(
         '${ApiConstants.baseUrl}providers/recommended/',
         queryParameters: {
-          'role': 'nurse',
-          'limit': 3,
+          'role': 'lab_tech',
+          'limit': 5,
           if (lat != null) 'lat': lat,
           if (lng != null) 'lng': lng,
         },
@@ -101,14 +101,14 @@ class _BookLabTestScreenState extends State<BookLabTestScreen> {
                   ),
 
                   SizedBox(height: w * 0.06),
-                  _sectionTitle('Select a Nurse', w),
+                  _sectionTitle('Select a Lab Technician', w),
                   SizedBox(height: w * 0.03),
 
                   if (_nurses.isEmpty)
                     Container(
                       padding: EdgeInsets.all(w * 0.05),
                       decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(14)),
-                      child: Center(child: Text('No nurses available in your area', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.034, color: AppColors.grey400))),
+                      child: Center(child: Text('No lab technicians available in your area', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.034, color: AppColors.grey400))),
                     )
                   else ...[
                     ..._nurses.map((n) => _NurseCard(
@@ -124,7 +124,7 @@ class _BookLabTestScreenState extends State<BookLabTestScreen> {
                         child: Row(
                           children: [
                             Text(
-                              'View all nurses',
+                              'View all lab technicians',
                               style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.032, fontWeight: FontWeight.w700, color: AppColors.darkBlue500),
                             ),
                             const SizedBox(width: 4),

@@ -20,6 +20,12 @@ class Appointment(models.Model):
         ('no_show', 'No Show'),
     )
 
+    LAB_STATUS_CHOICES = (
+        ('accepted', 'Accepted'),
+        ('ongoing', 'Sample Collected / Ongoing'),
+        ('results_ready', 'Results Ready'),
+    )
+
     appointment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='appointments')
     provider = models.ForeignKey(HealthcareProvider, on_delete=models.CASCADE, related_name='appointments')
@@ -35,6 +41,10 @@ class Appointment(models.Model):
     # Human-readable name of the test or treatment requested (e.g. "Wound
     # Treatment", "Malaria Rapid Test"). Empty for normal consults.
     service_name = models.CharField(max_length=200, blank=True, default='')
+    # Lab-test-specific workflow fields
+    lab_test_status = models.CharField(max_length=20, choices=LAB_STATUS_CHOICES, blank=True, null=True)
+    lab_results = models.TextField(blank=True, null=True)
+    lab_results_file_url = models.URLField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

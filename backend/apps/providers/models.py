@@ -44,6 +44,7 @@ class HealthcareProvider(models.Model):
         ('generalist', 'Generalist'),
         ('specialist', 'Specialist'),
         ('nurse', 'Nurse'),
+        ('lab_tech', 'Lab Technician'),
     )
 
     provider_id = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True, db_column='provider_id')

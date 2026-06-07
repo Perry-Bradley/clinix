@@ -8,6 +8,7 @@ from .views import (
     AdminSpecialtyListCreateView, AdminSpecialtyDetailView,
     UserResetPasswordView,
     PharmacyListView, PharmacySyncView, PharmacyPhoneView,
+    CMCDoctorsView,
 )
 
 urlpatterns = [
@@ -31,4 +32,5 @@ urlpatterns = [
     path('facilities/', PharmacyListView.as_view(), name='admin_facilities'),
     path('facilities/sync/', PharmacySyncView.as_view(), name='admin_facilities_sync'),
     path('facilities/<int:pk>/phone/', PharmacyPhoneView.as_view(), name='admin_facility_phone'),
+    path('cmc-doctors/', CMCDoctorsView.as_view(), name='admin_cmc_doctors'),
 ]

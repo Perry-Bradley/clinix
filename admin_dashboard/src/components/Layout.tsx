@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCheck, LogOut, Bell, Settings, HeartPulse, TrendingUp, FlaskConical, Stethoscope, Building2 } from 'lucide-react';
+import { LayoutDashboard, Users, UserCheck, LogOut, Bell, HeartPulse, TrendingUp, FlaskConical, Stethoscope, Building2 } from 'lucide-react';
 
 const Layout = () => {
   const navigate = useNavigate();
@@ -22,25 +22,25 @@ const Layout = () => {
   ];
 
   return (
-    <div className="flex h-screen bg-slate-100 overflow-hidden">
+    <div className="flex h-screen bg-slate-50 overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-dark-900 flex flex-col shadow-2xl">
+      <aside className="w-60 bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
         {/* Logo */}
-        <div className="px-6 py-6 border-b border-white/10">
+        <div className="px-5 py-5 border-b border-slate-200">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center shadow-lg shadow-sky-500/40 overflow-hidden">
-              <img src="/clinix_logo.png" alt="Clinix" className="w-6 h-6 object-contain" />
+            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden">
+              <img src="/clinix_logo.png" alt="Clinix" className="w-5 h-5 object-contain" />
             </div>
             <div>
-              <h1 className="text-white font-bold text-lg tracking-tight leading-none">Clinix</h1>
-              <p className="text-sky-400 text-xs font-medium">Admin Portal</p>
+              <h1 className="text-slate-900 font-bold text-base tracking-tight leading-none">Clinix</h1>
+              <p className="text-slate-400 text-[11px] font-medium">Admin Portal</p>
             </div>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-4 py-6 space-y-1">
-          <p className="text-sky-400/60 text-[10px] font-semibold uppercase tracking-widest px-4 mb-3">Main Menu</p>
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          <p className="text-slate-400 text-[10px] font-semibold uppercase tracking-widest px-3 mb-2">Menu</p>
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
@@ -50,31 +50,23 @@ const Layout = () => {
               </Link>
             );
           })}
-
-          <div className="pt-6">
-            <p className="text-sky-400/60 text-[10px] font-semibold uppercase tracking-widest px-4 mb-3">System</p>
-            <button className="sidebar-link w-full text-left">
-              <Settings size={18} />
-              <span className="font-medium text-sm">Settings</span>
-            </button>
-          </div>
         </nav>
 
         {/* User Footer */}
-        <div className="px-4 py-4 border-t border-white/10">
-          <div className="flex items-center space-x-3 px-4 py-3 rounded-xl bg-white/5 mb-2">
-            <div className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center text-white font-bold text-sm">S</div>
+        <div className="px-3 py-3 border-t border-slate-200">
+          <div className="flex items-center space-x-3 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 mb-1.5">
+            <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">S</div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-semibold truncate">Super Admin</p>
-              <p className="text-sky-400 text-xs truncate">admin@clinix.cm</p>
+              <p className="text-slate-800 text-xs font-semibold truncate">Super Admin</p>
+              <p className="text-slate-400 text-[10px] truncate">admin@clinix.cm</p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center space-x-3 text-red-400 hover:bg-red-500/10 w-full px-4 py-2.5 rounded-xl transition-all duration-200"
+            className="flex items-center space-x-3 text-red-500 hover:bg-red-50 w-full px-3 py-2 rounded-xl transition-all duration-200"
           >
-            <LogOut size={16} />
-            <span className="font-medium text-sm">Logout</span>
+            <LogOut size={15} />
+            <span className="font-medium text-xs">Logout</span>
           </button>
         </div>
       </aside>
@@ -82,25 +74,25 @@ const Layout = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="bg-white border-b border-gray-200 px-8 h-16 flex items-center justify-between shadow-sm flex-shrink-0">
+        <header className="bg-white border-b border-slate-200 px-8 h-14 flex items-center justify-between flex-shrink-0">
           <div>
-            <h2 className="font-bold text-dark-900 text-base capitalize">
+            <h2 className="font-bold text-slate-900 text-sm capitalize">
               {location.pathname === '/' ? 'Dashboard' : location.pathname.replace('/', '')}
             </h2>
-            <p className="text-gray-400 text-xs">Clinix Healthcare Management</p>
+            <p className="text-slate-400 text-[11px]">Clinix Healthcare Management</p>
           </div>
-          <div className="flex items-center space-x-3">
-            <button className="relative w-9 h-9 rounded-full bg-dark-900 flex items-center justify-center hover:bg-dark-700 transition-colors">
-              <Bell size={16} className="text-sky-400" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-orange-400 rounded-full ring-2 ring-white"></span>
+          <div className="flex items-center space-x-2">
+            <button className="relative w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center hover:bg-slate-50 transition-colors">
+              <Bell size={14} className="text-slate-600" />
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-orange-400 rounded-full"></span>
             </button>
-            <div className="w-9 h-9 rounded-full bg-sky-500 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-sky-500/30">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-bold text-xs">
               S
             </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-8">
+        <div className="flex-1 overflow-auto p-6">
           <Outlet />
         </div>
       </main>

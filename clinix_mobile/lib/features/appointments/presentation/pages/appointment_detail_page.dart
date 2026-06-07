@@ -345,7 +345,7 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
           _InfoRow(
             icon: Icons.calendar_today_rounded,
             label: 'Date',
-            value: scheduledAt != null ? DateFormat('MMMM d, y').format(scheduledAt) : '—',
+            value: scheduledAt != null ? DateFormat('d MMM yyyy').format(scheduledAt) : '—',
           ),
           const SizedBox(height: 10),
           _InfoRow(

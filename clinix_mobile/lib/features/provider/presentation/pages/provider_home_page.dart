@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
+import 'package:intl/intl.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -246,6 +247,7 @@ class _ProviderDashboard extends StatefulWidget {
 
 class _ProviderDashboardState extends State<_ProviderDashboard> {
   String _providerName = 'Doctor';
+  String _providerRole = 'generalist';
   String _greeting = 'Good Day';
   IconData _greetingIcon = Icons.wb_sunny_rounded;
   int _todayAppointments = 0;
@@ -283,6 +285,11 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
     setState(() {
       _providerName = (name != null && name.trim().isNotEmpty) ? name.trim() : 'Doctor';
     });
+    // Load provider role from profile
+    try {
+      final profile = await _ProviderApi.fetchProfile();
+      if (mounted) setState(() => _providerRole = profile['provider_role']?.toString() ?? 'generalist');
+    } catch (_) {}
   }
 
   Future<void> _loadDashboard() async {
@@ -317,9 +324,18 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
       if (!mounted) return;
       final data = res.data;
       List raw = data is List ? data : [];
+
+      // Filter by role-specific appointment type
+      List filtered = raw.where((a) {
+        final type = a['appointment_type']?.toString() ?? '';
+        if (_providerRole == 'nurse') return type == 'home_treatment';
+        if (_providerRole == 'lab_tech') return type == 'lab_test';
+        return type == 'virtual' || type == 'in-person';
+      }).toList();
+
       // Filter to today's appointments
       final today = DateTime.now();
-      final todayAppts = raw.where((a) {
+      final todayAppts = filtered.where((a) {
         final dt = DateTime.tryParse(a['scheduled_at']?.toString() ?? '');
         return dt != null && dt.year == today.year && dt.month == today.month && dt.day == today.day;
       }).map((a) => Map<String, dynamic>.from(a as Map)).toList();
@@ -327,7 +343,7 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
       // If none today, fall back to 3 most recent
       List<Map<String, dynamic>> toShow = todayAppts;
       if (toShow.isEmpty) {
-        toShow = raw.take(3).map((a) => Map<String, dynamic>.from(a as Map)).toList();
+        toShow = filtered.take(3).map((a) => Map<String, dynamic>.from(a as Map)).toList();
       }
       setState(() => _appointments = toShow);
     } catch (_) {}
@@ -413,7 +429,7 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
                           Icon(_greetingIcon, size: 14, color: AppColors.darkBlue500),
                           const SizedBox(width: 6),
                           Text(
-                            'Dr. $_greeting',
+                            '${_providerRole == 'nurse' || _providerRole == 'lab_tech' ? '' : 'Dr. '}$_greeting',
                             style: const TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 13,
@@ -479,9 +495,9 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
               ),
               SizedBox(height: w * 0.06),
 
-              // Today's Appointments
+              // Today's Appointments / Lab Tests / Home Care
               Text(
-                "Today's Appointments",
+                _providerRole == 'lab_tech' ? "Today's Lab Tests" : _providerRole == 'nurse' ? "Today's Home Care" : "Today's Appointments",
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: w * 0.042,
@@ -548,32 +564,88 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
               SizedBox(height: w * 0.05),
               Row(
                 children: [
-                  Expanded(
-                    child: _ProviderQuickCard(
-                      icon: Icons.description_outlined,
-                      label: 'Prescription',
-                      onTap: () => context.push('/provider/prescription/new'),
+                  if (_providerRole == 'lab_tech') ...[
+                    Expanded(
+                      child: _ProviderQuickCard(
+                        icon: Icons.biotech_rounded,
+                        label: 'My Lab Tests',
+                        onTap: () => context.push('/provider/lab-tests'),
+                      ),
                     ),
-                  ),
-                  SizedBox(width: w * 0.03),
-                  Expanded(
-                    child: _ProviderQuickCard(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: 'Patient Chats',
-                      onTap: () => context.push('/provider/messages'),
+                    SizedBox(width: w * 0.03),
+                    Expanded(
+                      child: _ProviderQuickCard(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        label: 'Messages',
+                        onTap: () => context.push('/provider/messages'),
+                      ),
                     ),
-                  ),
-                  SizedBox(width: w * 0.03),
-                  Expanded(
-                    child: _ProviderQuickCard(
-                      icon: Icons.bar_chart_rounded,
-                      label: 'View Earnings',
-                      onTap: () {
-                        final state = context.findAncestorStateOfType<_ProviderHomePageState>();
-                        state?.setState(() => state._selectedTab = 2);
-                      },
+                    SizedBox(width: w * 0.03),
+                    Expanded(
+                      child: _ProviderQuickCard(
+                        icon: Icons.bar_chart_rounded,
+                        label: 'Earnings',
+                        onTap: () {
+                          final state = context.findAncestorStateOfType<_ProviderHomePageState>();
+                          state?.setState(() => state._selectedTab = 2);
+                        },
+                      ),
                     ),
-                  ),
+                  ] else if (_providerRole == 'nurse') ...[
+                    Expanded(
+                      child: _ProviderQuickCard(
+                        icon: Icons.event_note_rounded,
+                        label: 'My Visits',
+                        onTap: () => context.push('/provider/appointments'),
+                      ),
+                    ),
+                    SizedBox(width: w * 0.03),
+                    Expanded(
+                      child: _ProviderQuickCard(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        label: 'Messages',
+                        onTap: () => context.push('/provider/messages'),
+                      ),
+                    ),
+                    SizedBox(width: w * 0.03),
+                    Expanded(
+                      child: _ProviderQuickCard(
+                        icon: Icons.bar_chart_rounded,
+                        label: 'Earnings',
+                        onTap: () {
+                          final state = context.findAncestorStateOfType<_ProviderHomePageState>();
+                          state?.setState(() => state._selectedTab = 2);
+                        },
+                      ),
+                    ),
+                  ] else ...[
+                    Expanded(
+                      child: _ProviderQuickCard(
+                        icon: Icons.description_outlined,
+                        label: 'Prescription',
+                        onTap: () => context.push('/provider/prescription/new'),
+                      ),
+                    ),
+                    SizedBox(width: w * 0.03),
+                    Expanded(
+                      child: _ProviderQuickCard(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        label: 'Patient Chats',
+                        onTap: () => context.push('/provider/messages'),
+                      ),
+                    ),
+                    SizedBox(width: w * 0.03),
+                    Expanded(
+                      child: _ProviderQuickCard(
+                        icon: Icons.bar_chart_rounded,
+                        label: 'View Earnings',
+                        onTap: () {
+                          final state = context.findAncestorStateOfType<_ProviderHomePageState>();
+                          state?.setState(() => state._selectedTab = 2);
+                        },
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ]),
@@ -1325,6 +1397,13 @@ class _TimeDropdown extends StatelessWidget {
   }
 }
 
+String _fmtTxDate(String? raw) {
+  if (raw == null || raw.isEmpty) return '';
+  final dt = DateTime.tryParse(raw)?.toLocal();
+  if (dt == null) return raw;
+  return DateFormat('d MMM yyyy · HH:mm').format(dt);
+}
+
 class _ProviderEarningsTab extends StatefulWidget {
   const _ProviderEarningsTab();
 
@@ -1485,7 +1564,7 @@ class _ProviderEarningsTabState extends State<_ProviderEarningsTab> {
                 },
                 child: _buildTxItem(
                   (tx['type']?.toString() == 'credit') ? 'Consultation Payout' : 'Withdrawal',
-                  tx['date']?.toString() ?? '',
+                  _fmtTxDate(tx['date']?.toString()),
                   tx['amount']?.toString() ?? '0',
                   tx['type']?.toString() == 'credit',
                 ),

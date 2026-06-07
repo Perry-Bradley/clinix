@@ -5,7 +5,7 @@ from rest_framework.exceptions import ValidationError
 from django.db.models import Q
 from datetime import datetime, timedelta
 from .models import Appointment
-from .serializers import AppointmentSerializer, AppointmentDetailSerializer
+from .serializers import AppointmentSerializer, AppointmentDetailSerializer, LabTestWorkflowSerializer
 from apps.patients.models import Patient
 from apps.providers.models import HealthcareProvider, ProviderSchedule
 
@@ -133,6 +133,52 @@ class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         # Allow partial updates like confirm/cancel if authorized
         serializer.save()
+
+class LabTestWorkflowView(APIView):
+    """Lab technicians update the workflow of a lab_test appointment."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Return all lab_test appointments assigned to this lab tech."""
+        user = request.user
+        if user.user_type != 'provider':
+            return Response({'detail': 'Not a provider.'}, status=status.HTTP_403_FORBIDDEN)
+        qs = Appointment.objects.filter(
+            provider__provider_id=user,
+            appointment_type='lab_test',
+        ).exclude(status='cancelled').order_by('-scheduled_at')
+        serializer = AppointmentDetailSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        """Update lab_test_status and/or post results."""
+        user = request.user
+        if user.user_type != 'provider':
+            return Response({'detail': 'Not a provider.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            appt = Appointment.objects.get(appointment_id=pk, provider__provider_id=user, appointment_type='lab_test')
+        except Appointment.DoesNotExist:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        new_lab_status = request.data.get('lab_test_status')
+        lab_results = request.data.get('lab_results')
+        lab_results_file_url = request.data.get('lab_results_file_url')
+
+        if new_lab_status:
+            appt.lab_test_status = new_lab_status
+            # Accept = confirm the appointment; results ready = complete it
+            if new_lab_status == 'accepted' and appt.status == 'pending':
+                appt.status = 'confirmed'
+            elif new_lab_status == 'results_ready':
+                appt.status = 'completed'
+        if lab_results is not None:
+            appt.lab_results = lab_results
+        if lab_results_file_url is not None:
+            appt.lab_results_file_url = lab_results_file_url
+
+        appt.save()
+        return Response(LabTestWorkflowSerializer(appt).data)
+
 
 class AvailableSlotsView(APIView):
     permission_classes = [permissions.AllowAny]

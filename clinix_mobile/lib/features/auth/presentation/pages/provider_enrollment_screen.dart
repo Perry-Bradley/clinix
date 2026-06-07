@@ -32,6 +32,7 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
   /// Resolved provider_role to send to the backend.
   String get _providerRole {
     if (_providerKind == 'nurse') return 'nurse';
+    if (_providerKind == 'lab_tech') return 'lab_tech';
     return _doctorRole; // 'generalist' or 'specialist'
   }
 
@@ -324,6 +325,29 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
             _specialtyDropdown(),
           ],
         ],
+        if (_providerKind == 'lab_tech') ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, color: Color(0xFF059669), size: 16),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'You will only be listed for lab test bookings made by patients.',
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF065F46), height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 20),
         _fieldLabel('Medical license number *'),
         _textField(_licenseCtrl, 'e.g. CM-MED-2019-0451', lines: 1),
@@ -544,8 +568,14 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
       {
         'key': 'nurse',
         'label': 'Nurse',
-        'sub': 'Nursing professional',
+        'sub': 'Nursing / midwifery professional',
         'icon': Icons.health_and_safety_rounded,
+      },
+      {
+        'key': 'lab_tech',
+        'label': 'Lab Technician',
+        'sub': 'Medical laboratory scientist / technician',
+        'icon': Icons.biotech_rounded,
       },
     ];
     return Column(
@@ -560,7 +590,7 @@ class _ProviderEnrollmentScreenState extends State<ProviderEnrollmentScreen> {
                 _providerKind = k['key']! as String;
                 _selectedSpecialty = null;
                 _specialties = const [];
-                if (_providerKind == 'nurse') {
+                if (_providerKind != 'doctor') {
                   _doctorRole = 'generalist';
                 }
               });

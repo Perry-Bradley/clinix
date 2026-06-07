@@ -832,7 +832,7 @@ class _UpcomingList extends StatelessWidget {
           final providerName = a['provider_name']?.toString() ?? a['provider']?['full_name']?.toString() ?? 'Doctor';
           final dateStr = a['scheduled_at']?.toString() ?? '';
           final date = DateTime.tryParse(dateStr);
-          final formattedDate = date != null ? DateFormat('EEE, MMM d').format(date.toLocal()) : '';
+          final formattedDate = date != null ? DateFormat('d MMM').format(date.toLocal()) : '';
           final formattedTime = date != null ? DateFormat('HH:mm').format(date.toLocal()) : '';
           final status = a['status']?.toString() ?? 'pending';
           final type = a['appointment_type']?.toString() ?? 'virtual';
@@ -1138,229 +1138,163 @@ class _PatientProfileTabState extends State<_PatientProfileTab> {
     }();
 
     return Scaffold(
-      backgroundColor: AppColors.grey50,
+      backgroundColor: const Color(0xFFF8FAFC),
       body: CustomScrollView(
         slivers: [
-          // App bar
           SliverAppBar(
             pinned: true,
             backgroundColor: Colors.white,
             elevation: 0,
             scrolledUnderElevation: 0.5,
-            shadowColor: AppColors.grey200,
+            shadowColor: const Color(0xFFE2E8F0),
             automaticallyImplyLeading: false,
-            toolbarHeight: topPad + 56,
+            toolbarHeight: topPad + 52,
             titleSpacing: 0,
             title: Padding(
               padding: EdgeInsets.only(top: topPad),
               child: const Center(
                 child: Text(
-                  'Settings',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.darkBlue900,
-                  ),
+                  'Profile',
+                  style: TextStyle(fontFamily: 'Inter', fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF0A1628)),
                 ),
               ),
             ),
           ),
 
           SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: w * 0.05),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: w * 0.07),
-
-                  // ── Profile card ───────────────────────────────────────
-                  Center(
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 80, height: 80,
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [AppColors.darkBlue500, AppColors.sky500],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+            child: Column(
+              children: [
+                // ── Profile hero ─────────────────────────────────────────
+                Container(
+                  width: double.infinity,
+                  color: Colors.white,
+                  padding: EdgeInsets.fromLTRB(w * 0.05, 24, w * 0.05, 28),
+                  child: Column(
+                    children: [
+                      Stack(
+                        children: [
+                          Container(
+                            width: 86, height: 86,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFF0A1628), Color(0xFF1E3A5F)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              shape: BoxShape.circle,
                             ),
-                            shape: BoxShape.circle,
+                            alignment: Alignment.center,
+                            child: Text(initials, style: const TextStyle(fontFamily: 'Inter', fontSize: 30, fontWeight: FontWeight.w800, color: Colors.white)),
                           ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            initials,
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: w * 0.03),
-                        Text(
-                          _userName,
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.darkBlue900,
-                          ),
-                        ),
-                        if (_userEmail.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            _userEmail,
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 13,
-                              color: AppColors.grey500,
+                          Positioned(
+                            bottom: 0, right: 0,
+                            child: Container(
+                              width: 26, height: 26,
+                              decoration: BoxDecoration(color: const Color(0xFF0EA5E9), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                              child: const Icon(Icons.edit_rounded, size: 13, color: Colors.white),
                             ),
                           ),
                         ],
-                        SizedBox(height: w * 0.04),
-                        GestureDetector(
-                          onTap: () {},
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: AppColors.sky600,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Text(
-                              'Edit profile',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(_userName, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF0A1628))),
+                      if (_userEmail.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(_userEmail, style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: Color(0xFF94A3B8))),
                       ],
+                      const SizedBox(height: 18),
+                      // Quick stat pills
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _StatPill(icon: Icons.calendar_month_rounded, label: 'Appointments', onTap: () => context.push('/patient/appointments')),
+                          const SizedBox(width: 10),
+                          _StatPill(icon: Icons.receipt_long_rounded, label: 'Payments', onTap: () => context.push('/patient/payment-history')),
+                          const SizedBox(width: 10),
+                          _StatPill(icon: Icons.biotech_rounded, label: 'Lab Tests', onTap: () => context.push('/homecare/lab-tests')),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // ── Health records ────────────────────────────────────────
+                _SettingSection(label: 'Health', items: [
+                  _SettingItem(icon: Icons.folder_copy_rounded, iconColor: const Color(0xFF6366F1), label: 'Medical Records', onTap: () => context.push('/patient/medical-records')),
+                  _SettingItem(icon: Icons.medication_rounded, iconColor: const Color(0xFF8B5CF6), label: 'Prescriptions', onTap: () => context.push('/patient/prescriptions')),
+                  _SettingItem(icon: Icons.monitor_heart_rounded, iconColor: const Color(0xFFEC4899), label: 'Health Dashboard', onTap: () => context.push('/patient/health-dashboard')),
+                  _SettingItem(icon: Icons.science_rounded, iconColor: const Color(0xFF0EA5E9), label: 'Lab Tests', onTap: () => context.push('/homecare/lab-tests'), isLast: true),
+                ]),
+
+                const SizedBox(height: 12),
+
+                // ── Preferences ───────────────────────────────────────────
+                _SettingSection(label: 'Preferences', items: [
+                  _SettingItem(icon: Icons.notifications_rounded, iconColor: const Color(0xFFF97316), label: 'Notifications', onTap: () => context.push('/patient/notifications')),
+                  _SettingToggleItem(icon: Icons.dark_mode_rounded, iconColor: const Color(0xFF475569), label: 'Dark Mode', value: false, onChanged: (_) {}),
+                  _SettingItem(icon: Icons.language_rounded, iconColor: const Color(0xFF10B981), label: 'Language', value: 'English', onTap: () {}, isLast: true),
+                ]),
+
+                const SizedBox(height: 12),
+
+                // ── Account ───────────────────────────────────────────────
+                _SettingSection(label: 'Account', items: [
+                  _SettingItem(icon: Icons.lock_rounded, iconColor: const Color(0xFF64748B), label: 'Change Password', onTap: () {}),
+                  _SettingItem(icon: Icons.headset_mic_rounded, iconColor: const Color(0xFF0EA5E9), label: 'Help & Support', onTap: () => context.push('/about')),
+                  _SettingItem(icon: Icons.shield_rounded, iconColor: const Color(0xFF6366F1), label: 'Terms & Privacy', onTap: () {}, isLast: true),
+                ]),
+
+                const SizedBox(height: 12),
+
+                // ── Logout ────────────────────────────────────────────────
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: w * 0.05),
+                  child: GestureDetector(
+                    onTap: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          title: const Text('Log Out', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800)),
+                          content: const Text('Are you sure you want to log out?', style: TextStyle(fontFamily: 'Inter')),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Log Out', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w700)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        await AuthService.logoutAndClear(context);
+                        if (context.mounted) context.go('/login');
+                      }
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF1F2),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFFFCDD2)),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
+                          SizedBox(width: 10),
+                          Text('Log Out', style: TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFFEF4444))),
+                        ],
+                      ),
                     ),
                   ),
+                ),
 
-                  SizedBox(height: w * 0.07),
-
-                  // ── Preferences ────────────────────────────────────────
-                  _SectionLabel(label: 'Preferences'),
-                  SizedBox(height: w * 0.025),
-                  _SettingsCard(children: [
-                    _ToggleTile(
-                      icon: Icons.notifications_outlined,
-                      label: 'Notifications and sounds',
-                      value: _notificationsEnabled,
-                      onChanged: (v) => setState(() => _notificationsEnabled = v),
-                    ),
-                    _Divider(),
-                    _NavTile(
-                      icon: Icons.language_rounded,
-                      label: 'Language',
-                      value: 'English',
-                      onTap: () {},
-                    ),
-                    _Divider(),
-                    _NavTile(
-                      icon: Icons.brightness_6_outlined,
-                      label: 'Theme',
-                      value: 'Light',
-                      onTap: () {},
-                    ),
-                  ]),
-
-                  SizedBox(height: w * 0.06),
-
-                  // ── Health ─────────────────────────────────────────────
-                  _SectionLabel(label: 'Health'),
-                  SizedBox(height: w * 0.025),
-                  _SettingsCard(children: [
-                    _NavTile(
-                      icon: Icons.folder_copy_outlined,
-                      label: 'Medical Records',
-                      onTap: () => context.push('/patient/medical-records'),
-                    ),
-                    _Divider(),
-                    _NavTile(
-                      icon: Icons.medication_outlined,
-                      label: 'Prescriptions',
-                      onTap: () => context.push('/patient/prescriptions'),
-                    ),
-                    _Divider(),
-                    _NavTile(
-                      icon: Icons.science_outlined,
-                      label: 'Lab Tests',
-                      onTap: () => context.push('/homecare/lab-tests'),
-                    ),
-                  ]),
-
-                  SizedBox(height: w * 0.06),
-
-                  // ── Account ────────────────────────────────────────────
-                  _SectionLabel(label: 'Account'),
-                  SizedBox(height: w * 0.025),
-                  _SettingsCard(children: [
-                    _NavTile(
-                      icon: Icons.lock_outline_rounded,
-                      label: 'Password',
-                      onTap: () {},
-                    ),
-                    _Divider(),
-                    _NavTile(
-                      icon: Icons.payment_outlined,
-                      label: 'Payment History',
-                      onTap: () => context.push('/patient/payment-history'),
-                    ),
-                    _Divider(),
-                    _NavTile(
-                      icon: Icons.headset_mic_outlined,
-                      label: 'Support',
-                      onTap: () => context.push('/about'),
-                    ),
-                    _Divider(),
-                    _NavTile(
-                      icon: Icons.cleaning_services_outlined,
-                      label: 'Clear cache',
-                      onTap: () {},
-                    ),
-                    _Divider(),
-                    _NavTile(
-                      icon: Icons.shield_outlined,
-                      label: 'Terms and Privacy Policy',
-                      onTap: () {},
-                    ),
-                    _Divider(),
-                    _NavTile(
-                      icon: Icons.logout_rounded,
-                      label: 'Logout',
-                      isDestructive: true,
-                      onTap: () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Log Out'),
-                            content: const Text('Are you sure you want to log out?'),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Log Out', style: TextStyle(color: AppColors.error))),
-                            ],
-                          ),
-                        );
-                        if (confirmed == true) {
-                          await AuthService.logoutAndClear(context);
-                          if (context.mounted) context.go('/login');
-                        }
-                      },
-                    ),
-                  ]),
-
-                  SizedBox(height: mq.padding.bottom + 32),
-                ],
-              ),
+                SizedBox(height: mq.padding.bottom + 32),
+              ],
             ),
           ),
         ],
@@ -1369,71 +1303,27 @@ class _PatientProfileTabState extends State<_PatientProfileTab> {
   }
 }
 
-// ── Shared settings widgets ──────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  final String label;
-  const _SectionLabel({required this.label});
-  @override
-  Widget build(BuildContext context) => Text(
-    label,
-    style: const TextStyle(
-      fontFamily: 'Inter',
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      color: AppColors.grey500,
-    ),
-  );
-}
-
-class _SettingsCard extends StatelessWidget {
-  final List<Widget> children;
-  const _SettingsCard({required this.children});
-  @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppColors.grey200),
-    ),
-    child: Column(children: children),
-  );
-}
-
-class _Divider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) => const Divider(height: 1, indent: 52, endIndent: 0, color: Color(0xFFF1F5F9));
-}
-
-class _NavTile extends StatelessWidget {
+class _StatPill extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String? value;
   final VoidCallback onTap;
-  final bool isDestructive;
-  const _NavTile({required this.icon, required this.label, required this.onTap, this.value, this.isDestructive = false});
+  const _StatPill({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? AppColors.error : AppColors.darkBlue900;
     return GestureDetector(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
           children: [
-            Icon(icon, size: 20, color: isDestructive ? AppColors.error : AppColors.grey500),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(label, style: TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w500, color: color)),
-            ),
-            if (value != null) ...[
-              Text(value!, style: const TextStyle(fontFamily: 'Inter', fontSize: 14, color: AppColors.grey400)),
-              const SizedBox(width: 6),
-            ],
-            if (!isDestructive)
-              const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.grey400),
+            Icon(icon, size: 18, color: const Color(0xFF0A1628)),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF475569))),
           ],
         ),
       ),
@@ -1441,32 +1331,112 @@ class _NavTile extends StatelessWidget {
   }
 }
 
-class _ToggleTile extends StatelessWidget {
+class _SettingSection extends StatelessWidget {
+  final String label;
+  final List<Widget> items;
+  const _SettingSection({required this.label, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: w * 0.05),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(children: items),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingItem extends StatelessWidget {
   final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String? value;
+  final VoidCallback onTap;
+  final bool isLast;
+  const _SettingItem({required this.icon, required this.iconColor, required this.label, required this.onTap, this.value, this.isLast = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            child: Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(icon, size: 18, color: iconColor),
+                ),
+                const SizedBox(width: 14),
+                Expanded(child: Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF0A1628)))),
+                if (value != null) ...[
+                  Text(value!, style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: Color(0xFF94A3B8))),
+                  const SizedBox(width: 6),
+                ],
+                const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFFCBD5E1)),
+              ],
+            ),
+          ),
+        ),
+        if (!isLast) const Divider(height: 1, indent: 66, color: Color(0xFFF1F5F9)),
+      ],
+    );
+  }
+}
+
+class _SettingToggleItem extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
-  const _ToggleTile({required this.icon, required this.label, required this.value, required this.onChanged});
+  const _SettingToggleItem({required this.icon, required this.iconColor, required this.label, required this.value, required this.onChanged});
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-    child: Row(
+  Widget build(BuildContext context) {
+    return Column(
       children: [
-        Icon(icon, size: 20, color: AppColors.grey500),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.darkBlue900)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, size: 18, color: iconColor),
+              ),
+              const SizedBox(width: 14),
+              Expanded(child: Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF0A1628)))),
+              Switch(value: value, onChanged: onChanged, activeColor: const Color(0xFF0EA5E9)),
+            ],
+          ),
         ),
-        Switch.adaptive(
-          value: value,
-          onChanged: onChanged,
-          activeColor: AppColors.sky600,
-        ),
+        const Divider(height: 1, indent: 66, color: Color(0xFFF1F5F9)),
       ],
-    ),
-  );
+    );
+  }
 }
+
 
 void _showRatingPrompt(BuildContext context, String doctorName) {
   showModalBottomSheet(

@@ -35,3 +35,10 @@ class AppointmentDetailSerializer(serializers.ModelSerializer):
             return str(obj.consultation.consultation_id)
         except ObjectDoesNotExist:
             return None
+
+
+class LabTestWorkflowSerializer(serializers.ModelSerializer):
+    """Minimal serializer for lab tech workflow updates."""
+    class Meta:
+        model = Appointment
+        fields = ('appointment_id', 'lab_test_status', 'lab_results', 'lab_results_file_url', 'status')

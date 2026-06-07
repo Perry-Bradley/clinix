@@ -69,8 +69,8 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     final hhmm = DateFormat('HH:mm').format(dt);
     if (diff == 0) return 'Today, $hhmm';
     if (diff == 1) return 'Yesterday, $hhmm';
-    if (diff < 7) return '${DateFormat('EEEE').format(dt)}, $hhmm';
-    return DateFormat('d MMM, HH:mm').format(dt);
+    if (diff < 7) return '${DateFormat('EEE').format(dt)} · $hhmm';
+    return DateFormat('d MMM · HH:mm').format(dt);
   }
 
   @override

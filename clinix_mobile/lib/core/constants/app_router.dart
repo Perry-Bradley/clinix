@@ -42,6 +42,7 @@ import '../../features/patient/screens/nurses_list_screen.dart';
 import '../../features/appointments/screens/incoming_call_screen.dart';
 import '../../features/appointments/screens/call_history_screen.dart';
 import '../../features/provider/screens/provider_appointments_screen.dart';
+import '../../features/provider/screens/lab_tech_workflow_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -257,6 +258,10 @@ final GoRouter appRouter = GoRouter(
       path: '/provider/appointments',
       builder: (c, s) => const ProviderAppointmentsScreen(),
     ),
+    GoRoute(
+      path: '/provider/lab-tests',
+      builder: (c, s) => const LabTechWorkflowScreen(),
+    ),
   ],
 );
 
@@ -271,6 +276,7 @@ class _PatientAppointmentsPlaceholder extends StatefulWidget {
 class _PatientAppointmentsPlaceholderState extends State<_PatientAppointmentsPlaceholder> {
   bool _loading = true;
   List<Map<String, dynamic>> _items = [];
+  String _filter = ‘all’;
 
   @override
   void initState() {
@@ -290,116 +296,268 @@ class _PatientAppointmentsPlaceholderState extends State<_PatientAppointmentsPla
     }
   }
 
+  List<Map<String, dynamic>> get _filtered {
+    if (_filter == ‘all’) return _items;
+    if (_filter == ‘consults’) return _items.where((a) {
+      final t = a[‘appointment_type’]?.toString() ?? ‘’;
+      return t == ‘virtual’ || t == ‘in-person’;
+    }).toList();
+    if (_filter == ‘lab’) return _items.where((a) => a[‘appointment_type’]?.toString() == ‘lab_test’).toList();
+    if (_filter == ‘care’) return _items.where((a) => a[‘appointment_type’]?.toString() == ‘home_treatment’).toList();
+    return _items;
+  }
+
   Color _statusColor(String s) {
     switch (s) {
-      case 'confirmed': return const Color(0xFF0EA5E9);
-      case 'completed': return const Color(0xFF10B981);
-      case 'cancelled': return const Color(0xFFEF4444);
-      case 'no_show': return const Color(0xFF64748B);
+      case ‘confirmed’: return const Color(0xFF0EA5E9);
+      case ‘completed’: return const Color(0xFF10B981);
+      case ‘cancelled’: return const Color(0xFFEF4444);
+      case ‘no_show’: return const Color(0xFF64748B);
       default: return const Color(0xFFF97316);
     }
   }
 
+  Color _labStatusColor(String? s) {
+    switch (s) {
+      case ‘accepted’: return const Color(0xFF0EA5E9);
+      case ‘ongoing’: return const Color(0xFFF97316);
+      case ‘results_ready’: return const Color(0xFF10B981);
+      default: return const Color(0xFF94A3B8);
+    }
+  }
+
+  IconData _typeIcon(String type) {
+    switch (type) {
+      case ‘lab_test’: return Icons.biotech_rounded;
+      case ‘home_treatment’: return Icons.healing_rounded;
+      case ‘virtual’: return Icons.video_call_rounded;
+      default: return Icons.local_hospital_rounded;
+    }
+  }
+
+  String _fmt(String? raw) {
+    if (raw == null) return ‘’;
+    final dt = DateTime.tryParse(raw)?.toLocal();
+    if (dt == null) return ‘’;
+    const m = [‘’, ‘Jan’, ‘Feb’, ‘Mar’, ‘Apr’, ‘May’, ‘Jun’, ‘Jul’, ‘Aug’, ‘Sep’, ‘Oct’, ‘Nov’, ‘Dec’];
+    final hh = dt.hour.toString().padLeft(2, ‘0’);
+    final mm = dt.minute.toString().padLeft(2, ‘0’);
+    return ‘${dt.day} ${m[dt.month]} · $hh:$mm’;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final filtered = _filtered;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        title: const Text('My Appointments', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 18, color: Color(0xFF0A1628))),
+        elevation: 0,
+        title: const Text(‘My Bookings’, style: TextStyle(fontFamily: ‘Inter’, fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF0A1628))),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0A1628), size: 20),
           onPressed: () => context.pop(),
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF0EA5E9)))
-          : _items.isEmpty
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.calendar_today_rounded, size: 56, color: Colors.grey.shade300),
-                  const SizedBox(height: 16),
-                  Text('No appointments yet', style: TextStyle(color: Colors.grey.shade400, fontSize: 16)),
-                ]))
-              : RefreshIndicator(
-                  color: const Color(0xFF0EA5E9),
-                  onRefresh: _load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, i) {
-                      final a = _items[i];
-                      final id = a['appointment_id']?.toString() ?? '';
-                      final status = a['status']?.toString() ?? 'pending';
-                      final type = a['appointment_type']?.toString() ?? 'virtual';
-                      final dateStr = a['scheduled_at']?.toString() ?? '';
-                      final date = DateTime.tryParse(dateStr);
-                      final formattedDate = date != null ? '${_dayName(date.weekday)}, ${date.day} ${_monthName(date.month)}' : '';
-                      final formattedTime = date != null ? '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}' : '';
+      body: Column(
+        children: [
+          // Filter tabs
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(label: ‘All’, value: ‘all’, selected: _filter, onTap: (v) => setState(() => _filter = v)),
+                  const SizedBox(width: 8),
+                  _FilterChip(label: ‘Consults’, value: ‘consults’, selected: _filter, onTap: (v) => setState(() => _filter = v)),
+                  const SizedBox(width: 8),
+                  _FilterChip(label: ‘Lab Tests’, value: ‘lab’, selected: _filter, onTap: (v) => setState(() => _filter = v)),
+                  const SizedBox(width: 8),
+                  _FilterChip(label: ‘Home Care’, value: ‘care’, selected: _filter, onTap: (v) => setState(() => _filter = v)),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF0EA5E9)))
+                : filtered.isEmpty
+                    ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.calendar_today_rounded, size: 48, color: Colors.grey.shade300),
+                        const SizedBox(height: 14),
+                        Text(‘Nothing here yet’, style: TextStyle(color: Colors.grey.shade400, fontSize: 15, fontFamily: ‘Inter’)),
+                      ]))
+                    : RefreshIndicator(
+                        color: const Color(0xFF0EA5E9),
+                        onRefresh: _load,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (context, i) {
+                            final a = filtered[i];
+                            final id = a[‘appointment_id’]?.toString() ?? ‘’;
+                            final status = a[‘status’]?.toString() ?? ‘pending’;
+                            final type = a[‘appointment_type’]?.toString() ?? ‘virtual’;
+                            final labStatus = a[‘lab_test_status’]?.toString();
+                            final hasLabResults = (a[‘lab_results’]?.toString() ?? ‘’).isNotEmpty;
+                            final serviceName = a[‘service_name’]?.toString() ?? ‘’;
 
-                      // Get provider name
-                      String providerName = 'Doctor';
-                      final provider = a['provider'];
-                      if (provider is Map) {
-                        providerName = provider['full_name']?.toString() ?? provider['user']?['full_name']?.toString() ?? 'Doctor';
-                      }
+                            String providerName = ‘Provider’;
+                            final provider = a[‘provider’];
+                            if (provider is Map) {
+                              providerName = provider[‘full_name’]?.toString()
+                                  ?? provider[‘user’]?[‘full_name’]?.toString()
+                                  ?? ‘Provider’;
+                            }
 
-                      final sc = _statusColor(status);
+                            final sc = _statusColor(status);
+                            final isLabTest = type == ‘lab_test’;
 
-                      return GestureDetector(
-                        onTap: id.isEmpty ? null : () => context.push('/appointments/$id'),
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 48, height: 48,
+                            return GestureDetector(
+                              onTap: id.isEmpty ? null : () => context.push(‘/appointments/$id’),
+                              child: Container(
+                                padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
-                                  color: sc.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(14),
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
                                 ),
-                                child: Icon(
-                                  type == 'virtual' ? Icons.video_call_rounded : Icons.local_hospital_rounded,
-                                  color: sc, size: 24,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 44, height: 44,
+                                          decoration: BoxDecoration(
+                                            color: sc.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(_typeIcon(type), color: sc, size: 22),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              isLabTest && serviceName.isNotEmpty ? serviceName : providerName,
+                                              style: const TextStyle(fontFamily: ‘Inter’, fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF0A1628)),
+                                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              isLabTest ? ‘Lab Test · $providerName’ : type == ‘home_treatment’ ? ‘Home Care · $providerName’ : type == ‘virtual’ ? ‘Video Consult’ : ‘In-Person’,
+                                              style: TextStyle(fontFamily: ‘Inter’, fontSize: 11.5, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
+                                            ),
+                                          ],
+                                        )),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: sc.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(7),
+                                              ),
+                                              child: Text(
+                                                status[0].toUpperCase() + status.substring(1),
+                                                style: TextStyle(fontFamily: ‘Inter’, fontSize: 10, fontWeight: FontWeight.w800, color: sc),
+                                              ),
+                                            ),
+                                            if (isLabTest && labStatus != null) ...[
+                                              const SizedBox(height: 4),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: _labStatusColor(labStatus).withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(7),
+                                                ),
+                                                child: Text(
+                                                  _labStatusDisplay(labStatus),
+                                                  style: TextStyle(fontFamily: ‘Inter’, fontSize: 10, fontWeight: FontWeight.w700, color: _labStatusColor(labStatus)),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.schedule_rounded, size: 12, color: Color(0xFF94A3B8)),
+                                        const SizedBox(width: 4),
+                                        Text(_fmt(a[‘scheduled_at’]?.toString()), style: TextStyle(fontFamily: ‘Inter’, fontSize: 11.5, color: Colors.grey.shade500)),
+                                      ],
+                                    ),
+                                    if (hasLabResults) ...[
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF0FDF4),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: const Color(0xFFBBF7D0)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF10B981)),
+                                            const SizedBox(width: 6),
+                                            const Expanded(
+                                              child: Text(‘Lab results available — tap to view’, style: TextStyle(fontFamily: ‘Inter’, fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF059669))),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 14),
-                              Expanded(child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(providerName, style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF0A1628)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  const SizedBox(height: 3),
-                                  Text('$formattedDate  $formattedTime', style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.grey.shade500)),
-                                ],
-                              )),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: sc.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  status[0].toUpperCase() + status.substring(1),
-                                  style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w700, color: sc),
-                                ),
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-                ),
+                      ),
+          ),
+        ],
+      ),
     );
   }
 
-  String _dayName(int wd) => const ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][wd];
-  String _monthName(int m) => const ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m];
+  String _labStatusDisplay(String? s) {
+    switch (s) {
+      case ‘accepted’: return ‘Accepted’;
+      case ‘ongoing’: return ‘In Progress’;
+      case ‘results_ready’: return ‘Results Ready’;
+      default: return ‘Pending’;
+    }
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label, value, selected;
+  final ValueChanged<String> onTap;
+  const _FilterChip({required this.label, required this.value, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = value == selected;
+    return GestureDetector(
+      onTap: () => onTap(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0A1628) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? const Color(0xFF0A1628) : const Color(0xFFE2E8F0)),
+        ),
+        child: Text(label, style: TextStyle(fontFamily: ‘Inter’, fontSize: 12.5, fontWeight: FontWeight.w700, color: isSelected ? Colors.white : const Color(0xFF64748B))),
+      ),
+    );
+  }
 }
 

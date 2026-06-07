@@ -532,3 +532,158 @@ class PharmacyPhoneView(APIView):
             'place_type': pharmacy.place_type,
             'phone_number': pharmacy.phone_number,
         })
+
+
+# ── ONMC doctor directory (onmc.app/tableau_de_lordre) ──────────────────────
+# Structure confirmed: <h2>FULL NAME</h2><p>REG_NO/YEAR Médecin</p>
+# 64 pages at ?page=N, ~200 doctors per page, 12 688 total.
+
+import re as _re
+
+ONMC_BASE = 'https://onmc.app'
+ONMC_DIRECTORY = f'{ONMC_BASE}/tableau_de_lordre'
+ONMC_TOTAL_PAGES = 64
+
+_ONMC_CACHE: dict = {'data': [], 'fetched_at': 0, 'error': None, 'pages_scraped': 0}
+CMC_CACHE_TTL = 3600  # 1 hour
+
+_ONMC_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+    'Referer': ONMC_BASE,
+}
+
+# Keep old alias so any existing code that imports CMC_CACHE_TTL still works
+_CMC_CACHE = _ONMC_CACHE
+CMC_DIRECTORY = ONMC_DIRECTORY
+
+
+def _parse_onmc_page(html: str) -> list:
+    """
+    Parse one page of onmc.app/tableau_de_lordre.
+    Each entry: <h2>NAME</h2><p>REG_NO/YEAR Médecin</p>
+    Falls back to regex if BeautifulSoup is unavailable.
+    """
+    entries = []
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, 'lxml')
+        for h2 in soup.find_all('h2'):
+            name = ' '.join(h2.get_text().split()).strip()
+            if not name or len(name) < 3:
+                continue
+            # Registration number is in the next <p> sibling
+            p = h2.find_next_sibling('p')
+            reg_raw = ' '.join(p.get_text().split()) if p else ''
+            # Strip trailing " Médecin" / " medecin"
+            reg_no = _re.sub(r'\s*[Mm][eé]decin\s*$', '', reg_raw).strip()
+            entries.append({
+                'name': name,
+                'specialization': 'Médecine',
+                'region': '',
+                'registration_number': reg_no,
+            })
+    except ImportError:
+        # Regex fallback: match <h2>NAME</h2> then <p>REG Médecin</p>
+        pairs = _re.findall(
+            r'<h2[^>]*>(.*?)</h2>\s*<p[^>]*>(.*?)</p>',
+            html, _re.S
+        )
+        for raw_name, raw_p in pairs:
+            name = _re.sub(r'<[^>]+>', '', raw_name).strip()
+            reg_raw = _re.sub(r'<[^>]+>', '', raw_p).strip()
+            reg_no = _re.sub(r'\s*[Mm][eé]decin\s*$', '', reg_raw).strip()
+            if name:
+                entries.append({
+                    'name': name,
+                    'specialization': 'Médecine',
+                    'region': '',
+                    'registration_number': reg_no,
+                })
+    return entries
+
+
+def _scrape_onmc_doctors(max_pages: int = ONMC_TOTAL_PAGES) -> tuple:
+    """
+    Scrape onmc.app/tableau_de_lordre across all pages.
+    Returns (entries: list, error: str|None, pages_scraped: int).
+    """
+    all_entries = []
+    error_msg = None
+    pages_scraped = 0
+    seen = set()
+
+    for page_num in range(1, max_pages + 1):
+        url = ONMC_DIRECTORY if page_num == 1 else f'{ONMC_DIRECTORY}?page={page_num}'
+        try:
+            resp = http_requests.get(url, timeout=12, headers=_ONMC_HEADERS, allow_redirects=True)
+            if resp.status_code != 200:
+                if page_num == 1:
+                    error_msg = f'ONMC site returned HTTP {resp.status_code}.'
+                break
+
+            page_entries = _parse_onmc_page(resp.text)
+
+            if not page_entries:
+                # Empty page means we've gone past the last real page
+                break
+
+            new_count = 0
+            for e in page_entries:
+                key = e['name'].lower()
+                if key not in seen:
+                    seen.add(key)
+                    all_entries.append(e)
+                    new_count += 1
+
+            pages_scraped = page_num
+
+            if new_count == 0 and page_num > 1:
+                break  # duplicate / past last page
+
+        except http_requests.RequestException as exc:
+            error_msg = str(exc)
+            if page_num == 1:
+                break  # can't even reach page 1
+            # Non-fatal for later pages — keep what we have
+            break
+
+    if not all_entries and not error_msg:
+        error_msg = 'Page fetched but no doctor records found — HTML structure may have changed.'
+
+    return all_entries, error_msg, pages_scraped
+
+
+class CMCDoctorsView(APIView):
+    """Return ONMC-registered doctors (onmc.app/tableau_de_lordre)."""
+    permission_classes = [IsSuperAdminUser]
+
+    def get(self, request):
+        now = time.time()
+        force_refresh = request.query_params.get('refresh') == '1'
+        cache_stale = now - _ONMC_CACHE['fetched_at'] > CMC_CACHE_TTL
+
+        if force_refresh or cache_stale or not _ONMC_CACHE['data']:
+            doctors, err, pages = _scrape_onmc_doctors()
+            _ONMC_CACHE['data'] = doctors
+            _ONMC_CACHE['fetched_at'] = now
+            _ONMC_CACHE['error'] = err
+            _ONMC_CACHE['pages_scraped'] = pages
+
+        data = _ONMC_CACHE['data']
+        search = request.query_params.get('search', '').strip().lower()
+        if search:
+            data = [d for d in data if
+                    search in d.get('name', '').lower() or
+                    search in d.get('registration_number', '').lower()]
+
+        return Response({
+            'count': len(data),
+            'total_scraped': len(_ONMC_CACHE['data']),
+            'pages_scraped': _ONMC_CACHE.get('pages_scraped', 0),
+            'fetched_at': _ONMC_CACHE['fetched_at'],
+            'source': ONMC_DIRECTORY,
+            'scrape_error': _ONMC_CACHE.get('error'),
+            'results': data,
+        })
