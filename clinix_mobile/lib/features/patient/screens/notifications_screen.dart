@@ -76,6 +76,52 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } catch (_) {}
   }
 
+  /// Route a tapped notification to the screen it's about — mirrors the
+  /// FCM tap mapping in NotificationService.
+  void _openNotification(Map<String, dynamic> n) {
+    final type = n['type']?.toString() ?? '';
+    final data = n['data'] is Map ? Map<String, dynamic>.from(n['data'] as Map) : <String, dynamic>{};
+
+    if (type == 'prescription') {
+      context.push('/patient/prescriptions');
+      return;
+    }
+    if (type == 'medical_record') {
+      final recordId = data['record_id']?.toString();
+      final isAiDraft = data['is_ai_draft']?.toString().toLowerCase() == 'true';
+      if (isAiDraft && recordId != null && recordId.isNotEmpty) {
+        context.push('/provider/medical-record/new?aiDraftRecordId=$recordId');
+      } else {
+        context.push('/patient/medical-records');
+      }
+      return;
+    }
+    if (type == 'referral') {
+      context.push('/patient/medical-records');
+      return;
+    }
+    if (type == 'medication_reminder' || type == 'reminder') {
+      context.push('/patient/medication-reminders');
+      return;
+    }
+    if (type == 'appointment') {
+      final id = data['appointment_id']?.toString();
+      if (id != null && id.isNotEmpty) {
+        context.push('/appointments/$id');
+        return;
+      }
+    }
+    // Missed/completed call entries carry a direction key.
+    if (data['direction'] != null) {
+      context.push('/calls');
+      return;
+    }
+    final route = data['route']?.toString();
+    if (route != null && route.startsWith('/')) {
+      context.push(route);
+    }
+  }
+
   IconData _iconForType(String type) {
     switch (type) {
       case 'appointment': return Icons.calendar_today_rounded;
@@ -164,6 +210,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           if (mounted) setState(() => _notifications.removeAt(index));
                           return true;
                         },
+                        child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _openNotification(n),
                         child: Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
@@ -199,6 +248,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.sky500, shape: BoxShape.circle)),
                           ],
                         ),
+                      ),
                       ),
                       );
                     },

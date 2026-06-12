@@ -270,17 +270,17 @@ class ProviderNearbyView(generics.ListAPIView):
         lat = self.request.query_params.get('lat')
         lng = self.request.query_params.get('lng')
         radius = self.request.query_params.get('radius')
-        
+
         if lat and lng and radius:
             try:
                 lat = float(lat)
                 lng = float(lng)
                 radius = float(radius)
-                
+
                 # Simple bounding box filter for locations
                 lat_diff = radius / 111.0 # approx degrees per km
                 lng_diff = radius / (111.0 * math.cos(math.radians(lat)))
-                
+
                 locations = Location.objects.filter(
                     location_type='residence', # Recommendation based on residence
                     latitude__range=(lat - lat_diff, lat + lat_diff),
@@ -290,8 +290,47 @@ class ProviderNearbyView(generics.ListAPIView):
                 queryset = queryset.filter(provider_id__in=provider_ids)
             except ValueError:
                 pass
-                
+
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        """Rank the list so the best matches come first: nearest providers
+        (when the app sends `lat`/`lng`) grouped in ~5 km bands, then the
+        highest-rated, then the most-reviewed within each band. Without a
+        location we fall back to rating + review count."""
+        qs = (
+            self.filter_queryset(self.get_queryset())
+            .select_related('provider_id', 'specialty_obj')
+            .prefetch_related('locations', 'reviews', 'schedules')
+        )
+
+        try:
+            lat = float(request.query_params.get('lat', ''))
+            lng = float(request.query_params.get('lng', ''))
+        except (TypeError, ValueError):
+            lat = lng = None
+
+        providers = list(qs)
+
+        def sort_key(p):
+            rating = float(p.rating or 0)
+            review_count = p.reviews.count()
+            band = 999  # providers with no usable location rank after located ones
+            if lat is not None and lng is not None:
+                best = None
+                for loc in p.locations.all():
+                    if loc.latitude is None or loc.longitude is None:
+                        continue
+                    d = _haversine_km(lat, lng, float(loc.latitude), float(loc.longitude))
+                    if best is None or d < best:
+                        best = d
+                if best is not None:
+                    band = int(best // 5)
+            return (band, -rating, -review_count)
+
+        providers.sort(key=sort_key)
+        serializer = self.get_serializer(providers, many=True)
+        return Response(serializer.data)
 
 def _haversine_km(lat1, lng1, lat2, lng2):
     """Great-circle distance between two lat/lng pairs in kilometres."""

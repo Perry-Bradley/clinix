@@ -3,7 +3,7 @@ from .models import Consultation, Prescription, MedicalRecord, ChatMessage, Medi
 from apps.providers.models import HealthcareProvider
 
 class PrescriptionSerializer(serializers.ModelSerializer):
-    provider_name = serializers.CharField(source='provider.provider_id.first_name', read_only=True)
+    provider_name = serializers.CharField(source='provider.provider_id.full_name', read_only=True)
     shared_with_ids = serializers.PrimaryKeyRelatedField(
         many=True, read_only=True, source='shared_with',
     )

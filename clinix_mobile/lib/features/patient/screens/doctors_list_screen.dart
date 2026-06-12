@@ -123,25 +123,9 @@ class _DoctorsListScreenState extends State<DoctorsListScreen> {
             return role != 'nurse';
           }).toList();
 
-          // Sort doctors by: 1) Has location (closer first), 2) Rating (higher first), 3) Name
-          results.sort((a, b) {
-            // Priority 1: Doctors with location data
-            final aHasLoc = a['distance_km'] != null;
-            final bHasLoc = b['distance_km'] != null;
-            if (aHasLoc && !bHasLoc) return -1;
-            if (!aHasLoc && bHasLoc) return 1;
-            
-            // Priority 2: Rating (higher first)
-            final aRating = (a['average_rating'] as num?)?.toDouble() ?? 0.0;
-            final bRating = (b['average_rating'] as num?)?.toDouble() ?? 0.0;
-            if (aRating != bRating) return bRating.compareTo(aRating);
-            
-            // Priority 3: Name (alphabetical)
-            final aName = (a['full_name'] ?? '').toString().toLowerCase();
-            final bName = (b['full_name'] ?? '').toString().toLowerCase();
-            return aName.compareTo(bName);
-          });
-
+          // The backend already ranks: nearest first (when we sent lat/lng),
+          // then highest-rated, then most-reviewed. Don't re-sort here —
+          // a client-side sort was wiping out the distance ranking.
           _doctors = results;
           _isLoading = false;
         });

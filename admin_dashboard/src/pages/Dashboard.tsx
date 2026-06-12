@@ -55,37 +55,87 @@ const RevenueChart = ({ points }: { points: RevenuePoint[] }) => {
     );
   }
 
-  // SVG line chart with a soft area fill. Padding keeps the line and dots
-  // off the edges; a single data point renders as a dot on a flat line.
+  // SVG line chart: days on the X axis, XAF on the Y axis, soft area fill
+  // and dotted gridlines. A single data point still draws a flat line so the
+  // chart never collapses into a lone dot.
   const W = 600;
-  const H = 160;
-  const PAD = 14;
+  const H = 190;
+  const PAD_L = 56;   // room for the XAF axis labels
+  const PAD_R = 16;
+  const PAD_T = 14;
+  const PAD_B = 26;   // room for the date labels
   const max = Math.max(...points.map((p) => p.revenue), 1);
   const x = (i: number) =>
-    points.length === 1 ? W / 2 : PAD + (i * (W - PAD * 2)) / (points.length - 1);
-  const y = (v: number) => H - PAD - (v / max) * (H - PAD * 2);
+    points.length === 1
+      ? (PAD_L + (W - PAD_R)) / 2
+      : PAD_L + (i * (W - PAD_L - PAD_R)) / (points.length - 1);
+  const y = (v: number) => H - PAD_B - (v / max) * (H - PAD_T - PAD_B);
 
-  const linePath = points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p.revenue).toFixed(1)}`)
-    .join(' ');
-  const areaPath =
-    `${linePath} L ${x(points.length - 1).toFixed(1)} ${H - PAD} L ${x(0).toFixed(1)} ${H - PAD} Z`;
+  const single = points.length === 1;
+  const linePath = single
+    ? `M ${PAD_L} ${y(points[0].revenue).toFixed(1)} L ${W - PAD_R} ${y(points[0].revenue).toFixed(1)}`
+    : points
+        .map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p.revenue).toFixed(1)}`)
+        .join(' ');
+  const areaPath = single
+    ? `${linePath} L ${W - PAD_R} ${H - PAD_B} L ${PAD_L} ${H - PAD_B} Z`
+    : `${linePath} L ${x(points.length - 1).toFixed(1)} ${H - PAD_B} L ${x(0).toFixed(1)} ${H - PAD_B} Z`;
+
+  const fmtAmount = (v: number) =>
+    v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${Math.round(v / 1000)}K` : `${Math.round(v)}`;
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  };
+
+  // Y gridlines at 0 / 50% / 100% of the max; X labels at start / middle / end.
+  const gridYs = [0, 0.5, 1].map((f) => ({ f, yy: y(max * f), label: fmtAmount(max * f) }));
+  const xLabelIdxs = single ? [0] : [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
 
   return (
-    <div className="h-40 w-full bg-slate-50 rounded-2xl border border-gray-100 overflow-hidden">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full">
+    <div className="w-full bg-slate-50 rounded-2xl border border-gray-100 overflow-hidden">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ display: 'block' }}>
         <defs>
           <linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.35" />
             <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.02" />
           </linearGradient>
         </defs>
-        {points.length > 1 && <path d={areaPath} fill="url(#revFill)" />}
+
+        {/* Y axis gridlines + XAF labels */}
+        {gridYs.map((g) => (
+          <g key={g.f}>
+            <line x1={PAD_L} y1={g.yy} x2={W - PAD_R} y2={g.yy} stroke="#e2e8f0" strokeWidth="1" strokeDasharray={g.f === 0 ? '0' : '4 4'} />
+            <text x={PAD_L - 8} y={g.yy + 3.5} textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="ui-sans-serif, system-ui">
+              {g.label}
+            </text>
+          </g>
+        ))}
+
+        {/* Area + line */}
+        <path d={areaPath} fill="url(#revFill)" />
         <path d={linePath} fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+        {/* Data dots with hover tooltips */}
         {points.map((p, i) => (
-          <circle key={p.date} cx={x(i)} cy={y(p.revenue)} r={points.length > 40 ? 0 : 3.5} fill="#0284c7">
-            <title>{`${p.date} — XAF ${p.revenue.toLocaleString()} (${p.payments} payment${p.payments === 1 ? '' : 's'})`}</title>
+          <circle key={p.date} cx={x(i)} cy={y(p.revenue)} r={points.length > 40 ? 2 : 4} fill="#0284c7" stroke="#fff" strokeWidth="1.5">
+            <title>{`${fmtDate(p.date)} — XAF ${p.revenue.toLocaleString()} (${p.payments} payment${p.payments === 1 ? '' : 's'})`}</title>
           </circle>
+        ))}
+
+        {/* X axis date labels */}
+        {xLabelIdxs.map((i) => (
+          <text
+            key={i}
+            x={x(i)}
+            y={H - 8}
+            textAnchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}
+            fontSize="10"
+            fill="#94a3b8"
+            fontFamily="ui-sans-serif, system-ui"
+          >
+            {fmtDate(points[i].date)}
+          </text>
         ))}
       </svg>
     </div>

@@ -52,12 +52,37 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
     }
   }
 
-  Future<void> _logDose(String reminderId, String status) async {
+  /// Log against the nearest scheduled dose slot today, so the backend
+  /// flips that slot from missed → taken instead of recording a stray dose.
+  DateTime _nearestSlot(Map<String, dynamic> reminder) {
+    final now = DateTime.now();
+    final times = (reminder['reminder_times'] as List?) ?? const [];
+    DateTime? best;
+    int bestDiff = 1 << 30;
+    for (final t in times) {
+      final parts = t.toString().split(':');
+      if (parts.length < 2) continue;
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      if (h == null || m == null) continue;
+      final slot = DateTime(now.year, now.month, now.day, h, m);
+      final diff = now.difference(slot).inMinutes.abs();
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = slot;
+      }
+    }
+    return best ?? now;
+  }
+
+  Future<void> _logDose(Map<String, dynamic> reminder, String status) async {
+    final reminderId = reminder['id']?.toString() ?? '';
+    if (reminderId.isEmpty) return;
     try {
       final opts = await _authOpts();
       await Dio(BaseOptions(baseUrl: ApiConstants.baseUrl)).post(
         'consultations/reminders/$reminderId/log/',
-        data: {'scheduled_time': DateTime.now().toUtc().toIso8601String(), 'status': status},
+        data: {'scheduled_time': _nearestSlot(reminder).toUtc().toIso8601String(), 'status': status},
         options: opts,
       );
       if (mounted) {
@@ -198,7 +223,6 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
             // Find matching reminder
             final reminder = pReminders.where((r) => r['medication_name'] == medName).toList();
             final hasReminder = reminder.isNotEmpty;
-            final reminderId = hasReminder ? reminder.first['id']?.toString() ?? '' : '';
             final adherence = hasReminder ? reminder.first['adherence_rate'] : null;
             final times = hasReminder ? (reminder.first['reminder_times'] as List?) ?? [] : [];
 
@@ -239,7 +263,7 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
                       child: SizedBox(
                         height: w * 0.09,
                         child: ElevatedButton.icon(
-                          onPressed: () => _logDose(reminderId, 'taken'),
+                          onPressed: () => _logDose(reminder.first, 'taken'),
                           icon: Icon(Icons.check_rounded, size: w * 0.04),
                           label: Text('Taken', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.03, fontWeight: FontWeight.w600)),
                           style: ElevatedButton.styleFrom(backgroundColor: AppColors.splashSlate900, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
@@ -251,7 +275,7 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
                       child: SizedBox(
                         height: w * 0.09,
                         child: OutlinedButton.icon(
-                          onPressed: () => _logDose(reminderId, 'skipped'),
+                          onPressed: () => _logDose(reminder.first, 'skipped'),
                           icon: Icon(Icons.close_rounded, size: w * 0.04),
                           label: Text('Skip', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.03, fontWeight: FontWeight.w600)),
                           style: OutlinedButton.styleFrom(foregroundColor: AppColors.grey500, side: const BorderSide(color: AppColors.grey200), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),

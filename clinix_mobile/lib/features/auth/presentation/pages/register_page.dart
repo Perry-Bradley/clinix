@@ -27,21 +27,32 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() { _isLoading = true; _errorMessage = null; });
 
     try {
+      final identifier = _idCtrl.text.trim();
       await AuthService.register(
         fullName: _fullNameCtrl.text.trim(),
-        identifier: _idCtrl.text.trim(),
+        identifier: identifier,
         password: _passCtrl.text,
       );
       if (mounted) {
-        // After registration, user is unassigned. 
-        // We login automatically or force them to login page. 
-        // For better UX, let's login automatically if backend returned tokens, 
-        // but our basic register doesn't return tokens in this implementation.
-        // So we redirect to login with a success message.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account created! Please sign in.')),
-        );
-        context.go('/login');
+        if (identifier.contains('@')) {
+          // Email signup → send the verification code and take them to the
+          // OTP screen (verification also signs them in).
+          try {
+            await AuthService.sendEmailOtp(email: identifier);
+          } catch (_) {
+            // The OTP page has a Resend button and shows server errors, so
+            // continue even if the first send fails.
+          }
+          if (mounted) {
+            context.go('/register/otp?email=${Uri.encodeComponent(identifier)}');
+          }
+        } else {
+          // Phone signup — no email to verify; sign in normally.
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Account created! Please sign in.')),
+          );
+          context.go('/login');
+        }
       }
     } on DioException catch (e) {
       final data = e.response?.data;
