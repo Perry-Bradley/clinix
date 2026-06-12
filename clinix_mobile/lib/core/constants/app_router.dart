@@ -40,6 +40,7 @@ import '../../features/patient/screens/book_lab_test_screen.dart';
 import '../../features/patient/screens/home_treatment_screen.dart';
 import '../../features/patient/screens/medication_reminders_screen.dart';
 import '../../features/patient/screens/health_profile_screen.dart';
+import '../../features/patient/screens/prescription_detail_screen.dart';
 import '../../features/patient/screens/nurses_list_screen.dart';
 import '../../features/appointments/screens/incoming_call_screen.dart';
 import '../../features/appointments/screens/call_history_screen.dart';
@@ -192,6 +193,14 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/notifications', builder: (c, s) => const NotificationsScreen()),
     GoRoute(path: '/about', builder: (c, s) => const AboutScreen()),
     GoRoute(path: '/patient/prescriptions', builder: (c, s) => const PrescriptionsScreen()),
+    GoRoute(
+      path: '/patient/prescriptions/detail',
+      builder: (c, s) => PrescriptionDetailScreen(
+        prescription: s.extra is Map
+            ? Map<String, dynamic>.from(s.extra as Map)
+            : const {},
+      ),
+    ),
     GoRoute(path: '/patient/medical-records', builder: (c, s) => const MedicalRecordsScreen()),
     GoRoute(path: '/homecare', builder: (c, s) => const HomeCareLandingScreen()),
     GoRoute(path: '/homecare/lab-tests', builder: (c, s) => const LabTestsScreen()),

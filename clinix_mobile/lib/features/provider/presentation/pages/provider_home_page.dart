@@ -1461,23 +1461,37 @@ class _ProviderEarningsTabState extends State<_ProviderEarningsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 40),
-          Text("Revenue & Wallet", style: AppTextStyles.displayLarge.copyWith(color: AppColors.darkBlue900, fontSize: 26)),
-          const SizedBox(height: 24),
-          
-          // Premium Glass Wallet Card
+          const SizedBox(height: 32),
+          Text(
+            'Revenue & Wallet',
+            style: AppTextStyles.displayLarge.copyWith(
+              color: AppColors.darkBlue900,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Your earnings from consultations and services',
+            style: AppTextStyles.caption.copyWith(color: AppColors.grey500),
+          ),
+          const SizedBox(height: 20),
+
+          // Balance card — solid dark navy, matching the admin dashboard's
+          // dark panel: clean and professional on the white page.
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(28),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.darkBlue900, AppColors.sky600],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(32),
+              color: AppColors.darkBlue900,
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
-                BoxShadow(color: AppColors.sky500.withOpacity(0.35), blurRadius: 30, offset: const Offset(0, 15)),
+                BoxShadow(
+                  color: AppColors.darkBlue900.withOpacity(0.22),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
               ],
             ),
             child: Column(
@@ -1485,60 +1499,91 @@ class _ProviderEarningsTabState extends State<_ProviderEarningsTab> {
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Available to Withdraw", style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky100, fontSize: 13)),
-                        const SizedBox(height: 6),
-                        Text("$balance XAF", style: AppTextStyles.displayLarge.copyWith(fontSize: 32, letterSpacing: -0.5)),
+                        Text(
+                          'AVAILABLE TO WITHDRAW',
+                          style: AppTextStyles.caption.copyWith(
+                            color: Colors.white54,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              balance,
+                              style: AppTextStyles.displayLarge.copyWith(
+                                fontSize: 34,
+                                letterSpacing: -1,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text('XAF', style: AppTextStyles.caption.copyWith(color: Colors.white54, fontWeight: FontWeight.w800)),
+                          ],
+                        ),
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-                      child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 28),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                Row(
-                  children: [
-                    _EarningStat(label: 'Pending', value: '$pendingWithdrawals XAF'),
-                    _EarningStat(label: 'KYC', value: verificationStatus.toUpperCase()),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: AppColors.darkBlue900,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        onPressed: () => _showPayoutModal(context, onSubmitted: _loadEarnings),
-                        child: const Text("Request Payout", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                      padding: const EdgeInsets.all(11),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
                       ),
+                      child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 24),
                     ),
                   ],
+                ),
+                const SizedBox(height: 20),
+                Container(height: 1, color: Colors.white.withOpacity(0.08)),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    _EarningStat(label: 'PENDING PAYOUTS', value: '$pendingWithdrawals XAF'),
+                    _EarningStat(
+                      label: 'KYC STATUS',
+                      value: verificationStatus == 'approved' ? 'VERIFIED ✓' : verificationStatus.toUpperCase(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.darkBlue900,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                    ),
+                    onPressed: () => _showPayoutModal(context, onSubmitted: _loadEarnings),
+                    child: const Text('Request Payout', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+                  ),
                 ),
               ],
             ),
           ),
-          
-          const SizedBox(height: 35),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text("Recent Transactions", style: AppTextStyles.headlineMedium),
-              Text("View All", style: AppTextStyles.caption.copyWith(color: AppColors.sky600, fontWeight: FontWeight.bold)),
-            ],
+
+          const SizedBox(height: 28),
+          Text(
+            'Recent Transactions',
+            style: AppTextStyles.headlineMedium.copyWith(
+              color: AppColors.darkBlue900,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           if (transactions.isEmpty)
             Container(
               padding: const EdgeInsets.all(16),
@@ -1627,9 +1672,17 @@ class _EarningStat extends StatelessWidget {
     return Expanded(child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.sky200, fontSize: 10)),
-        const SizedBox(height: 2),
-        Text(value, style: AppTextStyles.headlineSmall.copyWith(color: AppColors.white, fontSize: 13)),
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(
+            color: Colors.white54,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.1,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(value, style: AppTextStyles.headlineSmall.copyWith(color: AppColors.white, fontSize: 13.5, fontWeight: FontWeight.w800)),
       ],
     ));
   }
@@ -1717,15 +1770,15 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
         : (_profile?['specialty']?.toString() ?? 'Healthcare Provider');
     final feeText = (_profile?['consultation_fee'] ?? 0).toString();
 
+    final isApproved = verificationStatus == 'approved';
+
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
           child: Container(
-            padding: const EdgeInsets.fromLTRB(24, 70, 24, 40),
-            decoration: const BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.only(bottomLeft: Radius.circular(32), bottomRight: Radius.circular(32)),
-            ),
+            width: double.infinity,
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(24, 64, 24, 28),
             child: Column(
               children: [
                 GestureDetector(
@@ -1733,37 +1786,79 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
                   child: Stack(
                     children: [
                       Container(
-                        width: 100, height: 100,
+                        width: 104, height: 104,
                         decoration: BoxDecoration(
-                          color: AppColors.white,
+                          color: AppColors.grey50,
                           shape: BoxShape.circle,
                           image: profilePhoto.isNotEmpty
                               ? DecorationImage(image: NetworkImage(profilePhoto), fit: BoxFit.cover)
                               : null,
-                          border: Border.all(color: Colors.white.withOpacity(0.3), width: 3),
-                          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                          border: Border.all(color: AppColors.darkBlue900, width: 3),
                         ),
                         child: profilePhoto.isEmpty
-                            ? const Icon(Icons.person_rounded, color: AppColors.sky600, size: 50)
+                            ? const Icon(Icons.person_rounded, color: AppColors.darkBlue900, size: 52)
                             : null,
                       ),
                       Positioned(
                         bottom: 0, right: 0,
                         child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(color: AppColors.sky500, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-                          child: const Icon(Icons.camera_alt_rounded, color: AppColors.white, size: 14),
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: AppColors.darkBlue900,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2.5),
+                          ),
+                          child: const Icon(Icons.camera_alt_rounded, color: AppColors.white, size: 13),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(providerName, style: AppTextStyles.headlineLarge.copyWith(color: AppColors.white)),
-                Text(specialty, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky200)),
+                Text(
+                  providerName,
+                  style: AppTextStyles.headlineLarge.copyWith(
+                    color: AppColors.darkBlue900,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 21,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(specialty, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey500, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isApproved ? const Color(0xFFECFDF5) : const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: isApproved ? const Color(0xFFA7F3D0) : const Color(0xFFFFEDD5)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isApproved ? Icons.verified_rounded : Icons.hourglass_top_rounded,
+                        size: 14,
+                        color: isApproved ? const Color(0xFF059669) : const Color(0xFFF97316),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isApproved ? 'Verified provider' : 'Verification ${verificationStatus.toLowerCase()}',
+                        style: AppTextStyles.caption.copyWith(
+                          color: isApproved ? const Color(0xFF059669) : const Color(0xFFC2410C),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
+        ),
+        const SliverToBoxAdapter(
+          child: Divider(height: 1, color: AppColors.grey200),
         ),
         SliverPadding(
           padding: const EdgeInsets.all(20),

@@ -168,7 +168,13 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
                           if (mounted) setState(() => _prescriptions.removeAt(i));
                           return true;
                         },
-                        child: _buildPrescriptionCard(p, w),
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => context
+                              .push('/patient/prescriptions/detail', extra: p)
+                              .then((_) => _load()),
+                          child: _buildPrescriptionCard(p, w),
+                        ),
                       );
                     },
                   ),
