@@ -1965,44 +1965,113 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 25),
-                _ProfileMenuItem(
-                  icon: Icons.verified_user_outlined,
-                  label: 'Verify Profile',
-                  onTap: () => _showVerifyProfileModal(context, onUploaded: _loadProfile),
-                ),
+                const SizedBox(height: 20),
               ],
-              _ProfileMenuItem(
-                icon: Icons.edit_note_rounded,
-                label: 'Edit Profile & Bio',
-                onTap: () => _showEditBioModal(context, _profile!, onSaved: _loadProfile),
-              ),
-              _ProfileMenuItem(
-                icon: Icons.schedule_rounded,
-                label: 'My Schedule',
-                onTap: () {
-                  final state = context.findAncestorStateOfType<_ProviderHomePageState>();
-                  state?.setState(() => state._selectedTab = 1);
-                },
-              ),
-              _ProfileMenuItem(
-                icon: Icons.notifications_none_rounded,
-                label: 'Notifications',
-                onTap: () => context.push('/notifications'),
-              ),
-              _ProfileMenuItem(
-                icon: Icons.info_outline_rounded,
-                label: 'About Clinix',
-                onTap: () => context.push('/about'),
-              ),
-              _ProfileMenuItem(
-                icon: Icons.logout_rounded,
-                label: 'Log Out',
-                color: AppColors.error,
+
+              // ── Practice (mirrors the patient profile's grouped sections) ──
+              _PSettingSection(label: 'Practice', items: [
+                if (_credentials.isEmpty && verificationStatus != 'approved')
+                  _PSettingItem(
+                    icon: Icons.verified_user_rounded,
+                    iconColor: const Color(0xFFF97316),
+                    label: 'Verify Profile',
+                    onTap: () => _showVerifyProfileModal(context, onUploaded: _loadProfile),
+                  ),
+                _PSettingItem(
+                  icon: Icons.edit_note_rounded,
+                  iconColor: const Color(0xFF6366F1),
+                  label: 'Edit Profile & Bio',
+                  onTap: () => _showEditBioModal(context, _profile!, onSaved: _loadProfile),
+                ),
+                _PSettingItem(
+                  icon: Icons.schedule_rounded,
+                  iconColor: const Color(0xFF0EA5E9),
+                  label: 'My Schedule',
+                  onTap: () {
+                    final state = context.findAncestorStateOfType<_ProviderHomePageState>();
+                    state?.setState(() => state._selectedTab = 1);
+                  },
+                ),
+                _PSettingItem(
+                  icon: Icons.account_balance_wallet_rounded,
+                  iconColor: const Color(0xFF10B981),
+                  label: 'Wallet & Payouts',
+                  onTap: () {
+                    final state = context.findAncestorStateOfType<_ProviderHomePageState>();
+                    state?.setState(() => state._selectedTab = 2);
+                  },
+                  isLast: true,
+                ),
+              ]),
+
+              const SizedBox(height: 12),
+
+              // ── Preferences ──
+              _PSettingSection(label: 'Preferences', items: [
+                _PSettingItem(
+                  icon: Icons.notifications_rounded,
+                  iconColor: const Color(0xFFF97316),
+                  label: 'Notifications',
+                  onTap: () => context.push('/notifications'),
+                  isLast: true,
+                ),
+              ]),
+
+              const SizedBox(height: 12),
+
+              // ── Account ──
+              _PSettingSection(label: 'Account', items: [
+                _PSettingItem(
+                  icon: Icons.headset_mic_rounded,
+                  iconColor: const Color(0xFF0EA5E9),
+                  label: 'Help & Support',
+                  onTap: () => context.push('/about'),
+                  isLast: true,
+                ),
+              ]),
+
+              const SizedBox(height: 12),
+
+              // ── Logout (patient-style confirm + red rounded button) ──
+              GestureDetector(
                 onTap: () async {
-                  await AuthService.logoutAndClear(context);
-                  if (context.mounted) context.go('/login');
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      title: const Text('Log Out', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800)),
+                      content: const Text('Are you sure you want to log out?', style: TextStyle(fontFamily: 'Inter')),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Log Out', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true && context.mounted) {
+                    await AuthService.logoutAndClear(context);
+                    if (context.mounted) context.go('/login');
+                  }
                 },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF1F2),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFFCDD2)),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
+                      SizedBox(width: 10),
+                      Text('Log Out', style: TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 100),
             ]),
@@ -2013,27 +2082,96 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
   }
 }
 
-class _ProfileMenuItem extends StatelessWidget {
-  final IconData icon;
+/// Grouped settings card — replica of the patient profile's section style:
+/// a small grey section label above a white rounded card of rows.
+class _PSettingSection extends StatelessWidget {
   final String label;
-  final Color? color;
-  final VoidCallback onTap;
-
-  const _ProfileMenuItem({required this.icon, required this.label, required this.onTap, this.color});
+  final List<Widget> items;
+  const _PSettingSection({required this.label, required this.items});
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? AppColors.darkBlue800;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.grey200)),
-      child: ListTile(
-        onTap: onTap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        leading: Container(width: 42, height: 42, decoration: BoxDecoration(color: c.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: c, size: 20)),
-        title: Text(label, style: AppTextStyles.headlineSmall.copyWith(fontSize: 14, color: c)),
-        trailing: Icon(Icons.chevron_right_rounded, color: AppColors.grey400, size: 20),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF94A3B8),
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(children: items),
+        ),
+      ],
+    );
+  }
+}
+
+class _PSettingItem extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final VoidCallback onTap;
+  final bool isLast;
+  const _PSettingItem({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.onTap,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            child: Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, size: 18, color: iconColor),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF0A1628),
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFFCBD5E1)),
+              ],
+            ),
+          ),
+        ),
+        if (!isLast) const Divider(height: 1, indent: 66, color: Color(0xFFF1F5F9)),
+      ],
     );
   }
 }
