@@ -16,6 +16,18 @@ DEBUG = env.bool('DEBUG', default=False)
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 
+# Deployed behind Railway's TLS proxy: trust X-Forwarded-Proto so
+# request.is_secure() is correct and build_absolute_uri() returns https://
+# URLs (Android blocks cleartext http, so media links would otherwise
+# never load in the app).
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
+# Patients attach photos to the AI chat as base64 JSON; a phone photo can
+# easily exceed Django's 2.5 MB default request cap, which made image
+# messages fail with a 400 while plain text worked.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB
+
 # Daphne is required for production ASGI; optional for local migrate/shell if not installed.
 try:
     import daphne  # noqa: F401
@@ -158,8 +170,12 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    # Mobile sessions should behave like WhatsApp: sign in once and stay
+    # signed in. The app silently refreshes the access token, and rotation
+    # below extends the refresh token on every renewal, so active users are
+    # never logged out.
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=60),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'USER_ID_FIELD': 'user_id',

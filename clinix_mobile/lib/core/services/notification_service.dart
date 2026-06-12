@@ -128,10 +128,22 @@ class NotificationService {
     _routeFromData(message.data);
   }
 
-  /// Handle when user taps a local notification (foreground)
+  /// Handle when user taps a local notification. Payloads are either a
+  /// plain route ('/x') or prefixed like 'medreminder:/x'.
   static void _onNotificationTap(NotificationResponse response) {
-    // We don't currently encode the data on local-notification taps; just
-    // surface a no-op rather than crash.
+    try {
+      var payload = response.payload ?? '';
+      if (payload.isEmpty) return;
+      final colon = payload.indexOf(':');
+      if (!payload.startsWith('/') && colon > 0) {
+        payload = payload.substring(colon + 1);
+      }
+      if (payload.startsWith('/')) {
+        appRouter.push(payload);
+      }
+    } catch (_) {
+      // Routing is best-effort — never crash the notification handler.
+    }
   }
 
   /// Map an incoming notification's `data` payload to a GoRouter destination.

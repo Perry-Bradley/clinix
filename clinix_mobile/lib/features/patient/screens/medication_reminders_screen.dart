@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/medication_alarm_service.dart';
 
 class MedicationRemindersScreen extends StatefulWidget {
   const MedicationRemindersScreen({super.key});
@@ -39,20 +40,48 @@ class _MedicationRemindersScreenState extends State<MedicationRemindersScreen> {
         _adherence = adhRes.data is Map ? Map<String, dynamic>.from(adhRes.data) : null;
         _loading = false;
       });
+      // (Re)schedule the on-device alarms to match the active reminders.
+      await MedicationAlarmService.syncAlarms(_reminders);
     } catch (e) {
       debugPrint('[Reminders] Load failed: $e');
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _logDose(String reminderId, String status) async {
+  /// The dose slot this tap refers to: the closest scheduled time today.
+  /// Logging against the slot (not "now") lets the backend flip that slot
+  /// from missed → taken instead of recording a stray extra dose.
+  DateTime _nearestSlot(Map<String, dynamic> reminder) {
+    final now = DateTime.now();
+    final times = (reminder['reminder_times'] as List?) ?? const [];
+    DateTime? best;
+    int bestDiff = 1 << 30;
+    for (final t in times) {
+      final parts = t.toString().split(':');
+      if (parts.length < 2) continue;
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      if (h == null || m == null) continue;
+      final slot = DateTime(now.year, now.month, now.day, h, m);
+      final diff = (now.difference(slot)).inMinutes.abs();
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = slot;
+      }
+    }
+    return best ?? now;
+  }
+
+  Future<void> _logDose(Map<String, dynamic> reminder, String status) async {
+    final reminderId = reminder['id']?.toString() ?? '';
+    if (reminderId.isEmpty) return;
     try {
       final opts = await _authOpts();
-      final now = DateTime.now();
+      final slot = _nearestSlot(reminder);
       await Dio(BaseOptions(baseUrl: ApiConstants.baseUrl)).post(
         'consultations/reminders/$reminderId/log/',
         data: {
-          'scheduled_time': now.toUtc().toIso8601String(),
+          'scheduled_time': slot.toUtc().toIso8601String(),
           'status': status,
         },
         options: opts,
@@ -189,7 +218,6 @@ class _MedicationRemindersScreenState extends State<MedicationRemindersScreen> {
     final times = (r['reminder_times'] as List?) ?? [];
     final endDate = r['end_date']?.toString() ?? '';
     final adherenceRate = r['adherence_rate'];
-    final id = r['id']?.toString() ?? '';
 
     String daysLeft = '';
     if (endDate.isNotEmpty) {
@@ -263,7 +291,7 @@ class _MedicationRemindersScreenState extends State<MedicationRemindersScreen> {
                 child: SizedBox(
                   height: w * 0.11,
                   child: ElevatedButton.icon(
-                    onPressed: () => _logDose(id, 'taken'),
+                    onPressed: () => _logDose(r, 'taken'),
                     icon: Icon(Icons.check_rounded, size: w * 0.045),
                     label: Text('Taken', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.032, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
@@ -280,7 +308,7 @@ class _MedicationRemindersScreenState extends State<MedicationRemindersScreen> {
                 child: SizedBox(
                   height: w * 0.11,
                   child: OutlinedButton.icon(
-                    onPressed: () => _logDose(id, 'skipped'),
+                    onPressed: () => _logDose(r, 'skipped'),
                     icon: Icon(Icons.close_rounded, size: w * 0.045),
                     label: Text('Skip', style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.032, fontWeight: FontWeight.w700)),
                     style: OutlinedButton.styleFrom(
@@ -293,7 +321,168 @@ class _MedicationRemindersScreenState extends State<MedicationRemindersScreen> {
               ),
             ],
           ),
+          SizedBox(height: w * 0.015),
+          Center(
+            child: TextButton.icon(
+              onPressed: () => _showHistory(r),
+              icon: Icon(Icons.history_rounded, size: w * 0.04, color: AppColors.splashSlate900),
+              label: Text(
+                'Dose history',
+                style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.031, fontWeight: FontWeight.w700, color: AppColors.splashSlate900),
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  // ─── Dose history ─────────────────────────────────────────────────────────
+
+  Future<void> _showHistory(Map<String, dynamic> r) async {
+    final id = r['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => _DoseHistorySheet(reminderId: id, authOpts: _authOpts),
+    );
+  }
+}
+
+/// Bottom sheet listing the last 7 days of dose slots with their status —
+/// taken, skipped, missed, or upcoming.
+class _DoseHistorySheet extends StatefulWidget {
+  final String reminderId;
+  final Future<Options> Function() authOpts;
+  const _DoseHistorySheet({required this.reminderId, required this.authOpts});
+
+  @override
+  State<_DoseHistorySheet> createState() => _DoseHistorySheetState();
+}
+
+class _DoseHistorySheetState extends State<_DoseHistorySheet> {
+  List<Map<String, dynamic>> _slots = [];
+  String _medName = '';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final opts = await widget.authOpts();
+      final res = await Dio(BaseOptions(baseUrl: ApiConstants.baseUrl)).get(
+        'consultations/reminders/${widget.reminderId}/log/',
+        options: opts,
+      );
+      final data = res.data;
+      if (mounted && data is Map) {
+        setState(() {
+          _medName = data['medication_name']?.toString() ?? '';
+          _slots = List<Map<String, dynamic>>.from(
+              (data['slots'] as List?)?.map((e) => Map<String, dynamic>.from(e as Map)) ?? const []);
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  (Color, IconData, String) _statusStyle(String status) {
+    switch (status) {
+      case 'taken':
+        return (AppColors.accentGreen, Icons.check_circle_rounded, 'Taken');
+      case 'skipped':
+        return (AppColors.accentOrange, Icons.remove_circle_rounded, 'Skipped');
+      case 'missed':
+        return (AppColors.error, Icons.cancel_rounded, 'Missed');
+      default:
+        return (AppColors.grey400, Icons.schedule_rounded, 'Upcoming');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    return SafeArea(
+      child: Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+        padding: EdgeInsets.fromLTRB(w * 0.06, w * 0.04, w * 0.06, w * 0.06),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            SizedBox(height: w * 0.04),
+            Text(
+              _medName.isEmpty ? 'Dose history' : '$_medName — last 7 days',
+              style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.042, fontWeight: FontWeight.w800, color: AppColors.splashSlate900),
+            ),
+            SizedBox(height: w * 0.03),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator(color: AppColors.splashSlate900)),
+              )
+            else if (_slots.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Center(
+                  child: Text('No doses scheduled yet.', style: TextStyle(fontFamily: 'Inter', color: AppColors.grey500, fontSize: w * 0.034)),
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _slots.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  itemBuilder: (ctx, i) {
+                    final s = _slots[i];
+                    final dt = DateTime.tryParse(s['scheduled_time']?.toString() ?? '')?.toLocal();
+                    final (color, icon, label) = _statusStyle(s['status']?.toString() ?? '');
+                    return Padding(
+                      padding: EdgeInsets.symmetric(vertical: w * 0.025),
+                      child: Row(
+                        children: [
+                          Icon(icon, color: color, size: w * 0.05),
+                          SizedBox(width: w * 0.03),
+                          Expanded(
+                            child: Text(
+                              dt == null ? '—' : DateFormat('EEE d MMM · HH:mm').format(dt),
+                              style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.034, fontWeight: FontWeight.w600, color: AppColors.splashSlate900),
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: w * 0.025, vertical: w * 0.01),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(label, style: TextStyle(fontFamily: 'Inter', fontSize: w * 0.028, fontWeight: FontWeight.w700, color: color)),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

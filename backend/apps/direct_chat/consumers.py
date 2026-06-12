@@ -92,11 +92,11 @@ class DirectChatConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def _notify_peer(self, msg):
         try:
-            from apps.notifications.tasks import send_notification
+            from apps.notifications.dispatch import notify as send_notification_dispatch
             conv = msg.conversation
             peer = conv.other_participant(self.user)
             preview = msg.content[:80] if msg.content else ('📎 File' if msg.message_type == 'file' else '📷 Image')
-            send_notification.delay(
+            send_notification_dispatch(
                 str(peer.user_id),
                 self.user.full_name or 'New message',
                 preview,

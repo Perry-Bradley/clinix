@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCheck, LogOut, Bell, HeartPulse, TrendingUp, FlaskConical, Stethoscope, Building2 } from 'lucide-react';
+import { LayoutDashboard, Users, UserCheck, LogOut, Bell, HeartPulse, TrendingUp, FlaskConical, Stethoscope, Building2, CalendarClock } from 'lucide-react';
 
 const Layout = () => {
   const navigate = useNavigate();
@@ -15,6 +15,7 @@ const Layout = () => {
     { path: '/patients', icon: <HeartPulse size={18} />, label: 'Patients' },
     { path: '/users', icon: <Users size={18} />, label: 'Users' },
     { path: '/verifications', icon: <UserCheck size={18} />, label: 'Verifications' },
+    { path: '/appointments', icon: <CalendarClock size={18} />, label: 'Appointments' },
     { path: '/specialties', icon: <Stethoscope size={18} />, label: 'Specialties' },
     { path: '/facilities', icon: <Building2 size={18} />, label: 'Facilities' },
     { path: '/revenue', icon: <TrendingUp size={18} />, label: 'Finance' },
@@ -76,8 +77,8 @@ const Layout = () => {
         {/* Top bar */}
         <header className="bg-white border-b border-slate-200 px-8 h-14 flex items-center justify-between flex-shrink-0">
           <div>
-            <h2 className="font-bold text-slate-900 text-sm capitalize">
-              {location.pathname === '/' ? 'Dashboard' : location.pathname.replace('/', '')}
+            <h2 className="font-bold text-slate-900 text-sm">
+              {menuItems.find((m) => m.path === location.pathname)?.label ?? 'Dashboard'}
             </h2>
             <p className="text-slate-400 text-[11px]">Clinix Healthcare Management</p>
           </div>

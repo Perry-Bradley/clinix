@@ -147,7 +147,11 @@ class SendEmailOTPView(APIView):
             if User.objects.filter(email=email).exists():
                 otp = generate_otp()
                 set_email_otp(email, otp)
-                send_email_otp(email, otp)
+                if not send_email_otp(email, otp):
+                    return Response(
+                        {'error': 'Could not send the verification email. Please try again later.'},
+                        status=status.HTTP_502_BAD_GATEWAY,
+                    )
                 return Response({'message': 'OTP sent to email'})
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -216,37 +220,73 @@ class FCMTokenView(APIView):
 # ─── Password Reset ───────────────────────────────────────────────────────────
 
 class PasswordResetRequestView(APIView):
+    """Send a password-reset OTP. Accepts `email` (preferred) or
+    `phone_number` (legacy SMS path, requires Twilio config)."""
     permission_classes = (AllowAny,)
-    
+
     def post(self, request):
-        serializer = OTPSendSerializer(data=request.data)
-        if serializer.is_valid():
-            phone_number = serializer.validated_data['phone_number']
-            if User.objects.filter(phone_number=phone_number).exists():
-                otp = generate_otp()
-                set_otp(phone_number, otp)
-                send_sms(phone_number, f"Your Clinix password reset code is {otp}")
-                return Response({'message': 'OTP sent'})
-            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        email = (request.data.get('email') or '').strip().lower()
+        phone_number = (request.data.get('phone_number') or '').strip()
+
+        if email:
+            if not User.objects.filter(email__iexact=email).exists():
+                return Response({'error': 'No account found with this email.'}, status=status.HTTP_404_NOT_FOUND)
+            otp = generate_otp()
+            set_email_otp(email, otp)
+            if not send_email_otp(email, otp, purpose='password reset'):
+                return Response(
+                    {'error': 'Could not send the reset email. Please try again later.'},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            return Response({'message': 'OTP sent to email'})
+
+        if phone_number:
+            if not User.objects.filter(phone_number=phone_number).exists():
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+            otp = generate_otp()
+            set_otp(phone_number, otp)
+            send_sms(phone_number, f"Your Clinix password reset code is {otp}")
+            return Response({'message': 'OTP sent'})
+
+        return Response({'error': 'email or phone_number is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
 class PasswordResetConfirmView(APIView):
+    """Verify the reset OTP and set the new password. Accepts `email` or
+    `phone_number` to match however the OTP was requested."""
     permission_classes = (AllowAny,)
-    
+
     def patch(self, request):
-        serializer = PasswordResetConfirmSerializer(data=request.data)
-        if serializer.is_valid():
-            phone_number = serializer.validated_data['phone_number']
-            otp = serializer.validated_data['otp']
-            new_password = serializer.validated_data['new_password']
-            
-            if verify_otp(phone_number, otp):
+        email = (request.data.get('email') or '').strip().lower()
+        phone_number = (request.data.get('phone_number') or '').strip()
+        otp = (request.data.get('otp') or '').strip()
+        new_password = request.data.get('new_password') or ''
+
+        if not otp or len(new_password) < 6:
+            return Response(
+                {'error': 'otp and a new_password of at least 6 characters are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if email:
+            if not verify_email_otp(email, otp):
+                return Response({'error': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                user = User.objects.get(email__iexact=email)
+            except User.DoesNotExist:
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        elif phone_number:
+            if not verify_otp(phone_number, otp):
+                return Response({'error': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
                 user = User.objects.get(phone_number=phone_number)
-                user.set_password(new_password)
-                user.save()
-                return Response({'message': 'Password reset successful'})
-            return Response({'error': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            except User.DoesNotExist:
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response({'error': 'email or phone_number is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save()
+        return Response({'message': 'Password reset successful'})
 
 # ─── OAuth ───────────────────────────────────────────────────────────────────
 

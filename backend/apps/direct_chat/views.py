@@ -56,6 +56,82 @@ class ConversationStartWithProviderView(APIView):
         return Response(ConversationSerializer(conversation, context={'request': request}).data)
 
 
+class MessageUploadView(APIView):
+    """Multipart upload for direct-chat attachments. Stores the file in
+    MEDIA and creates the message in one call — replaces the old
+    Firebase Storage path, which rejected users who weren't signed in to
+    Firebase Auth (anyone using email/password login)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, conversation_id):
+        from django.core.files.storage import default_storage
+        from django.conf import settings
+        import os
+
+        conv = get_object_or_404(Conversation, conversation_id=conversation_id)
+        if request.user not in (conv.user_a, conv.user_b):
+            return Response(
+                {'error': 'You are not a participant in this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        message_type = request.data.get('message_type', 'file')
+        content = (request.data.get('content') or '').strip()
+
+        path = os.path.join('dchat_attachments', str(conversation_id), file_obj.name)
+        filename = default_storage.save(path, file_obj)
+        file_url = request.build_absolute_uri(settings.MEDIA_URL + filename)
+
+        msg = DirectMessage.objects.create(
+            conversation=conv,
+            sender=request.user,
+            content=content,
+            message_type=message_type,
+            file_url=file_url,
+            file_name=file_obj.name,
+        )
+        conv.last_message_at = timezone.now()
+        conv.save(update_fields=['last_message_at'])
+
+        peer = conv.other_participant(request.user)
+        _notify_direct_message(peer, conv, msg, request.user)
+
+        return Response(DirectMessageSerializer(msg).data, status=status.HTTP_201_CREATED)
+
+
+def _notify_direct_message(peer, conv, msg, sender):
+    """FCM + WebSocket fan-out for a new direct message."""
+    try:
+        from apps.notifications.dispatch import notify as send_notification_dispatch
+        preview = msg.content[:80] if msg.content else ('📎 File' if msg.message_type == 'file' else '📷 Image')
+        send_notification_dispatch(
+            str(peer.user_id),
+            sender.full_name or 'New message',
+            preview,
+            'consultation',
+            {'route': f'/chat-direct/{conv.conversation_id}', 'conversation_id': str(conv.conversation_id)},
+        )
+    except Exception:
+        pass
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        layer = get_channel_layer()
+        async_to_sync(layer.group_send)(
+            f'dchat_{conv.conversation_id}',
+            {
+                'type': 'chat_message',
+                'payload': DirectMessageSerializer(msg).data,
+            },
+        )
+    except Exception:
+        pass
+
+
 class MessageListView(generics.ListCreateAPIView):
     """List messages in a conversation + POST to send a new message (HTTP fallback)."""
     serializer_class = DirectMessageSerializer
@@ -110,9 +186,9 @@ class MessageListView(generics.ListCreateAPIView):
     def _notify(self, peer, conv, msg, sender):
         # FCM push
         try:
-            from apps.notifications.tasks import send_notification
+            from apps.notifications.dispatch import notify as send_notification_dispatch
             preview = msg.content[:80] if msg.content else ('📎 File' if msg.message_type == 'file' else '📷 Image')
-            send_notification.delay(
+            send_notification_dispatch(
                 str(peer.user_id),
                 sender.full_name or 'New message',
                 preview,

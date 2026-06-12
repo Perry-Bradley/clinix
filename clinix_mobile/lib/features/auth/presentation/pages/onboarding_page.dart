@@ -11,9 +11,15 @@ Future<void> _markOnboardingSeen() async {
 
 class _OnboardingData {
   final IconData icon;
+  final String image;
   final String title;
   final String subtitle;
-  const _OnboardingData({required this.icon, required this.title, required this.subtitle});
+  const _OnboardingData({
+    required this.icon,
+    required this.image,
+    required this.title,
+    required this.subtitle,
+  });
 }
 
 class OnboardingPage extends StatefulWidget {
@@ -30,16 +36,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
   final List<_OnboardingData> _pages = const [
     _OnboardingData(
       icon: Icons.medical_services_rounded,
+      image: 'assets/images/onboarding/onb_doctors.jpg',
       title: 'Find top doctors',
       subtitle: 'Connect with verified healthcare providers across Cameroon in seconds.',
     ),
     _OnboardingData(
       icon: Icons.psychology_rounded,
+      image: 'assets/images/onboarding/onb_ai.jpg',
       title: 'Clinix AI triage',
       subtitle: 'Describe symptoms and get structured guidance — with clear emergency reminders when needed.',
     ),
     _OnboardingData(
       icon: Icons.videocam_rounded,
+      image: 'assets/images/onboarding/onb_video.jpg',
       title: 'Video consultations',
       subtitle: 'Book and consult securely from home when you need a real clinician.',
     ),
@@ -177,22 +186,63 @@ class _OnboardingCard extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              color: AppColors.darkBlue500,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.darkBlue500.withOpacity(0.15),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12),
+          // Real-life photo illustrating the feature, with a floating icon
+          // badge anchored to its bottom edge.
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.darkBlue500.withOpacity(0.18),
+                      blurRadius: 28,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Icon(data.icon, size: 64, color: Colors.white),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(32),
+                  child: AspectRatio(
+                    aspectRatio: 0.92,
+                    child: Image.asset(
+                      data.image,
+                      fit: BoxFit.cover,
+                      // If the asset somehow fails to load, fall back to the
+                      // old icon tile so onboarding never looks broken.
+                      errorBuilder: (_, __, ___) => Container(
+                        color: AppColors.darkBlue500,
+                        alignment: Alignment.center,
+                        child: Icon(data.icon, size: 64, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: -22,
+                right: 24,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkBlue500,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.darkBlue500.withOpacity(0.3),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Icon(data.icon, size: 26, color: Colors.white),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 44),
           Text(
             data.title,
             textAlign: TextAlign.center,

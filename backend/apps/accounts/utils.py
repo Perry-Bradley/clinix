@@ -62,11 +62,13 @@ def verify_email_otp(email, submitted_otp):
         return True
     return False
 
-def send_email_otp(email, otp):
-    subject = "Your Clinix Verification Code"
+def send_email_otp(email, otp, purpose='verification'):
+    """Send an OTP email. Returns True on success so callers can surface a
+    real error instead of telling the user 'sent' when nothing went out."""
+    subject = f"Your Clinix {purpose} code"
     message = (
         f"Hello,\n\n"
-        f"Your Clinix verification code is: {otp}\n\n"
+        f"Your Clinix {purpose} code is: {otp}\n\n"
         f"This code expires in 10 minutes.\n\n"
         f"If you did not request this, please ignore this email.\n\n"
         f"— The Clinix Team"
@@ -75,6 +77,9 @@ def send_email_otp(email, otp):
     try:
         send_mail(subject, message, from_email, [email], fail_silently=False)
         print(f"Email OTP sent to {email}")
+        return True
     except Exception as e:
-        # In development without email configured, just print it
-        print(f"MOCK EMAIL OTP to {email}: {otp} (error: {e})")
+        # In development the console backend never raises; reaching here in
+        # production means SMTP is misconfigured or rejected the message.
+        print(f"EMAIL OTP SEND FAILED for {email}: {otp} (error: {e})")
+        return False

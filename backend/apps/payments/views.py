@@ -58,13 +58,13 @@ def _materialise_pending_booking(payment):
 
         # Notify the nurse so it lands in their notifications immediately.
         try:
-            from apps.notifications.tasks import send_notification
+            from apps.notifications.dispatch import notify as send_notification_dispatch
             patient_name = (
                 getattr(payment.patient.patient_id, 'full_name', None) or 'A patient'
             )
             label = 'home visit' if appointment.appointment_type == 'home_treatment' else 'lab test'
             service = appointment.service_name or label
-            send_notification.delay(
+            send_notification_dispatch(
                 str(provider.provider_id.user_id),
                 f'New {label} confirmed',
                 f'{patient_name} booked {service} — {scheduled_at.strftime("%b %d, %H:%M")}',

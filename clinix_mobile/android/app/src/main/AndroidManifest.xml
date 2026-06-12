@@ -18,6 +18,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Medication reminders fire as exact, alarm-style local notifications
+         even when the device is dozing. RECEIVE_BOOT_COMPLETED lets the
+         notifications plugin restore scheduled alarms after a reboot. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:label="clinix_mobile"
         android:name="${applicationName}"

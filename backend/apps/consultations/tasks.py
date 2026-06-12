@@ -21,7 +21,7 @@ def send_medication_reminders():
     and sends a push notification. Patient confirms/skips via the app.
     """
     from .models import MedicationReminder, MedicationLog
-    from apps.notifications.tasks import send_notification
+    from apps.notifications.dispatch import notify as send_notification_dispatch
 
     now = timezone.localtime()
     current_time = now.strftime('%H:%M')
@@ -63,7 +63,7 @@ def send_medication_reminders():
             if created:
                 # Send push notification
                 user_id = str(reminder.patient.patient_id.user_id)
-                send_notification.delay(
+                send_notification_dispatch(
                     user_id=user_id,
                     title='Medication Reminder',
                     body=f"Time to take {reminder.medication_name} ({reminder.dosage})",
@@ -83,7 +83,7 @@ def transcribe_and_draft_record(consultation_id: str):
     before submitting (which publishes it to the patient).
     """
     from .models import Consultation, MedicalRecord
-    from apps.notifications.tasks import send_notification
+    from apps.notifications.dispatch import notify as send_notification_dispatch
     from apps.ai_engine.medlm_client import medlm_client
 
     try:
@@ -146,7 +146,7 @@ def transcribe_and_draft_record(consultation_id: str):
     patient_name = (
         getattr(patient.patient_id, 'full_name', None) or 'your patient'
     )
-    send_notification.delay(
+    send_notification_dispatch(
         str(provider.provider_id.user_id),
         'AI report draft ready',
         f'Your draft report for {patient_name} is ready — review and submit.',
@@ -211,9 +211,10 @@ def _run_speech_to_text(audio_gs_uri: str) -> str:
     def _recognise(model: str | None) -> str:
         client = speech.SpeechClient(credentials=creds) if creds else speech.SpeechClient()
         audio = speech.RecognitionAudio(uri=audio_gs_uri)
+        # The call audio is a WAV file: encoding and sample rate are read from
+        # the header, and passing explicit values that don't match it makes
+        # the whole job fail — so leave them out.
         cfg_kwargs = dict(
-            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-            sample_rate_hertz=16000,
             language_code='en-US',
             alternative_language_codes=['fr-FR'],
             enable_automatic_punctuation=True,

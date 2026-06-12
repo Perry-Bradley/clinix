@@ -362,6 +362,16 @@ class _AppointmentDetailPageState extends State<AppointmentDetailPage> {
           const SizedBox(height: 10),
           _InfoRow(icon: Icons.payments_rounded, label: 'Fee', value: 'XAF ${fee.toInt()}'),
 
+          // ── Doctor-only: the patient's self-reported health basics ──
+          if (_isProvider) ...[
+            const SizedBox(height: 24),
+            _PatientSnapshotCard(
+              patient: a['patient'] is Map
+                  ? Map<String, dynamic>.from(a['patient'] as Map)
+                  : const {},
+            ),
+          ],
+
           if (status == 'cancelled' && reason.isNotEmpty) ...[
             const SizedBox(height: 24),
             Text(
@@ -509,6 +519,150 @@ class _InfoRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Doctor-facing summary of the basics the patient filled in on their
+/// health profile (height, weight, vitals, blood type, allergies…).
+class _PatientSnapshotCard extends StatelessWidget {
+  final Map<String, dynamic> patient;
+  const _PatientSnapshotCard({required this.patient});
+
+  String _s(dynamic v) {
+    if (v == null) return '';
+    final s = v.toString().trim();
+    return s == 'null' ? '' : s;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final height = _s(patient['height_cm']);
+    final weight = _s(patient['weight_kg']);
+    final temp = _s(patient['temperature_c']);
+    final pulse = _s(patient['pulse_bpm']);
+    final blood = _s(patient['blood_type']);
+    final meds = _s(patient['current_medications']);
+    final allergies =
+        ((patient['allergies'] as List?) ?? const []).map((e) => '$e').where((e) => e.isNotEmpty).toList();
+    final conditions =
+        ((patient['chronic_conditions'] as List?) ?? const []).map((e) => '$e').where((e) => e.isNotEmpty).toList();
+
+    final vitals = <MapEntry<String, String>>[
+      if (height.isNotEmpty) MapEntry('Height', '$height cm'),
+      if (weight.isNotEmpty) MapEntry('Weight', '$weight kg'),
+      if (temp.isNotEmpty) MapEntry('Temp', '$temp °C'),
+      if (pulse.isNotEmpty) MapEntry('Pulse', '$pulse bpm'),
+      if (blood.isNotEmpty) MapEntry('Blood', blood),
+    ];
+
+    final hasAnything =
+        vitals.isNotEmpty || allergies.isNotEmpty || conditions.isNotEmpty || meds.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.grey200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.monitor_heart_rounded, color: AppColors.darkBlue500, size: 18),
+              const SizedBox(width: 10),
+              Text(
+                'Patient health snapshot',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.darkBlue900,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!hasAnything)
+            Text(
+              'The patient hasn\'t filled in their health details yet.',
+              style: AppTextStyles.caption.copyWith(color: AppColors.grey500),
+            )
+          else ...[
+            if (vitals.isNotEmpty)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: vitals
+                    .map(
+                      (v) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.grey50,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(v.key,
+                                style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.grey500, fontSize: 10.5)),
+                            const SizedBox(height: 2),
+                            Text(v.value,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                    color: AppColors.darkBlue900,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            if (allergies.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _snapshotLine('Allergies', allergies.join(', '), const Color(0xFFEF4444)),
+            ],
+            if (conditions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _snapshotLine('Chronic conditions', conditions.join(', '), const Color(0xFFF97316)),
+            ],
+            if (meds.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _snapshotLine('Current medications', meds, AppColors.darkBlue500),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _snapshotLine(String label, String value, Color color) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 5),
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: AppTextStyles.caption.copyWith(color: AppColors.grey700, fontSize: 12.5, height: 1.4),
+              children: [
+                TextSpan(
+                  text: '$label: ',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                TextSpan(text: value),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

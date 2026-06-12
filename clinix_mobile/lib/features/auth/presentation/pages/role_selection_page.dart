@@ -25,7 +25,9 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
       await AuthService.selectRole(userType: role);
       if (mounted) {
         if (role == 'patient') {
-          context.go('/patient/home');
+          // New patients fill in basic health data first (skippable) so
+          // their doctor has context before the first consultation.
+          context.go('/patient/health-profile?intake=1');
         } else {
           context.go('/register/provider-enrollment');
         }

@@ -11,7 +11,7 @@ from .serializers import DirectMessageSerializer
 def post_clinical_message(*, doctor_user, patient_user, message_type, content, metadata):
     """Create a DirectMessage in the doctor↔patient conversation and broadcast
     it to the chat WebSocket group. Does NOT send an FCM push — the caller is
-    expected to fire a typed `send_notification.delay()` on its own so the
+    expected to fire a typed `send_notification_dispatch()` on its own so the
     notification surfaces with the right title/icon.
 
     Returns the created DirectMessage.

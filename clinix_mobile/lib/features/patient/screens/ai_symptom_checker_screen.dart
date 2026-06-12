@@ -176,7 +176,7 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
     try {
       final token = await AuthService.getAccessToken();
       final res = await Dio().post(
-        '${ApiConstants.baseUrl}ai-engine/chat/$_sessionId/recommend/',
+        '${ApiConstants.baseUrl}ai/chat/$_sessionId/recommend/',
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
       final data = res.data;
@@ -284,7 +284,14 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    // Downscale before encoding: full-resolution photos exceed request
+    // limits once base64-encoded and Gemini doesn't need more detail.
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+      maxWidth: 1280,
+      maxHeight: 1280,
+    );
     if (image == null) return;
     final bytes = await image.readAsBytes();
     setState(() {
@@ -295,7 +302,12 @@ class _AiConsultScreenState extends State<AiConsultScreen> {
 
   Future<void> _pickCamera() async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+      maxWidth: 1280,
+      maxHeight: 1280,
+    );
     if (image == null) return;
     final bytes = await image.readAsBytes();
     setState(() {

@@ -106,8 +106,12 @@ class AIChatMessageView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        user_message = serializer.validated_data['message']
+        user_message = serializer.validated_data.get('message', '') or ''
         image_b64 = serializer.validated_data.get('image', None)
+        if not user_message.strip() and image_b64:
+            # Gemini rejects empty text parts; give photo-only messages a
+            # neutral instruction.
+            user_message = 'Please look at this photo of my condition.'
 
         # Decode the image if provided
         image_bytes = None

@@ -249,30 +249,104 @@ class PlatformAppointmentsView(generics.ListAPIView):
             )
         return qs
 
+def _parse_days(request, default=30, maximum=365):
+    try:
+        days = int(request.query_params.get('days', default))
+    except (TypeError, ValueError):
+        days = default
+    return max(1, min(days, maximum))
+
+
 class AnalyticsRevenueView(APIView):
+    """Daily platform revenue (successful payments) for the chart on the
+    admin dashboard. `?days=N` controls the window (default 30)."""
     permission_classes = [IsSuperAdminUser]
-    
+
     def get(self, request):
-        # Mocking daily revenue for chart
-        return Response({'data': [{'date': '2025-01-01', 'revenue': 5000}]})
-        
+        days = _parse_days(request)
+        since = timezone.now() - timezone.timedelta(days=days)
+        rows = (
+            Payment.objects.filter(status='success', initiated_at__gte=since)
+            .annotate(date=TruncDate('initiated_at'))
+            .values('date')
+            .annotate(
+                revenue=Sum('platform_fee'),
+                volume=Sum('amount'),
+                payments=Count('pk'),
+            )
+            .order_by('date')
+        )
+        data = [
+            {
+                'date': r['date'].isoformat(),
+                'revenue': float(r['revenue'] or 0),
+                'volume': float(r['volume'] or 0),
+                'payments': r['payments'],
+            }
+            for r in rows if r['date']
+        ]
+        return Response({'data': data, 'days': days})
+
+
 class AnalyticsConsultationView(APIView):
+    """Daily consultation counts. `?days=N` controls the window (default 30)."""
     permission_classes = [IsSuperAdminUser]
-    
+
     def get(self, request):
-        # Mocking daily consultations for chart
-        return Response({'data': [{'date': '2025-01-01', 'consultations': 25}]})
+        days = _parse_days(request)
+        since = timezone.now() - timezone.timedelta(days=days)
+        rows = (
+            Consultation.objects.filter(created_at__gte=since)
+            .annotate(date=TruncDate('created_at'))
+            .values('date')
+            .annotate(consultations=Count('pk'))
+            .order_by('date')
+        )
+        data = [
+            {'date': r['date'].isoformat(), 'consultations': r['consultations']}
+            for r in rows if r['date']
+        ]
+        return Response({'data': data, 'days': days})
+
 
 class ExportCSVReportView(APIView):
+    """CSV export. `?report=appointments` (default) or `?report=payments`."""
     permission_classes = [IsSuperAdminUser]
-    
+
     def get(self, request):
+        report = request.query_params.get('report', 'appointments')
+        if report not in ('appointments', 'payments'):
+            report = 'appointments'
+
         response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="clinix_report.csv"'
-        
+        stamp = timezone.now().strftime('%Y%m%d')
+        response['Content-Disposition'] = f'attachment; filename="clinix_{report}_{stamp}.csv"'
         writer = csv.writer(response)
-        writer.writerow(['ID', 'Status', 'Date'])
-        writer.writerow(['1', 'Confirmed', '2025-01-01'])
+
+        if report == 'payments':
+            writer.writerow(['Payment ID', 'Amount', 'Platform Fee', 'Provider Payout', 'Status', 'Initiated At', 'Completed At'])
+            for p in Payment.objects.all().order_by('-initiated_at')[:5000]:
+                writer.writerow([
+                    str(p.pk), p.amount, p.platform_fee or '', p.provider_payout or '',
+                    p.status,
+                    p.initiated_at.isoformat() if p.initiated_at else '',
+                    p.completed_at.isoformat() if p.completed_at else '',
+                ])
+        else:
+            writer.writerow(['Appointment ID', 'Patient', 'Provider', 'Type', 'Status', 'Scheduled At'])
+            qs = (
+                Appointment.objects
+                .select_related('patient__patient_id', 'provider__provider_id')
+                .order_by('-scheduled_at')[:5000]
+            )
+            for a in qs:
+                patient_name = getattr(getattr(a.patient, 'patient_id', None), 'full_name', '') or ''
+                provider_name = getattr(getattr(a.provider, 'provider_id', None), 'full_name', '') or ''
+                writer.writerow([
+                    str(a.pk), patient_name, provider_name,
+                    a.appointment_type, a.status,
+                    a.scheduled_at.isoformat() if a.scheduled_at else '',
+                ])
         return response
 
 class AdminWithdrawalListView(APIView):

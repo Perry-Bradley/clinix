@@ -107,6 +107,53 @@ SAFETY_SETTINGS = {
     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
 }
 
+# Ordered fallback preference. Gemini 1.5 models were retired by Google, so
+# they only remain here as a last resort for legacy API keys that still
+# expose them.
+PREFERRED_MODELS = [
+    'models/gemini-2.5-flash',
+    'models/gemini-2.0-flash',
+    'models/gemini-2.5-flash-lite',
+    'models/gemini-flash-latest',
+    'models/gemini-1.5-flash-latest',
+    'models/gemini-1.5-flash',
+]
+
+
+def _strip_models_prefix(model_name: str) -> str:
+    model_name = (model_name or '').strip()
+    if model_name.startswith('models/'):
+        return model_name.split('models/', 1)[1]
+    return model_name
+
+
+def _best_available_model(exclude: str = '') -> str:
+    """Query the API for usable Gemini models and return the best match
+    (without the `models/` prefix), or '' if none could be listed."""
+    try:
+        models = list(genai.list_models())
+    except Exception:
+        logger.exception('ClinixAI list_models failed')
+        return ''
+
+    candidates = []
+    for m in models:
+        name = getattr(m, 'name', '') or ''
+        methods = getattr(m, 'supported_generation_methods', []) or []
+        if 'generateContent' not in methods:
+            continue
+        if 'gemini' not in name.lower():
+            continue
+        candidates.append(name)
+
+    for p in PREFERRED_MODELS:
+        if p in candidates and _strip_models_prefix(p) != exclude:
+            return _strip_models_prefix(p)
+    for c in candidates:
+        if _strip_models_prefix(c) != exclude:
+            return _strip_models_prefix(c)
+    return ''
+
 
 class MedLMClient:
     _instance = None
@@ -121,46 +168,10 @@ class MedLMClient:
             return
         self._singleton_configured = True
 
-        self.model_id = os.getenv('MEDLM_MODEL_ID', 'gemini-1.5-flash-latest')
+        self.model_id = os.getenv('MEDLM_MODEL_ID', 'gemini-2.5-flash')
         self.api_key = os.getenv('GEMINI_API_KEY', '')
         self._model_ready = False
         self.model = None
-
-        def _strip_models_prefix(model_name: str) -> str:
-            model_name = (model_name or '').strip()
-            if model_name.startswith('models/'):
-                return model_name.split('models/', 1)[1]
-            return model_name
-
-        def _pick_fallback_model_id() -> str:
-            try:
-                models = list(genai.list_models())
-            except Exception:
-                logger.exception('ClinixAI list_models failed')
-                return ''
-
-            candidates = []
-            for m in models:
-                name = getattr(m, 'name', '') or ''
-                methods = getattr(m, 'supported_generation_methods', []) or []
-                if 'generateContent' not in methods:
-                    continue
-                if 'gemini' not in name.lower():
-                    continue
-                candidates.append(name)
-
-            preferred = [
-                'models/gemini-1.5-flash-latest',
-                'models/gemini-1.5-flash',
-                'models/gemini-1.5-pro-latest',
-                'models/gemini-1.5-pro',
-            ]
-            for p in preferred:
-                if p in candidates:
-                    return _strip_models_prefix(p)
-            if candidates:
-                return _strip_models_prefix(candidates[0])
-            return ''
 
         if self.api_key:
             try:
@@ -172,7 +183,7 @@ class MedLMClient:
                         system_instruction=SYSTEM_INSTRUCTION,
                     )
                 except Exception:
-                    fallback = _pick_fallback_model_id()
+                    fallback = _best_available_model(exclude=self.model_id)
                     if not fallback:
                         raise
                     logger.warning('ClinixAI model not available (%s). Falling back to %s', self.model_id, fallback)
@@ -223,42 +234,7 @@ class MedLMClient:
         )
 
     def _fallback_model(self) -> bool:
-        try:
-            models = list(genai.list_models())
-        except Exception:
-            logger.exception('ClinixAI list_models failed')
-            return False
-
-        candidates = []
-        for m in models:
-            name = getattr(m, 'name', '') or ''
-            methods = getattr(m, 'supported_generation_methods', []) or []
-            if 'generateContent' not in methods:
-                continue
-            if 'gemini' not in name.lower():
-                continue
-            candidates.append(name)
-
-        preferred = [
-            'models/gemini-1.5-flash-latest',
-            'models/gemini-1.5-flash',
-            'models/gemini-1.5-pro-latest',
-            'models/gemini-1.5-pro',
-        ]
-
-        def _strip_models_prefix(model_name: str) -> str:
-            model_name = (model_name or '').strip()
-            if model_name.startswith('models/'):
-                return model_name.split('models/', 1)[1]
-            return model_name
-
-        fallback = ''
-        for p in preferred:
-            if p in candidates:
-                fallback = _strip_models_prefix(p)
-                break
-        if not fallback and candidates:
-            fallback = _strip_models_prefix(candidates[0])
+        fallback = _best_available_model(exclude=self.model_id)
         if not fallback or fallback == self.model_id:
             return False
 

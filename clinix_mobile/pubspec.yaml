@@ -82,6 +82,7 @@ dependencies:
   fl_chart: ^0.68.0
   camera: ^0.10.5+5
   flutter_local_notifications: ^20.1.0
+  timezone: ^0.10.0
 
 dev_dependencies:
   flutter_test:
@@ -95,6 +96,7 @@ flutter:
   assets:
     - .env
     - assets/images/
+    - assets/images/onboarding/
     - assets/animations/
     - assets/icons/
 

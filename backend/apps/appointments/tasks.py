@@ -2,7 +2,7 @@ from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
 from .models import Appointment
-from apps.notifications.tasks import send_notification
+from apps.notifications.dispatch import notify as send_notification_dispatch
 
 @shared_task
 def send_appointment_reminders():
@@ -13,17 +13,18 @@ def send_appointment_reminders():
     
     upcoming_appointments = Appointment.objects.filter(
         status='confirmed',
+        reminder_sent=False,
         scheduled_at__range=(timerange_start, timerange_end)
     )
-    
+
     for appointment in upcoming_appointments:
         title = "Upcoming Appointment Reminder"
         provider_name = appointment.provider.provider_id.full_name or 'your provider'
         appointment_type = appointment.appointment_type.replace('-', ' ')
         message = f"You have an upcoming {appointment_type} appointment with {provider_name} on {appointment.scheduled_at.strftime('%b %d, %H:%M')}."
         # Send to patient
-        send_notification.delay(
-            appointment.patient.patient_id.user_id,
+        send_notification_dispatch(
+            str(appointment.patient.patient_id.user_id),
             title,
             message,
             'appointment'

@@ -23,7 +23,7 @@ class PatientMedicalRecordsView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return MedicalRecord.objects.filter(patient__patient_id=self.request.user).order_dict('-created_at')
+        return MedicalRecord.objects.filter(patient__patient_id=self.request.user).order_by('-created_at')
 
 class PatientMedicalRecordDetailView(generics.RetrieveAPIView):
     serializer_class = MedicalRecordSerializer

@@ -52,7 +52,13 @@ class ConsultationStartView(APIView):
 class ConsultationDetailView(generics.RetrieveAPIView):
     serializer_class = ConsultationSerializer
     permission_classes = [permissions.IsAuthenticated]
-    queryset = Consultation.objects.all()
+
+    def get_queryset(self):
+        # Only the patient or provider on the appointment may read it.
+        return Consultation.objects.filter(
+            Q(appointment__patient__patient_id=self.request.user) |
+            Q(appointment__provider__provider_id=self.request.user)
+        )
 
 class ConsultationEndView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -122,7 +128,7 @@ def _notify_patient_of_prescription(prescription):
     plus inject an inline chat message so the patient sees the prescription
     in their conversation with the doctor."""
     try:
-        from apps.notifications.tasks import send_notification
+        from apps.notifications.dispatch import notify as send_notification_dispatch
         provider_name = (
             getattr(prescription.provider.provider_id, 'full_name', None)
             or 'Your doctor'
@@ -132,8 +138,8 @@ def _notify_patient_of_prescription(prescription):
             f"{provider_name} sent you a new prescription"
             + (f" with {med_count} medication{'s' if med_count != 1 else ''}." if med_count else '.')
         )
-        send_notification.delay(
-            prescription.patient.patient_id.user_id,
+        send_notification_dispatch(
+            str(prescription.patient.patient_id.user_id),
             'New prescription',
             body,
             'prescription',
@@ -258,8 +264,13 @@ class ConsultationTranscriptView(APIView):
     
     def get(self, request, pk):
         try:
-            consultation = Consultation.objects.get(pk=pk)
-            # Currently just returning the JSON field. Real scenario connects to ChatConsumer DB logic.
+            consultation = Consultation.objects.select_related(
+                'appointment__patient', 'appointment__provider'
+            ).get(pk=pk)
+            appointment = consultation.appointment
+            if (appointment.patient.patient_id != request.user
+                    and appointment.provider.provider_id != request.user):
+                return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
             return Response({'ai_transcript': consultation.ai_transcript or {}})
         except Consultation.DoesNotExist:
             return Response({'error': 'Consultation not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -337,8 +348,8 @@ class ConsultationRingView(APIView):
         caller_photo = getattr(caller, 'profile_photo', '') or ''
 
         try:
-            from apps.notifications.tasks import send_notification
-            send_notification.delay(
+            from apps.notifications.dispatch import notify as send_notification_dispatch
+            send_notification_dispatch(
                 str(peer.user_id),
                 f'Incoming call from {caller_name}',
                 f'{caller_name} is calling you on Clinix.',
@@ -424,6 +435,7 @@ class ConsultationMissedCallView(APIView):
         caller_name = caller.full_name or 'Clinix'
         peer_name = peer.full_name or 'the other person'
         reason = request.data.get('reason', 'no_answer')
+        duration = request.data.get('duration_seconds')
 
         try:
             from apps.notifications.models import Notification
@@ -432,24 +444,58 @@ class ConsultationMissedCallView(APIView):
                 'appointment_id': str(appointment.appointment_id),
                 'reason': reason,
             }
-            # Caller's inbox: outgoing miss.
-            Notification.objects.create(
-                user=caller,
-                title=f'No answer from {peer_name}',
-                body='Tap to try again.',
-                type='system',
-                channel='in_app',
-                data={**data, 'direction': 'outgoing'},
-            )
-            # Peer's inbox: incoming miss they didn't pick up.
-            Notification.objects.create(
-                user=peer,
-                title=f'Missed call from {caller_name}',
-                body='Tap to call back.',
-                type='system',
-                channel='in_app',
-                data={**data, 'direction': 'incoming', 'caller_name': caller_name},
-            )
+            if duration is not None:
+                data['duration_seconds'] = duration
+
+            if reason == 'completed':
+                # Both participants report the ended call — only log the
+                # first report so the history doesn't show duplicates.
+                recent = timezone.now() - timezone.timedelta(minutes=2)
+                already = Notification.objects.filter(
+                    user__in=[caller, peer],
+                    data__consultation_id=str(consultation.consultation_id),
+                    data__reason='completed',
+                    sent_at__gte=recent,
+                ).exists()
+                if already:
+                    return Response({'status': 'already_logged'}, status=status.HTTP_200_OK)
+                # Answered call that ended normally — log it on both sides so
+                # the call tab shows connected calls, not just missed ones.
+                Notification.objects.create(
+                    user=caller,
+                    title=f'Call with {peer_name}',
+                    body='Call ended.',
+                    type='system',
+                    channel='in_app',
+                    data={**data, 'direction': 'outgoing', 'caller_name': caller_name},
+                )
+                Notification.objects.create(
+                    user=peer,
+                    title=f'Call with {caller_name}',
+                    body='Call ended.',
+                    type='system',
+                    channel='in_app',
+                    data={**data, 'direction': 'incoming', 'caller_name': caller_name},
+                )
+            else:
+                # Caller's inbox: outgoing miss.
+                Notification.objects.create(
+                    user=caller,
+                    title=f'No answer from {peer_name}',
+                    body='Tap to try again.',
+                    type='system',
+                    channel='in_app',
+                    data={**data, 'direction': 'outgoing'},
+                )
+                # Peer's inbox: incoming miss they didn't pick up.
+                Notification.objects.create(
+                    user=peer,
+                    title=f'Missed call from {caller_name}',
+                    body='Tap to call back.',
+                    type='system',
+                    channel='in_app',
+                    data={**data, 'direction': 'incoming', 'caller_name': caller_name},
+                )
         except Exception:
             pass
 
@@ -513,10 +559,30 @@ class ConsultationAudioUploadView(APIView):
         consultation.audio_gs_uri = gs_uri
         consultation.save(update_fields=['audio_gs_uri'])
 
-        # Fire off the transcribe + draft job in the background.
+        # Fire off the transcribe + draft job in the background. Like
+        # notifications, this only goes through Celery when USE_CELERY=1;
+        # otherwise it runs on a background thread so transcription still
+        # works on deployments without a worker process.
+        cid = str(consultation.consultation_id)
         try:
             from .tasks import transcribe_and_draft_record
-            transcribe_and_draft_record.delay(str(consultation.consultation_id))
+            if os.environ.get('USE_CELERY', '').strip().lower() in ('1', 'true', 'yes'):
+                transcribe_and_draft_record.delay(cid)
+            else:
+                import threading
+                from django.db import close_old_connections
+
+                def _run():
+                    try:
+                        close_old_connections()
+                        transcribe_and_draft_record(cid)
+                    except Exception:
+                        import logging
+                        logging.getLogger(__name__).exception('Inline transcription failed')
+                    finally:
+                        close_old_connections()
+
+                threading.Thread(target=_run, daemon=True).start()
         except Exception:
             pass
 
@@ -561,7 +627,13 @@ class ChatMessageListView(generics.ListAPIView):
 
     def get_queryset(self):
         consultation_id = self.kwargs.get('pk')
-        return ChatMessage.objects.filter(consultation_id=consultation_id).order_by('created_at')
+        # Restrict to conversations the requester is actually part of.
+        return ChatMessage.objects.filter(
+            consultation_id=consultation_id,
+        ).filter(
+            Q(consultation__appointment__patient__patient_id=self.request.user) |
+            Q(consultation__appointment__provider__provider_id=self.request.user)
+        ).order_by('created_at')
 
 
 # ─── Medication Reminders ──────────────────────────────────────────────────
@@ -580,13 +652,72 @@ class PatientRemindersView(APIView):
         return Response(MedicationReminderSerializer(reminders, many=True).data)
 
 
+def _reminder_slots(reminder, days_back=7):
+    """Expected dose slots for a reminder over the recent past, paired with
+    the matching log (if any). Missed doses are DERIVED — a slot in the past
+    with no log is 'missed' — so tracking works even when the periodic
+    server task isn't running."""
+    from datetime import date as date_cls, datetime as dt_cls, timedelta as td
+
+    now = timezone.localtime()
+    today = now.date()
+    start = max(reminder.start_date, today - td(days=days_back))
+    end = min(reminder.end_date, today)
+
+    logs = {
+        timezone.localtime(log.scheduled_time).strftime('%Y-%m-%d %H:%M'): log
+        for log in reminder.logs.all()
+    }
+
+    slots = []
+    day = start
+    while day <= end:
+        for time_str in (reminder.reminder_times or []):
+            try:
+                h, m = int(time_str.split(':')[0]), int(time_str.split(':')[1])
+            except (ValueError, IndexError):
+                continue
+            slot_dt = timezone.make_aware(
+                dt_cls(day.year, day.month, day.day, h, m),
+                timezone.get_current_timezone(),
+            )
+            key = slot_dt.strftime('%Y-%m-%d %H:%M')
+            log = logs.get(key)
+            if log:
+                status_val = log.status
+            elif slot_dt <= now:
+                status_val = 'missed'
+            else:
+                status_val = 'upcoming'
+            slots.append({
+                'scheduled_time': slot_dt.isoformat(),
+                'status': status_val,
+                'responded_at': (
+                    log.responded_at.isoformat() if log and log.responded_at else None
+                ),
+            })
+        day = day + td(days=1)
+
+    slots.sort(key=lambda s: s['scheduled_time'], reverse=True)
+    return slots
+
+
 class ReminderLogView(APIView):
-    """Patient logs taken/skipped for a reminder at a specific time."""
+    """Dose history + patient logs taken/skipped for a reminder."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, reminder_id):
-        logs = MedicationLog.objects.filter(reminder_id=reminder_id).order_by('-scheduled_time')[:30]
-        return Response(MedicationLogSerializer(logs, many=True).data)
+        try:
+            reminder = MedicationReminder.objects.prefetch_related('logs').get(id=reminder_id)
+        except MedicationReminder.DoesNotExist:
+            return Response({'error': 'Reminder not found'}, status=status.HTTP_404_NOT_FOUND)
+        if reminder.patient.patient_id != request.user:
+            return Response({'error': 'Not your reminder.'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({
+            'medication_name': reminder.medication_name,
+            'dosage': reminder.dosage,
+            'slots': _reminder_slots(reminder, days_back=7),
+        })
 
     def post(self, request, reminder_id):
         from apps.patients.models import Patient
@@ -629,24 +760,31 @@ class ReminderAdherenceView(APIView):
         except Patient.DoesNotExist:
             return Response({'overall': 0, 'medications': []})
 
-        reminders = MedicationReminder.objects.filter(patient=patient, is_active=True)
+        reminders = MedicationReminder.objects.filter(
+            patient=patient, is_active=True
+        ).prefetch_related('logs')
         medications = []
         total_taken = 0
-        total_logs = 0
+        total_due = 0
         for r in reminders:
-            logs = r.logs.count()
-            taken = r.logs.filter(status='taken').count()
+            # Derive adherence from expected dose slots so missed doses count
+            # even when no log row was ever created for them.
+            slots = _reminder_slots(r, days_back=7)
+            due = [s for s in slots if s['status'] != 'upcoming']
+            taken = sum(1 for s in due if s['status'] == 'taken')
+            missed = sum(1 for s in due if s['status'] == 'missed')
             total_taken += taken
-            total_logs += logs
+            total_due += len(due)
             medications.append({
                 'id': str(r.id),
                 'name': r.medication_name,
                 'dosage': r.dosage,
-                'adherence': round((taken / logs) * 100) if logs > 0 else None,
-                'total_doses': logs,
+                'adherence': round((taken / len(due)) * 100) if due else None,
+                'total_doses': len(due),
                 'taken': taken,
+                'missed': missed,
             })
-        overall = round((total_taken / total_logs) * 100) if total_logs > 0 else None
+        overall = round((total_taken / total_due) * 100) if total_due > 0 else None
         return Response({'overall': overall, 'medications': medications})
 
 
@@ -731,9 +869,9 @@ class MedicalRecordListCreateView(generics.ListCreateAPIView):
 
         # FCM + in-app notification.
         try:
-            from apps.notifications.tasks import send_notification
-            send_notification.delay(
-                record.patient.patient_id.user_id,
+            from apps.notifications.dispatch import notify as send_notification_dispatch
+            send_notification_dispatch(
+                str(record.patient.patient_id.user_id),
                 'New medical record',
                 f'{provider_name} added {title_part} to your medical records.',
                 'medical_record',
@@ -797,9 +935,9 @@ class MedicalRecordDetailView(generics.RetrieveUpdateDestroyAPIView):
             ) or 'Your doctor'
             title_part = record.title or record.diagnosis or 'a new medical record'
             try:
-                from apps.notifications.tasks import send_notification
-                send_notification.delay(
-                    record.patient.patient_id.user_id,
+                from apps.notifications.dispatch import notify as send_notification_dispatch
+                send_notification_dispatch(
+                    str(record.patient.patient_id.user_id),
                     'New medical record',
                     f'{provider_name} added {title_part} to your medical records.',
                     'medical_record',
@@ -933,9 +1071,9 @@ class ReferralListCreateView(generics.ListCreateAPIView):
 
         # FCM + in-app notification.
         try:
-            from apps.notifications.tasks import send_notification
-            send_notification.delay(
-                referral.patient.patient_id.user_id,
+            from apps.notifications.dispatch import notify as send_notification_dispatch
+            send_notification_dispatch(
+                str(referral.patient.patient_id.user_id),
                 'New referral',
                 body,
                 'referral',
@@ -960,6 +1098,53 @@ class ReferralListCreateView(generics.ListCreateAPIView):
             )
         except Exception:
             pass
+
+        # Tell the RECEIVING doctor about the referral too: who the patient
+        # is, which doctor referred them, and why — as both a push
+        # notification and a chat message between the two doctors.
+        if referral.referred_to and referral.referred_to.provider_id:
+            patient_name = (
+                getattr(referral.patient.patient_id, 'full_name', None) or 'A patient'
+            )
+            reason_part = (referral.reason or '').strip()
+            doctor_body = f'{provider_name} referred {patient_name} to you.'
+            if reason_part:
+                doctor_body += f' Reason: {reason_part}'
+
+            try:
+                from apps.notifications.dispatch import notify as send_notification_dispatch
+                send_notification_dispatch(
+                    str(referral.referred_to.provider_id.user_id),
+                    'New patient referral',
+                    doctor_body,
+                    'referral',
+                    {
+                        'referral_id': str(referral.referral_id),
+                        'patient_id': str(referral.patient.patient_id.user_id),
+                        'patient_name': patient_name,
+                        'referred_by': provider_name,
+                    },
+                )
+            except Exception:
+                pass
+
+            try:
+                from apps.direct_chat.clinical import post_clinical_message
+                post_clinical_message(
+                    doctor_user=provider.provider_id,  # sender: referring doctor
+                    patient_user=referral.referred_to.provider_id,
+                    message_type='referral',
+                    content=doctor_body,
+                    metadata={
+                        'referral_id': str(referral.referral_id),
+                        'kind': referral.kind,
+                        'patient_id': str(referral.patient.patient_id.user_id),
+                        'patient_name': patient_name,
+                        'reason': reason_part[:200],
+                    },
+                )
+            except Exception:
+                pass
 
 
 class ReferralDetailView(generics.RetrieveUpdateAPIView):

@@ -15,5 +15,11 @@ class AISymptomSessionSerializer(serializers.ModelSerializer):
         read_only_fields = ('session_id', 'created_at')
 
 class SymptomChatMessageRequestSerializer(serializers.Serializer):
-    message = serializers.CharField()
+    # Blank allowed so a patient can send a photo without a caption.
+    message = serializers.CharField(required=False, allow_blank=True, default='')
     image = serializers.CharField(required=False, allow_blank=True, help_text="Base64 encoded image string")
+
+    def validate(self, attrs):
+        if not (attrs.get('message') or '').strip() and not (attrs.get('image') or '').strip():
+            raise serializers.ValidationError('Provide a message or an image.')
+        return attrs

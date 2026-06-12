@@ -9,10 +9,23 @@ import Revenue from './pages/Revenue';
 import LabTests from './pages/LabTests';
 import Specialties from './pages/Specialties';
 import Facilities from './pages/Facilities';
+import Appointments from './pages/Appointments';
 
-// Mock authentication check
+// A token is only good if it exists AND hasn't expired — otherwise every
+// page silently renders empty data until the admin logs out manually.
 const isAuthenticated = () => {
-    return !!localStorage.getItem('clinix_admin_token');
+    const token = localStorage.getItem('clinix_admin_token');
+    if (!token) return false;
+    try {
+        const { exp } = JSON.parse(atob(token.split('.')[1]));
+        if (typeof exp === 'number' && exp * 1000 < Date.now()) {
+            localStorage.removeItem('clinix_admin_token');
+            return false;
+        }
+    } catch {
+        return false;
+    }
+    return true;
 };
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -35,11 +48,13 @@ function App() {
         <Route path="users" element={<Users />} />
         <Route path="patients" element={<Patients />} />
         <Route path="verifications" element={<Verifications />} />
+        <Route path="appointments" element={<Appointments />} />
         <Route path="revenue" element={<Revenue />} />
         <Route path="lab-tests" element={<LabTests />} />
         <Route path="specialties" element={<Specialties />} />
         <Route path="facilities" element={<Facilities />} />
       </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

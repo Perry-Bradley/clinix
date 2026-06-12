@@ -9,6 +9,33 @@ from .serializers import AppointmentSerializer, AppointmentDetailSerializer, Lab
 from apps.patients.models import Patient
 from apps.providers.models import HealthcareProvider, ProviderSchedule
 
+
+def _health_snapshot_text(patient):
+    """One-line summary of the patient's self-reported health basics, or ''
+    when they haven't filled anything in."""
+    vitals = []
+    if patient.height_cm:
+        vitals.append(f'Height {patient.height_cm} cm')
+    if patient.weight_kg:
+        vitals.append(f'Weight {patient.weight_kg} kg')
+    if patient.temperature_c:
+        vitals.append(f'Temp {patient.temperature_c} °C')
+    if patient.pulse_bpm:
+        vitals.append(f'Pulse {patient.pulse_bpm} bpm')
+    if patient.blood_type:
+        vitals.append(f'Blood {patient.blood_type}')
+
+    lines = []
+    if vitals:
+        lines.append(' · '.join(vitals))
+    if patient.allergies:
+        lines.append('Allergies: ' + ', '.join(patient.allergies))
+    if patient.chronic_conditions:
+        lines.append('Chronic conditions: ' + ', '.join(patient.chronic_conditions))
+    if patient.current_medications:
+        lines.append('Current medications: ' + patient.current_medications)
+    return '\n'.join(lines)
+
 class AppointmentListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -86,17 +113,16 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
 
         appointment = serializer.save(patient=patient, status='pending')
 
+        patient_name = getattr(patient.patient_id, 'full_name', None) or 'A patient'
+
         # Notify the provider when a service request comes in so nurses see
         # the new home visit / lab test in their notifications immediately.
         if is_service:
             try:
-                from apps.notifications.tasks import send_notification
-                patient_name = (
-                    getattr(patient.patient_id, 'full_name', None) or 'A patient'
-                )
+                from apps.notifications.dispatch import notify as send_notification_dispatch
                 label = 'home visit' if appointment_type == 'home_treatment' else 'lab test'
                 service = appointment.service_name or label
-                send_notification.delay(
+                send_notification_dispatch(
                     str(appointment.provider.provider_id.user_id),
                     f'New {label} request',
                     f'{patient_name} booked {service} — {scheduled_at.strftime("%b %d, %H:%M")}',
@@ -105,6 +131,29 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
                 )
             except Exception:
                 pass
+
+        # Share the patient's self-reported health basics with THIS doctor
+        # only, as a chat message in their private conversation — so the
+        # doctor has context about the patient before the consultation.
+        try:
+            snapshot = _health_snapshot_text(patient)
+            if snapshot:
+                from apps.direct_chat.clinical import post_clinical_message
+                post_clinical_message(
+                    doctor_user=patient.patient_id,  # sender: the patient
+                    patient_user=appointment.provider.provider_id,
+                    message_type='text',
+                    content=(
+                        f'📋 Health snapshot for {patient_name} '
+                        f'(appointment {scheduled_at.strftime("%b %d, %H:%M")}):\n{snapshot}'
+                    ),
+                    metadata={
+                        'kind': 'health_snapshot',
+                        'appointment_id': str(appointment.appointment_id),
+                    },
+                )
+        except Exception:
+            pass
 
 class AppointmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AppointmentDetailSerializer

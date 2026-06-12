@@ -238,7 +238,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                           ),
                           const SizedBox(width: 10),
                           _FeatureCard(
-                            icon: Icons.home_health_rounded,
+                            icon: Icons.medical_services_rounded,
                             color: const Color(0xFFF59E0B),
                             label: 'Home\nCare',
                           ),

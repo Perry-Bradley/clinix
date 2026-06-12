@@ -20,6 +20,16 @@ class Patient(models.Model):
     emergency_contact_phone = models.CharField(max_length=20, blank=True, null=True)
     next_of_kin = models.CharField(max_length=200, blank=True, null=True)
 
+    # Baseline health data the patient fills in after signup (and can edit
+    # any time in their profile). Shown to the doctor before a consultation
+    # so they start with basic context about the patient.
+    height_cm = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    temperature_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    pulse_bpm = models.PositiveIntegerField(null=True, blank=True)
+    current_medications = models.TextField(blank=True, default='')
+    health_profile_completed = models.BooleanField(default=False)
+
     class Meta:
         db_table = 'patients'
 

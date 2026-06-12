@@ -89,6 +89,33 @@ class DirectChatService {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  /// Upload an attachment through the backend (multipart). The server
+  /// stores the file and creates the chat message in one call.
+  static Future<Map<String, dynamic>> uploadAttachment(
+    String conversationId, {
+    required String filePath,
+    required String fileName,
+    String messageType = 'file',
+    String content = '',
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(filePath, filename: fileName),
+      'message_type': messageType,
+      'content': content,
+    });
+    final res = await _dio.post(
+      '$conversationId/upload/',
+      data: form,
+      options: Options(
+        headers: {'Authorization': 'Bearer $token'},
+        contentType: 'multipart/form-data',
+        sendTimeout: const Duration(minutes: 3),
+      ),
+    );
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
   // ─── WebSocket: live delivery ───────────────────────────────────────────
 
   String? _conversationId;

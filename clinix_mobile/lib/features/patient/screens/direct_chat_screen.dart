@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -208,17 +207,19 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
         );
       }
       final name = file.path.split(Platform.pathSeparator).last;
-      final ref = FirebaseStorage.instance.ref('dchat/${widget.conversationId}/${DateTime.now().millisecondsSinceEpoch}_$name');
-      await ref.putFile(file);
-      final url = await ref.getDownloadURL();
-      // Send via HTTP so it persists reliably with file metadata
-      await DirectChatService.sendViaHttp(
+      // Upload through the backend — Firebase Storage rejected users who
+      // signed in with email/password (no Firebase Auth session).
+      final msg = await DirectChatService.uploadAttachment(
         widget.conversationId,
-        content: type == 'image' ? '' : name,
-        messageType: type,
-        fileUrl: url,
+        filePath: file.path,
         fileName: name,
+        messageType: type,
+        content: type == 'image' ? '' : name,
       );
+      if (mounted) {
+        setState(() => _messages.add({...msg, 'sender_name': '__me__'}));
+        _scrollToBottom();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));

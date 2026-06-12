@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../shared/widgets/custom_sidebar_drawer.dart';
 import '../../../shared/widgets/bubble_bottom_bar.dart';
 import '../../../shared/widgets/swipe_to_delete.dart';
 import '../../screens/doctors_list_screen.dart';
 import '../../screens/nearby_clinics_screen.dart';
-import '../../screens/health_dashboard_screen.dart';
 import '../../screens/messages_inbox_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../services/health_metric_service.dart';
 import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import '../../../../core/services/appointment_service.dart';
@@ -27,6 +24,8 @@ class PatientHomePage extends StatefulWidget {
 
 class _PatientHomePageState extends State<PatientHomePage> {
   int _selectedTab = 0;
+
+  void selectTab(int i) => setState(() => _selectedTab = i);
 
   final List<Widget> _pages = const [
     _PatientDashboard(),
@@ -711,7 +710,7 @@ class _BookAppointmentCard extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         final state = context.findAncestorStateOfType<_PatientHomePageState>();
-        state?.setState(() => state._selectedTab = 1);
+        state?.selectTab(1);
       },
       child: Container(
         padding: EdgeInsets.all(w * 0.045),
@@ -915,186 +914,6 @@ class _UpcomingList extends StatelessWidget {
   }
 }
 
-class _PatientDoctorsTab extends StatelessWidget {
-  const _PatientDoctorsTab();
-
-  static const List<Map<String, String>> _mockDoctors = [
-    {'name': 'Dr. Marie Nkomo', 'spec': 'Cardiologist', 'rating': '4.9', 'id': '1'},
-    {'name': 'Dr. Jean Paul', 'spec': 'Neurologist', 'rating': '4.8', 'id': '2'},
-    {'name': 'Dr. Sarah Smith', 'spec': 'Pediatrician', 'rating': '4.7', 'id': '3'},
-    {'name': 'Dr. Robert King', 'spec': 'Dermatologist', 'rating': '4.9', 'id': '4'},
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.grey50,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            backgroundColor: AppColors.darkBlue900,
-            expandedHeight: 140,
-            floating: false,
-            pinned: true,
-            elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text('Find Doctors', style: AppTextStyles.headlineMedium.copyWith(color: AppColors.white, fontSize: 16)),
-              background: Container(decoration: const BoxDecoration(gradient: AppColors.primaryGradient)),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (ctx, i) => _DoctorListTile(doctor: _mockDoctors[i % _mockDoctors.length]),
-                childCount: 8,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DoctorListTile extends StatelessWidget {
-  final Map<String, String> doctor;
-  const _DoctorListTile({required this.doctor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.grey200),
-        boxShadow: [BoxShadow(color: AppColors.darkBlue900.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 58, height: 58,
-            decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.darkBlue700, AppColors.sky500]), borderRadius: BorderRadius.circular(18)),
-            child: const Icon(Icons.person_outline_rounded, color: AppColors.white, size: 30),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(doctor['name']!, style: AppTextStyles.headlineSmall),
-                const SizedBox(height: 2),
-                Text(doctor['spec']!, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky500, fontSize: 13)),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 14),
-                    const SizedBox(width: 4),
-                    Text(doctor['rating']!, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(width: 12),
-                    const Icon(Icons.circle, color: AppColors.accentGreen, size: 8),
-                    const SizedBox(width: 4),
-                    Text('Available', style: AppTextStyles.caption.copyWith(color: AppColors.accentGreen)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () => context.push('/appointments/book?providerId=mock'),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.sky600, AppColors.sky400]), borderRadius: BorderRadius.circular(12)),
-              child: Text('Book', style: AppTextStyles.caption.copyWith(color: AppColors.white, fontWeight: FontWeight.w700)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: () => context.push('/chat/mock_chat_${doctor['id']}?doctorName=${Uri.encodeComponent(doctor['name']!)}'),
-            icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.sky500),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PatientAppointmentsTab extends StatelessWidget {
-  const _PatientAppointmentsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverAppBar(
-          backgroundColor: AppColors.darkBlue900,
-          pinned: true,
-          title: Text('My Appointments', style: AppTextStyles.headlineMedium.copyWith(color: AppColors.white, fontSize: 16)),
-          automaticallyImplyLeading: false,
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.all(16),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (ctx, i) => Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.grey200),
-                ),
-                child: Row(
-                  children: [
-                    Container(width: 4, height: 60, decoration: BoxDecoration(color: i % 2 == 0 ? AppColors.sky500 : AppColors.accentGreen, borderRadius: BorderRadius.circular(2))),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(i % 2 == 0 ? 'Dr. Jean Paul' : 'Dr. Marie Nkomo', style: AppTextStyles.headlineSmall.copyWith(fontSize: 15)),
-                          Text(i % 2 == 0 ? 'Neurology' : 'Cardiology', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky500)),
-                          const SizedBox(height: 6),
-                          Text(i % 2 == 0 ? 'Apr 12, 2026 • 09:30 AM' : 'Apr 08, 2026 • 14:00 PM', style: AppTextStyles.caption.copyWith(fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: i % 2 == 0 ? AppColors.sky100 : AppColors.accentGreen.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            i % 2 == 0 ? 'Confirmed' : 'Completed',
-                            style: AppTextStyles.caption.copyWith(color: i % 2 == 0 ? AppColors.sky600 : AppColors.accentGreen, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        if (i % 2 != 0) ...[
-                          const SizedBox(height: 8),
-                          GestureDetector(
-                            onTap: () => _showRatingPrompt(context, 'Dr. Marie Nkomo'),
-                            child: Text('Rate Visit', style: TextStyle(color: AppColors.sky600, fontSize: 12, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              childCount: 6,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _PatientProfileTab extends StatefulWidget {
   const _PatientProfileTab();
@@ -1106,7 +925,6 @@ class _PatientProfileTab extends StatefulWidget {
 class _PatientProfileTabState extends State<_PatientProfileTab> {
   String _userName = 'User';
   String _userEmail = '';
-  bool _notificationsEnabled = true;
 
   @override
   void initState() {
@@ -1222,9 +1040,10 @@ class _PatientProfileTabState extends State<_PatientProfileTab> {
 
                 // ── Health records ────────────────────────────────────────
                 _SettingSection(label: 'Health', items: [
+                  _SettingItem(icon: Icons.badge_rounded, iconColor: const Color(0xFF14B8A6), label: 'My Health Details', onTap: () => context.push('/patient/health-profile')),
                   _SettingItem(icon: Icons.folder_copy_rounded, iconColor: const Color(0xFF6366F1), label: 'Medical Records', onTap: () => context.push('/patient/medical-records')),
                   _SettingItem(icon: Icons.medication_rounded, iconColor: const Color(0xFF8B5CF6), label: 'Prescriptions', onTap: () => context.push('/patient/prescriptions')),
-                  _SettingItem(icon: Icons.monitor_heart_rounded, iconColor: const Color(0xFFEC4899), label: 'Health Dashboard', onTap: () => context.push('/patient/health-dashboard')),
+                  _SettingItem(icon: Icons.monitor_heart_rounded, iconColor: const Color(0xFFEC4899), label: 'Health Dashboard', onTap: () => context.push('/patient/health')),
                   _SettingItem(icon: Icons.science_rounded, iconColor: const Color(0xFF0EA5E9), label: 'Lab Tests', onTap: () => context.push('/homecare/lab-tests'), isLast: true),
                 ]),
 
@@ -1232,18 +1051,14 @@ class _PatientProfileTabState extends State<_PatientProfileTab> {
 
                 // ── Preferences ───────────────────────────────────────────
                 _SettingSection(label: 'Preferences', items: [
-                  _SettingItem(icon: Icons.notifications_rounded, iconColor: const Color(0xFFF97316), label: 'Notifications', onTap: () => context.push('/patient/notifications')),
-                  _SettingToggleItem(icon: Icons.dark_mode_rounded, iconColor: const Color(0xFF475569), label: 'Dark Mode', value: false, onChanged: (_) {}),
-                  _SettingItem(icon: Icons.language_rounded, iconColor: const Color(0xFF10B981), label: 'Language', value: 'English', onTap: () {}, isLast: true),
+                  _SettingItem(icon: Icons.notifications_rounded, iconColor: const Color(0xFFF97316), label: 'Notifications', onTap: () => context.push('/notifications'), isLast: true),
                 ]),
 
                 const SizedBox(height: 12),
 
                 // ── Account ───────────────────────────────────────────────
                 _SettingSection(label: 'Account', items: [
-                  _SettingItem(icon: Icons.lock_rounded, iconColor: const Color(0xFF64748B), label: 'Change Password', onTap: () {}),
-                  _SettingItem(icon: Icons.headset_mic_rounded, iconColor: const Color(0xFF0EA5E9), label: 'Help & Support', onTap: () => context.push('/about')),
-                  _SettingItem(icon: Icons.shield_rounded, iconColor: const Color(0xFF6366F1), label: 'Terms & Privacy', onTap: () {}, isLast: true),
+                  _SettingItem(icon: Icons.headset_mic_rounded, iconColor: const Color(0xFF0EA5E9), label: 'Help & Support', onTap: () => context.push('/about'), isLast: true),
                 ]),
 
                 const SizedBox(height: 12),
@@ -1366,10 +1181,9 @@ class _SettingItem extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final String label;
-  final String? value;
   final VoidCallback onTap;
   final bool isLast;
-  const _SettingItem({required this.icon, required this.iconColor, required this.label, required this.onTap, this.value, this.isLast = false});
+  const _SettingItem({required this.icon, required this.iconColor, required this.label, required this.onTap, this.isLast = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1389,10 +1203,6 @@ class _SettingItem extends StatelessWidget {
                 ),
                 const SizedBox(width: 14),
                 Expanded(child: Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF0A1628)))),
-                if (value != null) ...[
-                  Text(value!, style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: Color(0xFF94A3B8))),
-                  const SizedBox(width: 6),
-                ],
                 const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFFCBD5E1)),
               ],
             ),
@@ -1404,109 +1214,4 @@ class _SettingItem extends StatelessWidget {
   }
 }
 
-class _SettingToggleItem extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _SettingToggleItem({required this.icon, required this.iconColor, required this.label, required this.value, required this.onChanged});
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, size: 18, color: iconColor),
-              ),
-              const SizedBox(width: 14),
-              Expanded(child: Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF0A1628)))),
-              Switch(value: value, onChanged: onChanged, activeColor: const Color(0xFF0EA5E9)),
-            ],
-          ),
-        ),
-        const Divider(height: 1, indent: 66, color: Color(0xFFF1F5F9)),
-      ],
-    );
-  }
-}
-
-
-void _showRatingPrompt(BuildContext context, String doctorName) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) => _RatingModal(doctorName: doctorName),
-  );
-}
-
-class _RatingModal extends StatefulWidget {
-  final String doctorName;
-  const _RatingModal({super.key, required this.doctorName});
-  @override
-  State<_RatingModal> createState() => _RatingModalState();
-}
-
-class _RatingModalState extends State<_RatingModal> {
-  int _rating = 0;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 32),
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 24),
-          Text('How was your visit with ${widget.doctorName}?', textAlign: TextAlign.center, style: AppTextStyles.headlineSmall),
-          const SizedBox(height: 8),
-          Text('Your feedback helps us improve our healthcare services.', textAlign: TextAlign.center, style: AppTextStyles.caption),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(5, (i) => IconButton(
-              icon: Icon(Icons.star_rounded, size: 44, color: i < _rating ? const Color(0xFFFBBF24) : AppColors.grey200),
-              onPressed: () => setState(() => _rating = i + 1),
-            )),
-          ),
-          const SizedBox(height: 24),
-          TextField(
-            maxLines: 3,
-            decoration: InputDecoration(
-              hintText: 'Any specific feedback? (Optional)',
-              filled: true,
-              fillColor: AppColors.grey50,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppColors.sky500)),
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Thank you for your feedback!'), backgroundColor: AppColors.accentGreen),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.sky600,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 56),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: 0,
-            ),
-            child: const Text('Submit Feedback', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-}

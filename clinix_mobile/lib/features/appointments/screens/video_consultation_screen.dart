@@ -49,6 +49,9 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   // notification sound while we wait.
   bool _ringbackActive = false;
   Timer? _noAnswerTimer;
+  // Set when the peer joins, so we can log a completed call (with duration)
+  // in both users' call history when the call ends.
+  DateTime? _connectedAt;
 
   @override
   void initState() {
@@ -193,6 +196,7 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
           // Peer answered → stop the ringback tone + clear the "ringing"
           // overlay. From here it's just a normal call.
           _stopRingback();
+          _connectedAt ??= DateTime.now();
           if (mounted) setState(() => _remoteUid = remoteUid);
         },
         onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
@@ -278,7 +282,26 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
     if (wasRecording && recordingPath != null) {
       unawaited(_uploadRecording(recordingPath));
     }
+    // Connected calls land in both users' call history with their duration.
+    if (_connectedAt != null) {
+      final secs = DateTime.now().difference(_connectedAt!).inSeconds;
+      unawaited(_logCompletedCall(secs));
+    }
     if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _logCompletedCall(int durationSeconds) async {
+    try {
+      final token = await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) return;
+      await Dio().post(
+        '${ApiConstants.baseUrl}${ApiConstants.consultations}${widget.consultationId}/ring/missed/',
+        data: {'reason': 'completed', 'duration_seconds': durationSeconds},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+    } catch (_) {
+      // Best-effort logging.
+    }
   }
 
   Future<void> _ringPeer() async {

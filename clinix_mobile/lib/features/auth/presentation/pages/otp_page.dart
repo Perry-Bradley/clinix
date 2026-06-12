@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/notification_service.dart';
 import '../widgets/gradient_button.dart';
 
 class OtpPage extends StatefulWidget {
@@ -66,9 +67,19 @@ class _OtpPageState extends State<OtpPage> with TickerProviderStateMixin {
     setState(() { _isLoading = true; _errorMessage = null; });
     try {
       final data = await AuthService.verifyEmailOtp(email: widget.email, otp: otp);
+      // New accounts must push their FCM token now or they can't receive
+      // calls/notifications until their next login.
+      await NotificationService.registerToken();
       if (mounted) {
-        final userType = data['user_type'] ?? 'patient';
-        context.go(userType == 'provider' ? '/provider/home' : '/patient/home');
+        final userType = data['user_type']?.toString() ?? 'unassigned';
+        if (userType == 'provider') {
+          context.go('/provider/home');
+        } else if (userType == 'patient') {
+          context.go('/patient/home');
+        } else {
+          // Fresh signups haven't picked a role yet.
+          context.go('/role-selection');
+        }
       }
     } on DioException catch (e) {
       _shakeController.forward(from: 0);

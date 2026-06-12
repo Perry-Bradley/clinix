@@ -186,8 +186,43 @@ class AuthService {
     return null;
   }
 
+  /// Returns a usable access token, silently refreshing it when it's
+  /// expired or about to expire. Nearly every request goes through here,
+  /// so signed-in users stay signed in without ever seeing a login screen
+  /// (as long as their refresh token — extended on every refresh — lives).
   static Future<String?> getAccessToken() async {
-    return await _storage.read(key: 'access_token');
+    final token = await _storage.read(key: 'access_token');
+    if (token == null || token.isEmpty) return null;
+    if (!_isExpiringSoon(token)) return token;
+
+    // Single-flight: parallel callers share one refresh request.
+    _refreshing ??= refreshAccessToken().whenComplete(() => _refreshing = null);
+    final refreshed = await _refreshing;
+    // If refresh failed (offline, transient server error), fall back to the
+    // stale token — the request may still be served, and we never log the
+    // user out for a network blip.
+    return refreshed ?? token;
+  }
+
+  static Future<String?>? _refreshing;
+
+  /// True when the JWT expires within the next 2 minutes (or can't be read).
+  static bool _isExpiringSoon(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+      var payload = parts[1];
+      while (payload.length % 4 != 0) {
+        payload += '=';
+      }
+      final map = jsonDecode(utf8.decode(base64Url.decode(payload)));
+      final exp = map['exp'];
+      if (exp is! num) return false;
+      final expiry = DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000);
+      return expiry.isBefore(DateTime.now().add(const Duration(minutes: 2)));
+    } catch (_) {
+      return true;
+    }
   }
 
   /// Decode the JWT access token and return the current user's UUID.
@@ -222,12 +257,21 @@ class AuthService {
       final newAccess = response.data['access']?.toString();
       if (newAccess != null && newAccess.isNotEmpty) {
         await _storage.write(key: 'access_token', value: newAccess);
-        // If backend rotates refresh tokens, save the new one too
+        // The backend rotates refresh tokens — saving the new one extends
+        // the session another full lifetime, so active users never log out.
         final newRefresh = response.data['refresh']?.toString();
         if (newRefresh != null && newRefresh.isNotEmpty) {
           await _storage.write(key: 'refresh_token', value: newRefresh);
         }
         return newAccess;
+      }
+    } on DioException catch (e) {
+      // Only a definitive server rejection means the session is dead
+      // (expired/blacklisted refresh token). Network errors keep the
+      // session so a bad connection never logs anyone out.
+      if (e.response?.statusCode == 401) {
+        await _storage.delete(key: 'access_token');
+        await _storage.delete(key: 'refresh_token');
       }
     } catch (_) {}
     return null;
@@ -275,7 +319,38 @@ class AuthService {
       'email': email,
       'otp': otp,
     });
-    return response.data;
+    // The backend returns a full token bundle on success — persist it,
+    // otherwise the router bounces the "logged in" user straight back to
+    // the login screen.
+    final data = response.data;
+    if (data is Map && (data['access']?.toString().isNotEmpty ?? false)) {
+      await saveTokens(
+        access: data['access'].toString(),
+        refresh: data['refresh']?.toString() ?? '',
+        userType: data['user_type']?.toString() ?? 'unassigned',
+        fullName: data['full_name']?.toString(),
+        email: data['email']?.toString() ?? email,
+      );
+    }
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  // ─── Password Reset ────────────────────────────────────────────────────
+
+  static Future<void> requestPasswordReset({required String email}) async {
+    await _dio.post('password/reset/', data: {'email': email});
+  }
+
+  static Future<void> confirmPasswordReset({
+    required String email,
+    required String otp,
+    required String newPassword,
+  }) async {
+    await _dio.patch('password/confirm/', data: {
+      'email': email,
+      'otp': otp,
+      'new_password': newPassword,
+    });
   }
  
   // ─── FCM Token ───────────────────────────────────────────────────────────
