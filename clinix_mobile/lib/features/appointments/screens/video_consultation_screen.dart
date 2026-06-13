@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
@@ -52,6 +55,31 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   // Set when the peer joins, so we can log a completed call (with duration)
   // in both users' call history when the call ends.
   DateTime? _connectedAt;
+  // Live captions — both speakers, transcribed server-side by Groq Whisper.
+  // We tap Agora's audio frames (NOT a second mic, so no contention): the
+  // local mic = doctor, each remote stream = patient. Every ~10s we wrap the
+  // buffered PCM for each speaker as a WAV and POST it; the server appends a
+  // labeled line to the transcript and returns the text we show here.
+  bool _captionsOn = true;
+  String _liveCaption = '';
+  bool _captureActive = false;
+  // PCM16 mono 16kHz, accumulated per speaker between chunk flushes.
+  final List<int> _docPcm = [];
+  final List<int> _patPcm = [];
+  Timer? _chunkTimer;
+  AudioFrameObserver? _frameObserver;
+  // Agora delivers frames on a native thread; guard the buffers' max size so a
+  // stalled uploader can't grow them without bound (~60s of audio each).
+  static const int _maxPcmBytes = 16000 * 2 * 60;
+  // Debug-only capture counters, shown on screen in debug builds so the
+  // real-device spike can see exactly where the pipeline stalls: bytes climbing
+  // = frames flowing; sent/✓/✗ = uploads + server responses.
+  int _dbgDocBytes = 0;
+  int _dbgPatBytes = 0;
+  int _dbgSent = 0;
+  int _dbgOk = 0;
+  int _dbgFail = 0;
+  Timer? _dbgTimer;
 
   @override
   void initState() {
@@ -256,11 +284,187 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
       }
     }
 
+    // Live, both-speaker captions — only the doctor's device captures + posts,
+    // and only when the AI scribe was consented (same privacy surface as the
+    // recording). The transcript it builds is what the AI report reads.
+    if (_isProvider && _aiScribeConsented) {
+      _startLiveCaptions();
+    }
+
     if (mounted) setState(() => _isInitializing = false);
+  }
+
+  // ---- Live captions: tap Agora audio frames → chunked Groq Whisper ------
+
+  void _startLiveCaptions() {
+    final e = _engine;
+    if (e == null || _captureActive || !_captionsOn) return;
+    try {
+      // Ask Agora to deliver both the local mic and each remote stream as
+      // 16kHz mono PCM (read-only — we don't modify the call audio).
+      e.setRecordingAudioFrameParameters(
+        sampleRate: 16000,
+        channel: 1,
+        mode: RawAudioFrameOpModeType.rawAudioFrameOpModeReadOnly,
+        samplesPerCall: 1024,
+      );
+      e.setPlaybackAudioFrameBeforeMixingParameters(
+        sampleRate: 16000,
+        channel: 1,
+      );
+
+      _frameObserver = AudioFrameObserver(
+        // Local mic = the doctor.
+        onRecordAudioFrame: (String channelId, AudioFrame frame) {
+          _appendFrame(_docPcm, frame);
+        },
+        // Each remote stream, pre-mix = the patient.
+        onPlaybackAudioFrameBeforeMixing:
+            (String channelId, int uid, AudioFrame frame) {
+          _appendFrame(_patPcm, frame);
+        },
+      );
+      e.getMediaEngine().registerAudioFrameObserver(_frameObserver!);
+
+      _captureActive = true;
+      // Flush a chunk per speaker every 10s. The very first flush also covers
+      // anything spoken while the call was still ringing.
+      _chunkTimer = Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => unawaited(_flushChunks()),
+      );
+      // Repaint the on-screen debug counter once a second (debug builds only).
+      if (kDebugMode) {
+        _dbgTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted) setState(() {});
+        });
+      }
+    } catch (e) {
+      debugPrint('[Captions] could not start audio capture: $e');
+    }
+  }
+
+  void _appendFrame(List<int> buf, AudioFrame frame) {
+    final data = frame.buffer;
+    if (data == null || data.isEmpty) return;
+    if (identical(buf, _docPcm)) {
+      _dbgDocBytes += data.length;
+    } else {
+      _dbgPatBytes += data.length;
+    }
+    // Drop oldest audio if an upload stalls, so memory stays bounded.
+    if (buf.length + data.length > _maxPcmBytes) {
+      final overflow = buf.length + data.length - _maxPcmBytes;
+      buf.removeRange(0, overflow.clamp(0, buf.length));
+    }
+    buf.addAll(data);
+  }
+
+  /// Snapshot each speaker's buffer, wrap as a WAV, and POST for transcription.
+  Future<void> _flushChunks() async {
+    if (!_captionsOn) return;
+    await Future.wait([
+      _flushOne(_docPcm, 'doctor'),
+      _flushOne(_patPcm, 'patient'),
+    ]);
+  }
+
+  Future<void> _flushOne(List<int> buf, String speaker) async {
+    if (buf.isEmpty) return;
+    final pcm = Uint8List.fromList(buf);
+    buf.clear();
+    // Skip near-silent chunks to save API calls (PCM16 silence ≈ all zeros).
+    if (pcm.length < 16000) return; // <0.5s of audio
+    final wav = _wrapWav(pcm);
+    try {
+      final token = await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) return;
+      _dbgSent++;
+      final form = FormData.fromMap({
+        'speaker': speaker,
+        'audio': MultipartFile.fromBytes(wav, filename: '$speaker.wav'),
+      });
+      final resp = await Dio().post(
+        '${ApiConstants.baseUrl}${ApiConstants.consultations}${widget.consultationId}/transcribe-chunk/',
+        data: form,
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
+      _dbgOk++;
+      final text = (resp.data is Map ? resp.data['text'] : null)?.toString() ?? '';
+      if (text.isNotEmpty && mounted && _captionsOn) {
+        final who = speaker == 'doctor' ? 'You' : 'Patient';
+        setState(() => _liveCaption = '$who: $text');
+      }
+    } catch (e) {
+      _dbgFail++;
+      debugPrint('[Captions] chunk upload failed: $e');
+    }
+  }
+
+  /// Prepend a 44-byte PCM16 WAV header (mono, 16kHz) to raw samples.
+  Uint8List _wrapWav(Uint8List pcm,
+      {int sampleRate = 16000, int channels = 1, int bitsPerSample = 16}) {
+    final byteRate = sampleRate * channels * bitsPerSample ~/ 8;
+    final blockAlign = channels * bitsPerSample ~/ 8;
+    final dataLen = pcm.length;
+    final b = BytesBuilder();
+    void str(String s) => b.add(ascii.encode(s));
+    void u32(int v) => b.add([v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff]);
+    void u16(int v) => b.add([v & 0xff, (v >> 8) & 0xff]);
+    str('RIFF');
+    u32(36 + dataLen);
+    str('WAVE');
+    str('fmt ');
+    u32(16);
+    u16(1); // PCM
+    u16(channels);
+    u32(sampleRate);
+    u32(byteRate);
+    u16(blockAlign);
+    u16(bitsPerSample);
+    str('data');
+    u32(dataLen);
+    b.add(pcm);
+    return b.toBytes();
+  }
+
+  Future<void> _stopLiveCaptions() async {
+    _chunkTimer?.cancel();
+    _chunkTimer = null;
+    _dbgTimer?.cancel();
+    _dbgTimer = null;
+    final e = _engine;
+    if (_frameObserver != null && e != null) {
+      try {
+        e.getMediaEngine().unregisterAudioFrameObserver(_frameObserver!);
+      } catch (_) {}
+    }
+    _frameObserver = null;
+    _captureActive = false;
+    // Send whatever's left so the last few seconds aren't lost.
+    await _flushChunks();
+    _docPcm.clear();
+    _patPcm.clear();
+  }
+
+  Future<void> _toggleCaptions() async {
+    _captionsOn = !_captionsOn;
+    if (_captionsOn) {
+      if (_isProvider && _aiScribeConsented) _startLiveCaptions();
+    } else {
+      await _stopLiveCaptions();
+      _liveCaption = '';
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _leave() async {
     _stopRingback();
+    await _stopLiveCaptions();
     final e = _engine;
     final wasRecording = _isRecording;
     final recordingPath = _recordingPath;
@@ -456,6 +660,14 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
                 label: _onHold ? 'Resume call' : 'Hold call',
                 onTap: () { Navigator.pop(ctx); _toggleHold(); },
               ),
+              if (_isProvider && _aiScribeConsented)
+                _MoreMenuItem(
+                  icon: _captionsOn
+                      ? Icons.closed_caption_rounded
+                      : Icons.closed_caption_disabled_rounded,
+                  label: _captionsOn ? 'Hide live captions' : 'Show live captions',
+                  onTap: () { Navigator.pop(ctx); _toggleCaptions(); },
+                ),
               _MoreMenuItem(
                 icon: Icons.chat_bubble_rounded,
                 label: 'Open chat',
@@ -472,9 +684,16 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   @override
   void dispose() {
     _stopRingback();
+    _chunkTimer?.cancel();
+    _dbgTimer?.cancel();
     final e = _engine;
     _engine = null;
     if (e != null) {
+      if (_frameObserver != null) {
+        try {
+          e.getMediaEngine().unregisterAudioFrameObserver(_frameObserver!);
+        } catch (_) {}
+      }
       unawaited(e.leaveChannel());
       unawaited(e.release());
     }
@@ -584,6 +803,70 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
                         ],
                       ),
                     ),
+                    // Debug-only capture probe (debug builds, doctor side). Lets
+                    // the real-device spike see the pipeline stage by stage:
+                    // doc/pat KB climbing = Agora frames flowing; sent/✓/✗ =
+                    // chunk uploads + server responses.
+                    if (kDebugMode && _captureActive)
+                      Positioned(
+                        top: 86,
+                        left: 18,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.greenAccent.withOpacity(0.5)),
+                          ),
+                          child: Text(
+                            'cap doc ${(_dbgDocBytes / 1024).round()}KB · '
+                            'pat ${(_dbgPatBytes / 1024).round()}KB · '
+                            'sent $_dbgSent ✓$_dbgOk ✗$_dbgFail',
+                            style: const TextStyle(
+                              color: Colors.greenAccent,
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    // Live caption strip — the local speaker's words as they
+                    // talk. Sits just above the call controls.
+                    if (_captionsOn && _liveCaption.isNotEmpty)
+                      Positioned(
+                        left: 18,
+                        right: 18,
+                        bottom: 124,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.55),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white.withOpacity(0.10)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.closed_caption_rounded, color: Colors.white70, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _liveCaption,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    height: 1.35,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     Positioned(
                       left: 0,
                       right: 0,

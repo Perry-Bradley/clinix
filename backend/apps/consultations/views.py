@@ -589,6 +589,56 @@ class ConsultationAudioUploadView(APIView):
         return Response({'status': 'queued', 'audio_gs_uri': gs_uri}, status=status.HTTP_202_ACCEPTED)
 
 
+class ConsultationTranscribeChunkView(APIView):
+    """Live, per-~10s transcription of ONE speaker's audio during a call.
+
+    The doctor's device captures the doctor and patient streams separately
+    (Agora audio-frame observer) and posts each as a short WAV chunk tagged
+    with `speaker`. We run Groq-hosted Whisper on the chunk, append a labeled
+    line to the consultation transcript, and return the text so the app can
+    show it as a live caption (~10s behind). The accumulated, speaker-labeled
+    transcript is what the end-of-call Gemini draft reads.
+
+    Only the doctor on the appointment can post chunks.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [__import__('rest_framework.parsers', fromlist=['MultiPartParser']).MultiPartParser]
+
+    def post(self, request, pk):
+        provider = _provider_for_user(request.user)
+        if not provider:
+            return Response({'error': 'Only providers can stream call audio.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            consultation = Consultation.objects.select_related('appointment', 'appointment__provider').get(pk=pk)
+        except Consultation.DoesNotExist:
+            return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if consultation.appointment.provider_id != provider.pk:
+            return Response({'error': 'You can only transcribe your own consultations.'}, status=status.HTTP_403_FORBIDDEN)
+
+        audio = request.FILES.get('audio') or request.FILES.get('file')
+        if not audio:
+            return Response({'error': 'No audio chunk provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        speaker = (request.data.get('speaker') or 'speaker').strip().lower()
+        label = {'doctor': 'Doctor', 'patient': 'Patient'}.get(speaker, 'Speaker')
+
+        from .transcription import groq_transcribe
+        text = (groq_transcribe(audio.read(), filename=audio.name or 'chunk.wav') or '').strip()
+        if not text:
+            # Silence / unintelligible chunk — nothing to add, not an error.
+            return Response({'text': '', 'speaker': speaker}, status=status.HTTP_200_OK)
+
+        # Atomic DB-side append so the doctor + patient chunks landing in the
+        # same window don't clobber each other's transcript writes.
+        from django.db.models.functions import Concat
+        from django.db.models import Value, TextField
+        line = f'[{label}] {text}\n'
+        Consultation.objects.filter(pk=consultation.pk).update(
+            call_transcript=Concat('call_transcript', Value(line), output_field=TextField())
+        )
+        return Response({'text': text, 'speaker': speaker}, status=status.HTTP_200_OK)
+
+
 class ChatFileUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 

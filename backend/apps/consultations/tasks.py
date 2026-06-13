@@ -95,23 +95,44 @@ def transcribe_and_draft_record(consultation_id: str):
         logger.warning(f'transcribe_and_draft: consultation {consultation_id} not found')
         return
 
-    audio_uri = consultation.audio_gs_uri
-    if not audio_uri:
-        logger.warning(f'transcribe_and_draft: no audio_gs_uri on {consultation_id}')
-        return
+    # If the live chunked captions already built a transcript during the call,
+    # it's labeled per-speaker and already finished — use it as-is. Only fall
+    # back to whole-file Google STT on the uploaded WAV when there's no live
+    # transcript (e.g. the frame-observer capture didn't run on this device).
+    if not (consultation.call_transcript or '').strip():
+        audio_uri = consultation.audio_gs_uri
+        if not audio_uri:
+            logger.warning(f'transcribe_and_draft: no live transcript and no audio_gs_uri on {consultation_id}')
+            return
+        transcript = _run_speech_to_text(audio_uri)
+        if not transcript:
+            logger.warning(f'transcribe_and_draft: empty transcript for {consultation_id}')
+            return
+        consultation.call_transcript = transcript
+        consultation.save(update_fields=['call_transcript'])
 
-    transcript = _run_speech_to_text(audio_uri)
+    _draft_and_notify(consultation)
+
+
+def _draft_and_notify(consultation):
+    """Hand the consultation's `call_transcript` to Gemini, persist the result
+    as an unpublished AI draft, and notify the doctor. Shared by the live
+    (chunked) and whole-file transcription paths so the report logic stays in
+    one place. `consultation` must be loaded with appointment/patient/provider
+    select_related."""
+    from .models import MedicalRecord
+    from apps.notifications.dispatch import notify as send_notification_dispatch
+    from apps.ai_engine.medlm_client import medlm_client
+
+    transcript = (consultation.call_transcript or '').strip()
     if not transcript:
-        logger.warning(f'transcribe_and_draft: empty transcript for {consultation_id}')
+        logger.warning(f'draft: no transcript for {consultation.consultation_id}')
         return
-
-    consultation.call_transcript = transcript
-    consultation.save(update_fields=['call_transcript'])
 
     try:
         draft = medlm_client.draft_medical_record(transcript)
     except Exception as e:
-        logger.exception(f'transcribe_and_draft: Gemini draft failed for {consultation_id}: {e}')
+        logger.exception(f'draft: Gemini draft failed for {consultation.consultation_id}: {e}')
         return
 
     provider = consultation.appointment.provider
