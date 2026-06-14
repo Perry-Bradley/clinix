@@ -643,22 +643,40 @@ class ConsultationTranscribeChunkView(APIView):
         speaker = (request.data.get('speaker') or 'speaker').strip().lower()
         label = {'doctor': 'Doctor', 'patient': 'Patient'}.get(speaker, 'Speaker')
 
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+
         from .transcription import groq_transcribe
-        text = (groq_transcribe(audio.read(), filename=audio.name or 'chunk.wav') or '').strip()
+        try:
+            text = (groq_transcribe(audio.read(), filename=audio.name or 'chunk.wav') or '').strip()
+        except Exception as e:
+            _log.exception('transcribe-chunk: groq call failed')
+            return Response({'text': '', 'speaker': speaker, 'stage': 'groq', 'error': repr(e)[:200]},
+                            status=status.HTTP_200_OK)
+
         if not text:
             # Silence / unintelligible chunk — nothing to add, not an error.
             return Response({'text': '', 'speaker': speaker}, status=status.HTTP_200_OK)
 
         # Append under a row lock so the doctor + patient chunks that land in
-        # the same window (both posted from the doctor's device) serialize
-        # instead of clobbering each other's transcript writes.
-        from django.db import transaction
-        line = f'[{label}] {text}\n'
-        with transaction.atomic():
-            locked = Consultation.objects.select_for_update().get(pk=consultation.pk)
-            locked.call_transcript = (locked.call_transcript or '') + line
-            locked.save(update_fields=['call_transcript'])
-        return Response({'text': text, 'speaker': speaker}, status=status.HTTP_200_OK)
+        # the same window serialize instead of clobbering each other. NEVER
+        # fail the request over a save error — the caption is already useful to
+        # show live; we just report saved=false + the reason so it's diagnosable.
+        saved = True
+        save_error = ''
+        try:
+            from django.db import transaction
+            line = f'[{label}] {text}\n'
+            with transaction.atomic():
+                locked = Consultation.objects.select_for_update().get(pk=consultation.pk)
+                locked.call_transcript = (locked.call_transcript or '') + line
+                locked.save(update_fields=['call_transcript'])
+        except Exception as e:
+            saved = False
+            save_error = repr(e)[:200]
+            _log.exception('transcribe-chunk: transcript append failed')
+        return Response({'text': text, 'speaker': speaker, 'saved': saved, 'error': save_error},
+                        status=status.HTTP_200_OK)
 
 
 class ChatFileUploadView(APIView):
