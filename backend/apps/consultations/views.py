@@ -378,7 +378,13 @@ class ConsultationRingView(APIView):
                 'system',
                 {
                     'type': 'incoming_call',
-                    'consultation_id': str(consultation.consultation_id),
+                    # Echo back the EXACT id the caller is using as their Agora
+                    # channel (the URL pk), not the resolved consultation pk.
+                    # The caller joined the channel named after whatever id they
+                    # opened the call with (often the appointment id); the callee
+                    # must join that same channel or they land in separate rooms
+                    # and never connect. Backend calls resolve either id anyway.
+                    'consultation_id': str(pk),
                     'caller_id': str(caller.user_id),
                     'caller_name': caller_name,
                     'caller_photo': caller_photo,
@@ -643,14 +649,15 @@ class ConsultationTranscribeChunkView(APIView):
             # Silence / unintelligible chunk — nothing to add, not an error.
             return Response({'text': '', 'speaker': speaker}, status=status.HTTP_200_OK)
 
-        # Atomic DB-side append so the doctor + patient chunks landing in the
-        # same window don't clobber each other's transcript writes.
-        from django.db.models.functions import Concat
-        from django.db.models import Value, TextField
+        # Append under a row lock so the doctor + patient chunks that land in
+        # the same window (both posted from the doctor's device) serialize
+        # instead of clobbering each other's transcript writes.
+        from django.db import transaction
         line = f'[{label}] {text}\n'
-        Consultation.objects.filter(pk=consultation.pk).update(
-            call_transcript=Concat('call_transcript', Value(line), output_field=TextField())
-        )
+        with transaction.atomic():
+            locked = Consultation.objects.select_for_update().get(pk=consultation.pk)
+            locked.call_transcript = (locked.call_transcript or '') + line
+            locked.save(update_fields=['call_transcript'])
         return Response({'text': text, 'speaker': speaker}, status=status.HTTP_200_OK)
 
 
