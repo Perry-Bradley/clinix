@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/call_handler.dart';
+import '../../../core/app_globals.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 
@@ -529,15 +530,35 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   }
 
   Future<void> _finalizeReport() async {
+    void toast(String msg) =>
+        rootMessengerKey.currentState?.showSnackBar(SnackBar(
+          content: Text(msg),
+          duration: const Duration(seconds: 5),
+        ));
     try {
       final token = await AuthService.getAccessToken();
       if (token == null || token.isEmpty) return;
-      await Dio().post(
+      final resp = await Dio().post(
         '${ApiConstants.baseUrl}${ApiConstants.consultations}${widget.consultationId}/finalize/',
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 90),
+        ),
       );
+      final d = resp.data is Map ? resp.data as Map : const {};
+      final drafted = d['drafted'] == true;
+      final chars = d['transcript_chars'] ?? 0;
+      if (drafted) {
+        toast('AI report draft ready — open it from “AI drafts”.');
+      } else if (chars == 0) {
+        toast('No transcript was captured, so no report was created.');
+      } else {
+        toast('Could not generate the report (${d['reason'] ?? 'unknown'}).');
+      }
     } catch (e) {
       debugPrint('[AIScribe] Finalize failed: $e');
+      toast('Could not generate the AI report.');
     }
   }
 

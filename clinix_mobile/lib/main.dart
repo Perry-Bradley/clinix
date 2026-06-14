@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'core/theme/app_theme.dart';
+import 'core/app_globals.dart';
 import 'core/constants/app_router.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/call_handler.dart';
@@ -84,6 +85,7 @@ class ClinixApp extends StatelessWidget {
       title: 'Clinix',
       theme: AppTheme.light,
       routerConfig: appRouter,
+      scaffoldMessengerKey: rootMessengerKey,
       debugShowCheckedModeBanner: false,
     );
   }
