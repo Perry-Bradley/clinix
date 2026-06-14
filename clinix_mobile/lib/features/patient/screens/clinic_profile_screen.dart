@@ -21,11 +21,40 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
   final String _apiKey = dotenv.get('GOOGLE_MAPS_API_KEY');
   Map<String, dynamic>? _clinicDetails;
   bool _isLoading = true;
+  // Phone number we curated in our own admin (keyed by place_id). Preferred
+  // over Google's listed number, which is often missing for Cameroon clinics.
+  String? _curatedPhone;
 
   @override
   void initState() {
     super.initState();
     _fetchClinicDetails();
+    _fetchCuratedPhone();
+  }
+
+  Future<void> _fetchCuratedPhone() async {
+    try {
+      final res = await _dio.get(
+        'https://clinix-production-81cf.up.railway.app/api/v1/locations/facility-phones/?place_id=${widget.placeId}',
+      );
+      if (res.data is List && (res.data as List).isNotEmpty) {
+        final phone = res.data[0]['phone_number']?.toString();
+        if (phone != null && phone.trim().isNotEmpty && mounted) {
+          setState(() => _curatedPhone = phone.trim());
+        }
+      }
+    } catch (_) {
+      // Best-effort — fall back to Google's number.
+    }
+  }
+
+  /// The number to actually call: our curated one first, then Google's.
+  String? get _effectivePhone {
+    final c = _curatedPhone;
+    if (c != null && c.trim().isNotEmpty) return c.trim();
+    final g = _clinicDetails?['formatted_phone_number']?.toString() ??
+        _clinicDetails?['international_phone_number']?.toString();
+    return (g != null && g.trim().isNotEmpty) ? g.trim() : null;
   }
 
   Future<void> _fetchClinicDetails() async {
@@ -62,8 +91,7 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
   }
 
   Future<void> _call() async {
-    final phone = _clinicDetails?['formatted_phone_number']?.toString()
-        ?? _clinicDetails?['international_phone_number']?.toString();
+    final phone = _effectivePhone;
     final hasPhone = phone != null && phone.trim().isNotEmpty;
     final clinicName = _clinicDetails?['name']?.toString() ?? 'Clinic';
     if (!mounted) return;
@@ -125,7 +153,7 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
               )
             else
               Text(
-                'No phone number listed for this clinic on Google Maps.',
+                'No phone number available for this clinic yet.',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: AppColors.grey500,
@@ -375,8 +403,7 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () {
-                        final phone = _clinicDetails?['formatted_phone_number']?.toString()
-                            ?? _clinicDetails?['international_phone_number']?.toString();
+                        final phone = _effectivePhone;
                         if (phone != null && phone.isNotEmpty) {
                           final uri = Uri.parse('tel:${phone.replaceAll(RegExp(r'\s+'), '')}');
                           launchUrl(uri, mode: LaunchMode.externalApplication);

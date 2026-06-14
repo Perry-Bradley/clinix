@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Check, Eye, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import DocumentReviewModal from '../components/DocumentReviewModal';
@@ -27,6 +27,7 @@ interface CMCResponse {
   fetched_at: number;
   source: string;
   scrape_error: string | null;
+  scraping?: boolean;
   results: CMCDoctor[];
 }
 
@@ -74,6 +75,15 @@ const Verifications = () => {
     queryFn: () => fetchCMCDoctors(cmcSearch, cmcRefresh),
     enabled: activeTab === 'cmc',
   });
+
+  // The scrape now runs in the background on the server; while it's running,
+  // poll every 25s so the list appears automatically once it's stored.
+  useEffect(() => {
+    if (activeTab === 'cmc' && cmcData?.scraping) {
+      const t = setTimeout(() => refetchCMC(), 25000);
+      return () => clearTimeout(t);
+    }
+  }, [activeTab, cmcData?.scraping, cmcData?.count, refetchCMC]);
 
   const handleReview = async (req: VerificationRequest) => {
     try {
@@ -289,16 +299,24 @@ const Verifications = () => {
                     </tbody>
                   </table>
                 </div>
+              ) : cmcData?.scraping ? (
+                <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+                  <RefreshCw size={24} className="animate-spin mx-auto mb-3 text-slate-300" />
+                  <p className="text-sm font-medium text-slate-600">Scraping the directory in the background…</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                    This takes about a minute (≈64 pages). The list will appear here automatically — no need to wait on this screen.
+                  </p>
+                </div>
               ) : (
                 <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
                   <ShieldCheck size={32} className="mx-auto mb-3 text-slate-300" />
                   <p className="text-sm font-medium text-slate-600">
-                    {cmcSearch ? `No results for "${cmcSearch}"` : 'No records extracted'}
+                    {cmcSearch ? `No results for "${cmcSearch}"` : 'No records yet'}
                   </p>
                   <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
                     {cmcData?.scrape_error
                       ? 'See the notice above — the site may render its directory with JavaScript which cannot be scraped with a standard HTTP request.'
-                      : 'Hit Refresh to attempt a new scrape. If it consistently returns nothing, the CMC site may require JavaScript to load its data.'}
+                      : 'Hit Refresh to scrape the directory. It runs in the background and the list refreshes automatically when done.'}
                   </p>
                   <a
                     href="https://www.ordremedecinsducameroun.org/annuaire"

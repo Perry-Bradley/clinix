@@ -690,21 +690,12 @@ def _parse_onmc_page(html: str) -> list:
             if not name or len(name) < 3:
                 continue
 
-            # Strategy 1: direct sibling <p>
-            p = h2.find_next_sibling('p')
-
-            # Strategy 2: first <p> within the same parent container
-            if not p:
-                parent = h2.find_parent(['div', 'article', 'li', 'section', 'td'])
-                if parent:
-                    p = parent.find('p')
-
-            # Strategy 3: nearest <p> anywhere after h2 in document order
-            if not p:
-                p = h2.find_next('p')
-
-            reg_raw = ' '.join(p.get_text().split()) if p else ''
-            reg_no = _extract_reg_no(reg_raw)
+            # The registration number ("NNNNN/YYYY", optionally "P"-prefixed) is
+            # the nearest text after the name. Find that text node directly
+            # rather than assuming a specific <p> structure (which failed on the
+            # real markup — names were captured but reg numbers came back empty).
+            reg_node = h2.find_next(string=_REG_NO_RE)
+            reg_no = _extract_reg_no(str(reg_node)) if reg_node else ''
 
             entries.append({
                 'name': name,
@@ -783,6 +774,40 @@ def _scrape_onmc_doctors(max_pages: int = ONMC_TOTAL_PAGES) -> tuple:
     return all_entries, error_msg, pages_scraped
 
 
+_ONMC_SCRAPE_STATE = {'running': False, 'last': 0.0}
+
+
+def _trigger_onmc_scrape() -> bool:
+    """Kick off an ONMC scrape+store on a background thread (non-blocking).
+    Debounced so rapid refreshes don't pile up or hammer the source. Returns
+    True if a scrape is in progress/just started."""
+    now = time.time()
+    if _ONMC_SCRAPE_STATE['running']:
+        return True
+    if now - _ONMC_SCRAPE_STATE['last'] < 120:
+        return False  # scraped very recently
+    _ONMC_SCRAPE_STATE['running'] = True
+    _ONMC_SCRAPE_STATE['last'] = now
+
+    import threading
+    from django.db import close_old_connections
+
+    def _run():
+        from .tasks import scrape_and_store_onmc
+        try:
+            close_old_connections()
+            scrape_and_store_onmc()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Background ONMC scrape failed')
+        finally:
+            _ONMC_SCRAPE_STATE['running'] = False
+            close_old_connections()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return True
+
+
 class CMCDoctorsView(APIView):
     """Return ONMC-registered doctors (onmc.app/tableau_de_lordre)."""
     permission_classes = [IsSuperAdminUser]
@@ -790,19 +815,16 @@ class CMCDoctorsView(APIView):
     def get(self, request):
         from django.db.models import Q
         from .models import OnmcDoctor
-        from .tasks import scrape_and_store_onmc
 
-        scrape_error = None
-        pages_scraped = 0
         force_refresh = request.query_params.get('refresh') == '1'
 
-        # Serve from the DB (refreshed weekly by Celery Beat). Re-scrape only
-        # when the admin asks (refresh=1) or the table has never been filled.
+        # Serve from the DB (refreshed weekly by Celery Beat). A scrape is slow
+        # (~64 pages), so NEVER run it inside the request — kick it off in the
+        # background and return whatever's in the DB right now. Trigger only when
+        # the admin asks (refresh=1) or the table has never been filled.
+        scraping = False
         if force_refresh or not OnmcDoctor.objects.exists():
-            result = scrape_and_store_onmc()
-            if isinstance(result, dict):
-                scrape_error = result.get('error')
-                pages_scraped = result.get('pages', 0) or 0
+            scraping = _trigger_onmc_scrape()
 
         qs = OnmcDoctor.objects.all()
         total = qs.count()
@@ -829,9 +851,10 @@ class CMCDoctorsView(APIView):
         return Response({
             'count': len(results),
             'total_scraped': total,
-            'pages_scraped': pages_scraped,
+            'pages_scraped': 0,
             'fetched_at': latest.timestamp() if latest else 0,
             'source': ONMC_DIRECTORY,
-            'scrape_error': scrape_error,
+            'scraping': scraping,
+            'scrape_error': None,
             'results': results,
         })

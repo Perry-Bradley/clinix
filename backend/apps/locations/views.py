@@ -99,10 +99,13 @@ class PublicFacilityPhonesView(APIView):
 
     def get(self, request):
         try:
-            rows = (Pharmacy.objects
-                    .exclude(phone_number__isnull=True)
-                    .exclude(phone_number='')
-                    .values('place_id', 'name', 'phone_number'))
+            qs = (Pharmacy.objects
+                  .exclude(phone_number__isnull=True)
+                  .exclude(phone_number=''))
+            place_id = request.query_params.get('place_id')
+            if place_id:
+                qs = qs.filter(place_id=place_id)
+            rows = qs.values('place_id', 'name', 'phone_number')
             data = [
                 {'place_id': r['place_id'], 'name': r['name'], 'phone_number': r['phone_number']}
                 for r in rows
