@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/call_handler.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 
@@ -488,6 +489,9 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
 
   Future<void> _leave() async {
     _stopRingback();
+    // Clear any native CallKit entry for this call so it doesn't linger or
+    // keep ringing after the call ends.
+    unawaited(CallHandler.endCall(widget.consultationId));
     await _stopLiveCaptions();
     final e = _engine;
     final wasRecording = _isRecording;

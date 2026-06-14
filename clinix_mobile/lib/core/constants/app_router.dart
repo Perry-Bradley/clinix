@@ -13,6 +13,7 @@ import '../../features/patient/presentation/pages/patient_home_page.dart';
 import '../../features/provider/presentation/pages/provider_home_page.dart';
 import '../../features/provider/presentation/pages/write_prescription_page.dart';
 import '../../features/provider/presentation/pages/medical_record_form_page.dart';
+import '../../features/provider/presentation/pages/ai_drafts_screen.dart';
 import '../../features/provider/presentation/pages/referral_form_page.dart';
 import '../../features/patient/screens/book_appointment_screen.dart';
 import '../../features/appointments/presentation/pages/appointment_detail_page.dart';
@@ -224,6 +225,10 @@ final GoRouter appRouter = GoRouter(
           aiDraftRecordId: extra['aiDraftRecordId']?.toString() ?? draftFromQuery,
         );
       },
+    ),
+    GoRoute(
+      path: '/provider/ai-drafts',
+      builder: (c, s) => const AiDraftsScreen(),
     ),
     GoRoute(
       path: '/provider/refer',

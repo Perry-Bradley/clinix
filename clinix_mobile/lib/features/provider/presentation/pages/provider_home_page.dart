@@ -458,6 +458,21 @@ class _ProviderDashboardState extends State<_ProviderDashboard> {
                   ),
                 ),
                 GestureDetector(
+                  onTap: () => context.push('/provider/ai-drafts'),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    width: 48, height: 48,
+                    alignment: Alignment.center,
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.grey200),
+                    ),
+                    child: const Icon(Icons.auto_awesome_rounded, color: AppColors.darkBlue500, size: 22),
+                  ),
+                ),
+                GestureDetector(
                   onTap: () => context.push('/notifications'),
                   behavior: HitTestBehavior.opaque,
                   child: Container(

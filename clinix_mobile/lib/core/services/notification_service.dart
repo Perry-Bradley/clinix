@@ -176,14 +176,11 @@ class NotificationService {
       final isAiDraft = data['is_ai_draft']?.toString().toLowerCase() == 'true';
 
       if (type == 'incoming_call') {
-        final consultationId = data['consultation_id']?.toString() ?? '';
-        if (consultationId.isEmpty) return;
-        appRouter.push('/incoming-call', extra: {
-          'consultationId': consultationId,
-          'callerName': data['caller_name']?.toString() ?? 'Caller',
-          'callerPhoto': data['caller_photo']?.toString(),
-          'audioOnly': data['audio_only']?.toString().toLowerCase() == 'true',
-        });
+        // Incoming calls are shown by the native CallKit UI (foreground +
+        // background FCM handlers). Do NOT also push the in-app ringing screen
+        // here — that produced a duplicate "two screens / rings twice"
+        // experience. (IncomingCallScreen is still used as the auto-accept
+        // transition right after a CallKit accept.)
         return;
       }
       if (type == 'medical_record') {
