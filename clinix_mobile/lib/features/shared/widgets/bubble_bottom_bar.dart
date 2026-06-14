@@ -2,8 +2,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
-/// "Liquid glass" bottom navigation — a translucent, blurred, rounded panel
-/// with a soft pill highlight on the active tab (Telegram-style aesthetic).
+/// Floating "liquid glass" bottom navigation — a frosted, translucent, fully
+/// rounded pill that hovers above the content (content shows through the blur),
+/// with a soft pill highlight on the active tab. Requires the host Scaffold to
+/// set `extendBody: true` so the body renders behind the glass.
 class BubbleBottomBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
@@ -18,77 +20,75 @@ class BubbleBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-        child: Container(
-          decoration: BoxDecoration(
-            // Frosted, semi-transparent panel.
-            color: Colors.white.withOpacity(0.80),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-            border: Border(
-              top: BorderSide(color: Colors.white.withOpacity(0.65), width: 1),
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return Padding(
+      // Float the pill: margin on all sides, lifted off the bottom edge.
+      padding: EdgeInsets.fromLTRB(14, 0, 14, bottomInset > 0 ? bottomInset : 14),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(34),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
+          child: Container(
+            decoration: BoxDecoration(
+              // Frosted translucent glass — content shows through.
+              color: Colors.white.withOpacity(0.62),
+              borderRadius: BorderRadius.circular(34),
+              border: Border.all(color: Colors.white.withOpacity(0.55), width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 26,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 24,
-                offset: const Offset(0, -6),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              child: Row(
-                children: List.generate(items.length, (idx) {
-                  final item = items[idx];
-                  final sel = idx == currentIndex;
-                  return Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => onTap(idx),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOut,
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        padding: const EdgeInsets.symmetric(vertical: 7),
-                        decoration: BoxDecoration(
-                          color: sel
-                              ? AppColors.darkBlue500.withOpacity(0.12)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              sel ? item.activeIcon : item.icon,
-                              color: sel ? AppColors.darkBlue500 : AppColors.grey400,
-                              size: 23,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            child: Row(
+              children: List.generate(items.length, (idx) {
+                final item = items[idx];
+                final sel = idx == currentIndex;
+                return Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onTap(idx),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      padding: const EdgeInsets.symmetric(vertical: 7),
+                      decoration: BoxDecoration(
+                        color: sel
+                            ? AppColors.darkBlue500.withOpacity(0.14)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            sel ? item.activeIcon : item.icon,
+                            color: sel ? AppColors.darkBlue500 : AppColors.grey500,
+                            size: 23,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            item.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10,
+                              height: 1.0,
+                              color: sel ? AppColors.darkBlue500 : AppColors.grey500,
+                              fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
                             ),
-                            const SizedBox(height: 3),
-                            Text(
-                              item.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 10.5,
-                                height: 1.0,
-                                color: sel ? AppColors.darkBlue500 : AppColors.grey400,
-                                fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                }),
-              ),
+                  ),
+                );
+              }),
             ),
           ),
         ),

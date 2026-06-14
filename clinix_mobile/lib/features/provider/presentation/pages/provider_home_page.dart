@@ -148,6 +148,7 @@ class _ProviderHomePageState extends State<ProviderHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.grey50,
+      extendBody: true, // content renders behind the floating glass navbar
       drawer: CustomSidebarDrawer(
         currentIndex: _selectedTab,
         onTabSelected: (i) => setState(() => _selectedTab = i),
