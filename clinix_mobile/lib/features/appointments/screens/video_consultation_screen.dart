@@ -84,6 +84,7 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   int _dbgSent = 0;
   int _dbgOk = 0;
   int _dbgFail = 0;
+  String _dbgLastErr = '';
   Timer? _dbgTimer;
 
   @override
@@ -402,13 +403,28 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
         ),
       );
       _dbgOk++;
-      final text = (resp.data is Map ? resp.data['text'] : null)?.toString() ?? '';
+      final data = resp.data is Map ? resp.data as Map : const {};
+      final text = (data['text'])?.toString() ?? '';
+      // Server now never 500s — it reports save problems in the body instead.
+      if (data['saved'] == false) {
+        _dbgLastErr = 'save:${(data['error'] ?? '').toString()}';
+      } else if (data['stage'] == 'groq') {
+        _dbgLastErr = 'groq:${(data['error'] ?? '').toString()}';
+      }
       if (text.isNotEmpty && mounted && _captionsOn) {
         final who = speaker == 'doctor' ? 'You' : 'Patient';
         setState(() => _liveCaption = '$who: $text');
       }
     } catch (e) {
       _dbgFail++;
+      // Capture the real reason so the on-screen probe shows it (HTTP status
+      // for a rejected request, or the timeout/connection type otherwise).
+      if (e is DioException) {
+        final code = e.response?.statusCode;
+        _dbgLastErr = code != null ? 'HTTP $code' : e.type.name;
+      } else {
+        _dbgLastErr = e.runtimeType.toString();
+      }
       debugPrint('[Captions] chunk upload failed: $e');
     }
   }
@@ -827,7 +843,8 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
                           child: Text(
                             'cap doc ${(_dbgDocBytes / 1024).round()}KB · '
                             'pat ${(_dbgPatBytes / 1024).round()}KB · '
-                            'sent $_dbgSent ✓$_dbgOk ✗$_dbgFail',
+                            'sent $_dbgSent ✓$_dbgOk ✗$_dbgFail'
+                            '${_dbgLastErr.isEmpty ? '' : '\n$_dbgLastErr'}',
                             style: const TextStyle(
                               color: Colors.greenAccent,
                               fontSize: 11,
