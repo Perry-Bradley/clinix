@@ -91,9 +91,12 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void _accept() {
     _autoDismiss?.cancel();
     _stopRinging();
-    // Push on the ROOT navigator — IncomingCallScreen is a go_router page, and
-    // pushing the call screen on the nested navigator can silently no-op.
-    Navigator.of(context, rootNavigator: true).pushReplacement(
+    // Use the SAME navigation the (working) caller side uses: a plain additive
+    // push from this context. pushReplacement / rootNavigator from a go_router
+    // page can silently no-op — which is why Accept did nothing. When the call
+    // screen later closes, dismiss this incoming-call screen too.
+    Navigator.push(
+      context,
       MaterialPageRoute(
         builder: (_) => VideoConsultationScreen(
           consultationId: widget.consultationId,
@@ -102,7 +105,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
           incoming: true,
         ),
       ),
-    );
+    ).then((_) {
+      if (!mounted) return;
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      } else {
+        context.go('/');
+      }
+    });
   }
 
   void _decline({bool autoMissed = false}) {
