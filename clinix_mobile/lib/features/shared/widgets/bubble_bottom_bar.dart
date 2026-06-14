@@ -30,11 +30,12 @@ class BubbleBottomBar extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
           child: Container(
             decoration: BoxDecoration(
-              // Light, whitish frosted glass — very translucent so content
-              // clearly shows through the blur.
-              color: Colors.white.withOpacity(0.45),
+              // Thick, mostly-opaque pure white so the bar clearly stands out
+              // from the app background — but still frosted (BackdropFilter
+              // blur) for the glassy feel.
+              color: Colors.white.withOpacity(0.85),
               borderRadius: BorderRadius.circular(34),
-              border: Border.all(color: Colors.white.withOpacity(0.55), width: 1.2),
+              border: Border.all(color: Colors.white.withOpacity(0.7), width: 1.2),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.12),
