@@ -12,6 +12,7 @@ import 'package:dio/dio.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/call_handler.dart';
 import '../../../core/app_globals.dart';
+import '../../../core/constants/app_router.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
 
@@ -533,8 +534,10 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
     void toast(String msg) =>
         rootMessengerKey.currentState?.showSnackBar(SnackBar(
           content: Text(msg),
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 4),
         ));
+    // Let the doctor know the report is being written while they leave the call.
+    toast('Generating AI report…');
     try {
       final token = await AuthService.getAccessToken();
       if (token == null || token.isEmpty) return;
@@ -548,9 +551,11 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
       );
       final d = resp.data is Map ? resp.data as Map : const {};
       final drafted = d['drafted'] == true;
+      final recordId = (d['record_id'] ?? '').toString();
       final chars = d['transcript_chars'] ?? 0;
-      if (drafted) {
-        toast('AI report draft ready — open it from “AI drafts”.');
+      if (drafted && recordId.isNotEmpty) {
+        // Open the review form straight away (doctor edits + publishes).
+        appRouter.push('/provider/medical-record/new?aiDraftRecordId=$recordId');
       } else if (chars == 0) {
         toast('No transcript was captured, so no report was created.');
       } else {

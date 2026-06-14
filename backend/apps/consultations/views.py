@@ -725,9 +725,14 @@ class ConsultationFinalizeView(APIView):
             return Response({'drafted': False, 'transcript_chars': len(transcript),
                              'reason': repr(e)[:200]}, status=status.HTTP_200_OK)
 
-        drafted = MedicalRecord.objects.filter(consultation=consultation, is_ai_draft=True).exists()
-        return Response({'drafted': drafted, 'transcript_chars': len(transcript),
-                         'reason': '' if drafted else 'draft_empty'}, status=status.HTTP_200_OK)
+        draft_rec = (MedicalRecord.objects
+                     .filter(consultation=consultation, is_ai_draft=True)
+                     .order_by('-created_at').first())
+        return Response({'drafted': draft_rec is not None,
+                         'record_id': str(draft_rec.record_id) if draft_rec else '',
+                         'transcript_chars': len(transcript),
+                         'reason': '' if draft_rec else 'draft_empty'},
+                        status=status.HTTP_200_OK)
 
 
 class ChatFileUploadView(APIView):
