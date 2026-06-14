@@ -205,6 +205,14 @@ try:
             'task': 'apps.consultations.tasks.send_medication_reminders',
             'schedule': crontab(minute='*/15'),  # every 15 minutes
         },
+        'scrape-onmc-doctors-weekly': {
+            'task': 'apps.admin_dashboard.tasks.scrape_and_store_onmc',
+            'schedule': crontab(minute=0, hour=3, day_of_week=1),  # Mon 03:00
+        },
+        'sync-facilities-weekly': {
+            'task': 'apps.admin_dashboard.tasks.sync_facilities',
+            'schedule': crontab(minute=30, hour=3, day_of_week=1),  # Mon 03:30
+        },
     }
 except ImportError:
     pass

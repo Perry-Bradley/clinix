@@ -531,78 +531,88 @@ class PharmacyListView(APIView):
         return Response(data)
 
 
+def run_facility_sync() -> dict:
+    """Fetch pharmacies + hospitals from Google Places and upsert into the DB.
+    Shared by the admin sync endpoint and the weekly Celery task. Returns a
+    summary dict ({'error': 'no_api_key'} when the key is missing)."""
+    api_key = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+    if not api_key:
+        return {'error': 'no_api_key'}
+
+    created = updated = 0
+    errors = []
+
+    for place_type in PLACE_TYPES_TO_SYNC:
+        for city_name, lat, lng in CAMEROON_CITIES:
+            next_page_token = None
+            for _ in range(3):  # up to 3 pages = 60 results per city per type
+                params = {
+                    'location': f'{lat},{lng}',
+                    'radius': 50000,
+                    'type': place_type,
+                    'key': api_key,
+                }
+                if next_page_token:
+                    params = {'pagetoken': next_page_token, 'key': api_key}
+
+                try:
+                    r = http_requests.get(
+                        'https://maps.googleapis.com/maps/api/place/nearbysearch/json',
+                        params=params,
+                        timeout=15,
+                    )
+                    data = r.json()
+                except Exception as e:
+                    errors.append(f'{place_type}/{city_name}: {e}')
+                    break
+
+                for place in data.get('results', []):
+                    place_id = place.get('place_id')
+                    if not place_id:
+                        continue
+                    name = place.get('name', '')
+                    address = place.get('vicinity', '')
+                    p_lat = place.get('geometry', {}).get('location', {}).get('lat')
+                    p_lng = place.get('geometry', {}).get('location', {}).get('lng')
+
+                    obj, was_created = Pharmacy.objects.update_or_create(
+                        place_id=place_id,
+                        defaults={
+                            'name': name,
+                            'place_type': place_type,
+                            'address': address,
+                            'city': city_name,
+                            'latitude': p_lat,
+                            'longitude': p_lng,
+                        },
+                    )
+                    if was_created:
+                        created += 1
+                    else:
+                        updated += 1
+
+                next_page_token = data.get('next_page_token')
+                if not next_page_token:
+                    break
+                time.sleep(2)  # required delay before using next_page_token
+
+    return {
+        'created': created,
+        'updated': updated,
+        'total': Pharmacy.objects.count(),
+        'errors': errors,
+    }
+
+
 class PharmacySyncView(APIView):
     """Fetch pharmacies and hospitals from Google Places API and upsert into the DB."""
     permission_classes = [IsSuperAdminUser]
 
     def post(self, request):
-        api_key = os.environ.get('GOOGLE_MAPS_API_KEY', '')
-        if not api_key:
+        result = run_facility_sync()
+        if result.get('error') == 'no_api_key':
             return Response({'error': 'GOOGLE_MAPS_API_KEY not configured'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
-        created = updated = 0
-        errors = []
-
-        for place_type in PLACE_TYPES_TO_SYNC:
-            for city_name, lat, lng in CAMEROON_CITIES:
-                next_page_token = None
-                for _ in range(3):  # up to 3 pages = 60 results per city per type
-                    params = {
-                        'location': f'{lat},{lng}',
-                        'radius': 50000,
-                        'type': place_type,
-                        'key': api_key,
-                    }
-                    if next_page_token:
-                        params = {'pagetoken': next_page_token, 'key': api_key}
-
-                    try:
-                        r = http_requests.get(
-                            'https://maps.googleapis.com/maps/api/place/nearbysearch/json',
-                            params=params,
-                            timeout=15,
-                        )
-                        data = r.json()
-                    except Exception as e:
-                        errors.append(f'{place_type}/{city_name}: {e}')
-                        break
-
-                    for place in data.get('results', []):
-                        place_id = place.get('place_id')
-                        if not place_id:
-                            continue
-                        name = place.get('name', '')
-                        address = place.get('vicinity', '')
-                        p_lat = place.get('geometry', {}).get('location', {}).get('lat')
-                        p_lng = place.get('geometry', {}).get('location', {}).get('lng')
-
-                        obj, was_created = Pharmacy.objects.update_or_create(
-                            place_id=place_id,
-                            defaults={
-                                'name': name,
-                                'place_type': place_type,
-                                'address': address,
-                                'city': city_name,
-                                'latitude': p_lat,
-                                'longitude': p_lng,
-                            },
-                        )
-                        if was_created:
-                            created += 1
-                        else:
-                            updated += 1
-
-                    next_page_token = data.get('next_page_token')
-                    if not next_page_token:
-                        break
-                    time.sleep(2)  # required delay before using next_page_token
-
-        return Response({
-            'created': created,
-            'updated': updated,
-            'total': Pharmacy.objects.count(),
-            'errors': errors,
-        })
+        return Response(result)
 
 
 class PharmacyPhoneView(APIView):
@@ -651,6 +661,20 @@ _CMC_CACHE = _ONMC_CACHE
 CMC_DIRECTORY = ONMC_DIRECTORY
 
 
+_REG_NO_RE = _re.compile(r'P?\d{3,6}\s*/\s*\d{4}')
+
+
+def _extract_reg_no(text: str) -> str:
+    """Pull the registration number (e.g. '13574/2024', or 'P1234/2023') out of
+    a doctor's detail text. Falls back to stripping the 'Médecin' suffix if the
+    number pattern isn't found."""
+    text = text or ''
+    m = _REG_NO_RE.search(text)
+    if m:
+        return m.group(0).replace(' ', '')
+    return _re.sub(r'\s*[Mm][eé]decin.*$', '', text).strip()
+
+
 def _parse_onmc_page(html: str) -> list:
     """
     Parse one page of onmc.app/tableau_de_lordre.
@@ -680,8 +704,7 @@ def _parse_onmc_page(html: str) -> list:
                 p = h2.find_next('p')
 
             reg_raw = ' '.join(p.get_text().split()) if p else ''
-            # Strip "Médecin" and everything that follows (handles "Médecin Généraliste", etc.)
-            reg_no = _re.sub(r'\s*[Mm][eé]decin.*$', '', reg_raw).strip()
+            reg_no = _extract_reg_no(reg_raw)
 
             entries.append({
                 'name': name,
@@ -698,7 +721,7 @@ def _parse_onmc_page(html: str) -> list:
         for raw_name, raw_p in pairs:
             name = _re.sub(r'<[^>]+>', '', raw_name).strip()
             reg_raw = _re.sub(r'<[^>]+>', '', raw_p).strip()
-            reg_no = _re.sub(r'\s*[Mm][eé]decin.*$', '', reg_raw).strip()
+            reg_no = _extract_reg_no(reg_raw)
             if name:
                 entries.append({
                     'name': name,
@@ -765,30 +788,50 @@ class CMCDoctorsView(APIView):
     permission_classes = [IsSuperAdminUser]
 
     def get(self, request):
-        now = time.time()
+        from django.db.models import Q
+        from .models import OnmcDoctor
+        from .tasks import scrape_and_store_onmc
+
+        scrape_error = None
+        pages_scraped = 0
         force_refresh = request.query_params.get('refresh') == '1'
-        cache_stale = now - _ONMC_CACHE['fetched_at'] > CMC_CACHE_TTL
 
-        if force_refresh or cache_stale or not _ONMC_CACHE['data']:
-            doctors, err, pages = _scrape_onmc_doctors()
-            _ONMC_CACHE['data'] = doctors
-            _ONMC_CACHE['fetched_at'] = now
-            _ONMC_CACHE['error'] = err
-            _ONMC_CACHE['pages_scraped'] = pages
+        # Serve from the DB (refreshed weekly by Celery Beat). Re-scrape only
+        # when the admin asks (refresh=1) or the table has never been filled.
+        if force_refresh or not OnmcDoctor.objects.exists():
+            result = scrape_and_store_onmc()
+            if isinstance(result, dict):
+                scrape_error = result.get('error')
+                pages_scraped = result.get('pages', 0) or 0
 
-        data = _ONMC_CACHE['data']
-        search = request.query_params.get('search', '').strip().lower()
+        qs = OnmcDoctor.objects.all()
+        total = qs.count()
+        search = request.query_params.get('search', '').strip()
         if search:
-            data = [d for d in data if
-                    search in d.get('name', '').lower() or
-                    search in d.get('registration_number', '').lower()]
+            qs = qs.filter(
+                Q(name__icontains=search) |
+                Q(registration_number__icontains=search) |
+                Q(region__icontains=search)
+            )
 
+        results = [
+            {
+                'name': d.name,
+                'specialization': d.specialization,
+                'region': d.region,
+                'registration_number': d.registration_number,
+            }
+            for d in qs
+        ]
+
+        latest = (OnmcDoctor.objects.order_by('-scraped_at')
+                  .values_list('scraped_at', flat=True).first())
         return Response({
-            'count': len(data),
-            'total_scraped': len(_ONMC_CACHE['data']),
-            'pages_scraped': _ONMC_CACHE.get('pages_scraped', 0),
-            'fetched_at': _ONMC_CACHE['fetched_at'],
+            'count': len(results),
+            'total_scraped': total,
+            'pages_scraped': pages_scraped,
+            'fetched_at': latest.timestamp() if latest else 0,
             'source': ONMC_DIRECTORY,
-            'scrape_error': _ONMC_CACHE.get('error'),
-            'results': data,
+            'scrape_error': scrape_error,
+            'results': results,
         })
