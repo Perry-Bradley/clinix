@@ -339,7 +339,17 @@ def _resolve_consultation(pk):
         appointment = Appointment.objects.get(appointment_id=pk)
     except Appointment.DoesNotExist:
         return None
-    consultation, _created = Consultation.objects.get_or_create(appointment=appointment)
+    # get_or_create can race when the doctor + patient transcription chunks
+    # arrive together and the Consultation row doesn't exist yet: both try to
+    # create it and one hits the OneToOne unique-key error. Isolate it in a
+    # savepoint so the collision rolls back cleanly (won't poison the request
+    # transaction under ATOMIC_REQUESTS), then fall back to a plain get.
+    from django.db import IntegrityError, transaction
+    try:
+        with transaction.atomic():
+            consultation, _created = Consultation.objects.get_or_create(appointment=appointment)
+    except IntegrityError:
+        consultation = Consultation.objects.get(appointment=appointment)
     return Consultation.objects.select_related(*_sel).get(pk=consultation.pk)
 
 
