@@ -30,8 +30,9 @@ class BubbleBottomBar extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
           child: Container(
             decoration: BoxDecoration(
-              // Frosted translucent glass — content shows through.
-              color: Colors.white.withOpacity(0.62),
+              // Light, whitish frosted glass — very translucent so content
+              // clearly shows through the blur.
+              color: Colors.white.withOpacity(0.45),
               borderRadius: BorderRadius.circular(34),
               border: Border.all(color: Colors.white.withOpacity(0.55), width: 1.2),
               boxShadow: [

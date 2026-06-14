@@ -1041,25 +1041,25 @@ class _PatientProfileTabState extends State<_PatientProfileTab> {
 
                 // ── Health records ────────────────────────────────────────
                 _SettingSection(label: 'Health', items: [
-                  _SettingItem(icon: Icons.badge_rounded, iconColor: const Color(0xFF14B8A6), label: 'My Health Details', onTap: () => context.push('/patient/health-profile')),
-                  _SettingItem(icon: Icons.folder_copy_rounded, iconColor: const Color(0xFF6366F1), label: 'Medical Records', onTap: () => context.push('/patient/medical-records')),
-                  _SettingItem(icon: Icons.medication_rounded, iconColor: const Color(0xFF8B5CF6), label: 'Prescriptions', onTap: () => context.push('/patient/prescriptions')),
-                  _SettingItem(icon: Icons.monitor_heart_rounded, iconColor: const Color(0xFFEC4899), label: 'Health Dashboard', onTap: () => context.push('/patient/health')),
-                  _SettingItem(icon: Icons.science_rounded, iconColor: const Color(0xFF0EA5E9), label: 'Lab Tests', onTap: () => context.push('/homecare/lab-tests'), isLast: true),
+                  _SettingItem(icon: Icons.badge_rounded, label: 'My Health Details', onTap: () => context.push('/patient/health-profile')),
+                  _SettingItem(icon: Icons.folder_copy_rounded, label: 'Medical Records', onTap: () => context.push('/patient/medical-records')),
+                  _SettingItem(icon: Icons.medication_rounded, label: 'Prescriptions', onTap: () => context.push('/patient/prescriptions')),
+                  _SettingItem(icon: Icons.monitor_heart_rounded, label: 'Health Dashboard', onTap: () => context.push('/patient/health')),
+                  _SettingItem(icon: Icons.science_rounded, label: 'Lab Tests', onTap: () => context.push('/homecare/lab-tests'), isLast: true),
                 ]),
 
                 const SizedBox(height: 12),
 
                 // ── Preferences ───────────────────────────────────────────
                 _SettingSection(label: 'Preferences', items: [
-                  _SettingItem(icon: Icons.notifications_rounded, iconColor: const Color(0xFFF97316), label: 'Notifications', onTap: () => context.push('/notifications'), isLast: true),
+                  _SettingItem(icon: Icons.notifications_rounded, label: 'Notifications', onTap: () => context.push('/notifications'), isLast: true),
                 ]),
 
                 const SizedBox(height: 12),
 
                 // ── Account ───────────────────────────────────────────────
                 _SettingSection(label: 'Account', items: [
-                  _SettingItem(icon: Icons.headset_mic_rounded, iconColor: const Color(0xFF0EA5E9), label: 'Help & Support', onTap: () => context.push('/about'), isLast: true),
+                  _SettingItem(icon: Icons.headset_mic_rounded, label: 'Help & Support', onTap: () => context.push('/about'), isLast: true),
                 ]),
 
                 const SizedBox(height: 12),
@@ -1180,11 +1180,10 @@ class _SettingSection extends StatelessWidget {
 
 class _SettingItem extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
   final String label;
   final VoidCallback onTap;
   final bool isLast;
-  const _SettingItem({required this.icon, required this.iconColor, required this.label, required this.onTap, this.isLast = false});
+  const _SettingItem({required this.icon, required this.label, required this.onTap, this.isLast = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1199,8 +1198,8 @@ class _SettingItem extends StatelessWidget {
               children: [
                 Container(
                   width: 36, height: 36,
-                  decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                  child: Icon(icon, size: 18, color: iconColor),
+                  decoration: BoxDecoration(color: AppColors.darkBlue500.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(icon, size: 18, color: AppColors.darkBlue500),
                 ),
                 const SizedBox(width: 14),
                 Expanded(child: Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF0A1628)))),

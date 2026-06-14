@@ -1989,19 +1989,16 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
                 if (_credentials.isEmpty && verificationStatus != 'approved')
                   _PSettingItem(
                     icon: Icons.verified_user_rounded,
-                    iconColor: const Color(0xFFF97316),
                     label: 'Verify Profile',
                     onTap: () => _showVerifyProfileModal(context, onUploaded: _loadProfile),
                   ),
                 _PSettingItem(
                   icon: Icons.edit_note_rounded,
-                  iconColor: const Color(0xFF6366F1),
                   label: 'Edit Profile & Bio',
                   onTap: () => _showEditBioModal(context, _profile!, onSaved: _loadProfile),
                 ),
                 _PSettingItem(
                   icon: Icons.schedule_rounded,
-                  iconColor: const Color(0xFF0EA5E9),
                   label: 'My Schedule',
                   onTap: () {
                     final state = context.findAncestorStateOfType<_ProviderHomePageState>();
@@ -2010,7 +2007,6 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
                 ),
                 _PSettingItem(
                   icon: Icons.account_balance_wallet_rounded,
-                  iconColor: const Color(0xFF10B981),
                   label: 'Wallet & Payouts',
                   onTap: () {
                     final state = context.findAncestorStateOfType<_ProviderHomePageState>();
@@ -2026,7 +2022,6 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
               _PSettingSection(label: 'Preferences', items: [
                 _PSettingItem(
                   icon: Icons.notifications_rounded,
-                  iconColor: const Color(0xFFF97316),
                   label: 'Notifications',
                   onTap: () => context.push('/notifications'),
                   isLast: true,
@@ -2039,7 +2034,6 @@ class _ProviderProfileTabState extends State<_ProviderProfileTab> {
               _PSettingSection(label: 'Account', items: [
                 _PSettingItem(
                   icon: Icons.headset_mic_rounded,
-                  iconColor: const Color(0xFF0EA5E9),
                   label: 'Help & Support',
                   onTap: () => context.push('/about'),
                   isLast: true,
@@ -2138,13 +2132,11 @@ class _PSettingSection extends StatelessWidget {
 
 class _PSettingItem extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
   final String label;
   final VoidCallback onTap;
   final bool isLast;
   const _PSettingItem({
     required this.icon,
-    required this.iconColor,
     required this.label,
     required this.onTap,
     this.isLast = false,
@@ -2164,10 +2156,10 @@ class _PSettingItem extends StatelessWidget {
                 Container(
                   width: 36, height: 36,
                   decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.12),
+                    color: AppColors.darkBlue500.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, size: 18, color: iconColor),
+                  child: Icon(icon, size: 18, color: AppColors.darkBlue500),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
