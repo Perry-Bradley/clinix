@@ -689,6 +689,46 @@ class ConsultationTranscribeChunkView(APIView):
                         status=status.HTTP_200_OK)
 
 
+class ConsultationFinalizeView(APIView):
+    """Called by the doctor's device when a recorded call ends. Drafts the AI
+    medical report from the live (chunked) transcript — WITHOUT needing the WAV
+    upload or Cloud Storage. Drafting is idempotent (skipped if a draft already
+    exists), so it's safe alongside the audio-upload path."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        provider = _provider_for_user(request.user)
+        if not provider:
+            return Response({'error': 'Only providers can finalize a consultation.'}, status=status.HTTP_403_FORBIDDEN)
+        consultation = _resolve_consultation(pk)
+        if consultation is None:
+            return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if consultation.appointment.provider_id != provider.pk:
+            return Response({'error': 'You can only finalize your own consultations.'}, status=status.HTTP_403_FORBIDDEN)
+
+        cid = str(consultation.consultation_id)
+        import os
+        import logging
+        from .tasks import transcribe_and_draft_record
+        if os.environ.get('USE_CELERY', '').strip().lower() in ('1', 'true', 'yes'):
+            transcribe_and_draft_record.delay(cid)
+        else:
+            import threading
+            from django.db import close_old_connections
+
+            def _run():
+                try:
+                    close_old_connections()
+                    transcribe_and_draft_record(cid)
+                except Exception:
+                    logging.getLogger(__name__).exception('Inline finalize draft failed')
+                finally:
+                    close_old_connections()
+
+            threading.Thread(target=_run, daemon=True).start()
+        return Response({'status': 'drafting'}, status=status.HTTP_202_ACCEPTED)
+
+
 class ChatFileUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 

@@ -114,25 +114,63 @@ def transcribe_and_draft_record(consultation_id: str):
     _draft_and_notify(consultation)
 
 
+def _generate_draft(transcript: str, consultation_id) -> dict:
+    """Draft the structured medical record from the transcript. Prefers Groq
+    (already configured for transcription, and reliable), falling back to
+    Gemini. Returns {} if both produce nothing usable."""
+    def _has_content(d):
+        if not d:
+            return False
+        return any(
+            (d.get(k) or '').strip() if isinstance(d.get(k), str) else d.get(k)
+            for k in ('title', 'chief_complaint', 'symptoms', 'diagnosis',
+                      'treatment_plan', 'examination_findings', 'medications_summary')
+        )
+
+    # 1) Groq-hosted LLM.
+    try:
+        from .transcription import groq_draft_medical_record
+        draft = groq_draft_medical_record(transcript)
+        if _has_content(draft):
+            return draft
+    except Exception:
+        logger.exception(f'draft: Groq drafting failed for {consultation_id}')
+
+    # 2) Fall back to Gemini.
+    try:
+        from apps.ai_engine.medlm_client import medlm_client
+        draft = medlm_client.draft_medical_record(transcript)
+        if _has_content(draft):
+            return draft
+    except Exception:
+        logger.exception(f'draft: Gemini drafting failed for {consultation_id}')
+
+    return {}
+
+
 def _draft_and_notify(consultation):
-    """Hand the consultation's `call_transcript` to Gemini, persist the result
-    as an unpublished AI draft, and notify the doctor. Shared by the live
-    (chunked) and whole-file transcription paths so the report logic stays in
-    one place. `consultation` must be loaded with appointment/patient/provider
+    """Draft the medical record from the consultation's `call_transcript`,
+    persist it as an unpublished AI draft, and notify the doctor. Shared by the
+    live (chunked) and whole-file transcription paths so the report logic stays
+    in one place. `consultation` must be loaded with appointment/patient/provider
     select_related."""
     from .models import MedicalRecord
     from apps.notifications.dispatch import notify as send_notification_dispatch
-    from apps.ai_engine.medlm_client import medlm_client
 
     transcript = (consultation.call_transcript or '').strip()
     if not transcript:
         logger.warning(f'draft: no transcript for {consultation.consultation_id}')
         return
 
-    try:
-        draft = medlm_client.draft_medical_record(transcript)
-    except Exception as e:
-        logger.exception(f'draft: Gemini draft failed for {consultation.consultation_id}: {e}')
+    # Don't create a second draft if one already exists for this consultation
+    # (both the audio-upload and the finalize hook can trigger drafting).
+    if MedicalRecord.objects.filter(consultation=consultation, is_ai_draft=True).exists():
+        logger.info(f'draft: AI draft already exists for {consultation.consultation_id}; skipping')
+        return
+
+    draft = _generate_draft(transcript, consultation.consultation_id)
+    if not draft:
+        logger.warning(f'draft: empty/failed draft for {consultation.consultation_id}')
         return
 
     provider = consultation.appointment.provider
