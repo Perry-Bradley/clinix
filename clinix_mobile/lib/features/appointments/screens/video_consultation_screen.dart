@@ -514,12 +514,31 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
     if (wasRecording && recordingPath != null) {
       unawaited(_uploadRecording(recordingPath));
     }
+    // Draft the AI report from the LIVE transcript — this works even when the
+    // WAV/Cloud-Storage path isn't configured. Doctor side, scribe consented.
+    // (Server de-dupes, so this is safe alongside the upload trigger.)
+    if (_isProvider && _aiScribeConsented) {
+      unawaited(_finalizeReport());
+    }
     // Connected calls land in both users' call history with their duration.
     if (_connectedAt != null) {
       final secs = DateTime.now().difference(_connectedAt!).inSeconds;
       unawaited(_logCompletedCall(secs));
     }
     if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _finalizeReport() async {
+    try {
+      final token = await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) return;
+      await Dio().post(
+        '${ApiConstants.baseUrl}${ApiConstants.consultations}${widget.consultationId}/finalize/',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+    } catch (e) {
+      debugPrint('[AIScribe] Finalize failed: $e');
+    }
   }
 
   Future<void> _logCompletedCall(int durationSeconds) async {

@@ -66,6 +66,13 @@ void main() async {
       child: ClinixApp(),
     ),
   );
+
+  // Cold-start backstop: if the app was launched by accepting an incoming call
+  // on the native CallKit screen, the live accept event can be missed. Once the
+  // UI and the auth redirect have settled, route into any accepted call.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future.delayed(const Duration(milliseconds: 1500), CallHandler.routePendingCall);
+  });
 }
 
 class ClinixApp extends StatelessWidget {
