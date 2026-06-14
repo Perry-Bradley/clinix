@@ -2,7 +2,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
-from .models import Location
+from .models import Location, Pharmacy
 from .serializers import LocationUpdateSerializer
 from apps.providers.models import HealthcareProvider
 from apps.providers.serializers import ProviderPublicSerializer
@@ -87,6 +87,30 @@ class FacilitiesListView(APIView):
         except Exception as e:
             # Return empty list on error
             return Response([], status=status.HTTP_200_OK)
+
+class PublicFacilityPhonesView(APIView):
+    """Public: facility phone numbers from OUR database, keyed by Google
+    `place_id`. The app overlays these onto its map results by exact place_id,
+    so it shows the contact number we stored/curated in the admin instead of
+    Google's listing or a fuzzy name match. Pharmacy rows are synced from Google
+    (so the place_id matches the app's) and their phones are edited in the admin.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            rows = (Pharmacy.objects
+                    .exclude(phone_number__isnull=True)
+                    .exclude(phone_number='')
+                    .values('place_id', 'name', 'phone_number'))
+            data = [
+                {'place_id': r['place_id'], 'name': r['name'], 'phone_number': r['phone_number']}
+                for r in rows
+            ]
+            return Response(data)
+        except Exception:
+            return Response([], status=status.HTTP_200_OK)
+
 
 class AdminFacilityUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]

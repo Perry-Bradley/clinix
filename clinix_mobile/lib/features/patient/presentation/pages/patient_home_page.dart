@@ -54,7 +54,7 @@ class _PatientHomePageState extends State<PatientHomePage> {
           BubbleNavItem(icon: Icons.medical_services_outlined, label: 'Doctors'),
           BubbleNavItem(icon: Icons.local_hospital_outlined, label: 'Facilities'),
           // BubbleNavItem(icon: Icons.favorite_outline_rounded, label: 'Health'), // Commented out - health tracking hidden
-          BubbleNavItem(icon: Icons.chat_bubble_outline_rounded, label: 'Messages'),
+          BubbleNavItem(icon: Icons.forum_outlined, activeIcon: Icons.forum_rounded, label: 'Messages'),
           BubbleNavItem(icon: Icons.person_outline_rounded, label: 'Profile'),
         ],
       ),

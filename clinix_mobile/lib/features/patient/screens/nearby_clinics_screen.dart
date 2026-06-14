@@ -273,30 +273,20 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
       });
       await Future.wait(futures);
 
-      // Fetch backend facilities with phone numbers (hybrid approach)
+      // Overlay the phone numbers WE stored, matched EXACTLY by Google
+      // place_id, so the app shows the contact details set in our admin — not
+      // Google's number or an unreliable name/address guess.
       try {
-        final backendFacilities = await _fetchBackendFacilities();
-        // Match Google Places with backend facilities by name/address
+        final phoneMap = await _fetchFacilityPhones();
         for (var clinic in fresh) {
-          final googleName = clinic['name']?.toString().toLowerCase() ?? '';
-          final googleAddress = clinic['address']?.toString().toLowerCase() ?? '';
-          
-          // Try to find matching backend facility
-          for (var backendFac in backendFacilities) {
-            final backendName = backendFac['facility_name']?.toString().toLowerCase() ?? '';
-            final backendAddress = backendFac['address']?.toString().toLowerCase() ?? '';
-            
-            // Match if names are similar or addresses match
-            if ((googleName.contains(backendName) || backendName.contains(googleName)) ||
-                (googleAddress.contains(backendAddress) || backendAddress.contains(googleAddress))) {
-              clinic['phone_number'] = backendFac['phone_number'];
-              break;
-            }
+          final pid = clinic['id']?.toString();
+          if (pid != null && phoneMap.containsKey(pid)) {
+            clinic['phone_number'] = phoneMap[pid];
           }
         }
       } catch (e) {
-        print('Error fetching backend facilities: $e');
-        // Continue without phone numbers if backend fetch fails
+        print('Error overlaying facility phones: $e');
+        // Continue without curated phone numbers if the fetch fails.
       }
 
       if (fresh.isEmpty) {
@@ -326,18 +316,26 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchBackendFacilities() async {
+  /// Phone numbers we curated in the admin, keyed by Google place_id.
+  Future<Map<String, String>> _fetchFacilityPhones() async {
     try {
       final response = await _dio.get(
-        'https://clinix-production-81cf.up.railway.app/api/v1/locations/facilities/',
+        'https://clinix-production-81cf.up.railway.app/api/v1/locations/facility-phones/',
       );
+      final map = <String, String>{};
       if (response.data is List) {
-        return List<Map<String, dynamic>>.from(response.data);
+        for (final r in response.data) {
+          final pid = r['place_id']?.toString();
+          final phone = r['phone_number']?.toString();
+          if (pid != null && pid.isNotEmpty && phone != null && phone.isNotEmpty) {
+            map[pid] = phone;
+          }
+        }
       }
-      return [];
+      return map;
     } catch (e) {
-      print('Error fetching backend facilities: $e');
-      return [];
+      print('Error fetching facility phones: $e');
+      return {};
     }
   }
 
@@ -886,18 +884,11 @@ class _NearbyClinicsScreenState extends State<NearbyClinicsScreen> {
             return GestureDetector(
               onTap: () => context.push('/patient/clinic-profile/${clinic['id']}'),
               child: Container(
-              margin: const EdgeInsets.only(bottom: 8),
+              margin: const EdgeInsets.only(bottom: 4),
               decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: AppColors.grey200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
