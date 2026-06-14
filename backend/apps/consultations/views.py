@@ -706,27 +706,28 @@ class ConsultationFinalizeView(APIView):
         if consultation.appointment.provider_id != provider.pk:
             return Response({'error': 'You can only finalize your own consultations.'}, status=status.HTTP_403_FORBIDDEN)
 
-        cid = str(consultation.consultation_id)
-        import os
+        # Run synchronously and report the outcome so the app (and we) can see
+        # exactly what happened: whether a transcript was captured, and whether
+        # the report drafted. The LLM call takes a few seconds — acceptable for
+        # a fire-and-forget call the device doesn't block its UI on.
         import logging
-        from .tasks import transcribe_and_draft_record
-        if os.environ.get('USE_CELERY', '').strip().lower() in ('1', 'true', 'yes'):
-            transcribe_and_draft_record.delay(cid)
-        else:
-            import threading
-            from django.db import close_old_connections
+        from .models import MedicalRecord
+        from .tasks import _draft_and_notify
 
-            def _run():
-                try:
-                    close_old_connections()
-                    transcribe_and_draft_record(cid)
-                except Exception:
-                    logging.getLogger(__name__).exception('Inline finalize draft failed')
-                finally:
-                    close_old_connections()
+        transcript = (consultation.call_transcript or '').strip()
+        if not transcript:
+            return Response({'drafted': False, 'transcript_chars': 0, 'reason': 'no_transcript'},
+                            status=status.HTTP_200_OK)
+        try:
+            _draft_and_notify(consultation)
+        except Exception as e:
+            logging.getLogger(__name__).exception('finalize: drafting failed')
+            return Response({'drafted': False, 'transcript_chars': len(transcript),
+                             'reason': repr(e)[:200]}, status=status.HTTP_200_OK)
 
-            threading.Thread(target=_run, daemon=True).start()
-        return Response({'status': 'drafting'}, status=status.HTTP_202_ACCEPTED)
+        drafted = MedicalRecord.objects.filter(consultation=consultation, is_ai_draft=True).exists()
+        return Response({'drafted': drafted, 'transcript_chars': len(transcript),
+                         'reason': '' if drafted else 'draft_empty'}, status=status.HTTP_200_OK)
 
 
 class ChatFileUploadView(APIView):
