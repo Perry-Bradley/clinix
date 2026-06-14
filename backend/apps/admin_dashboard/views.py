@@ -685,17 +685,25 @@ def _parse_onmc_page(html: str) -> list:
     try:
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(html, 'lxml')
-        for h2 in soup.find_all('h2'):
+        h2s = soup.find_all('h2')
+        for i, h2 in enumerate(h2s):
             name = ' '.join(h2.get_text().split()).strip()
             if not name or len(name) < 3:
                 continue
 
-            # The registration number ("NNNNN/YYYY", optionally "P"-prefixed) is
-            # the nearest text after the name. Find that text node directly
-            # rather than assuming a specific <p> structure (which failed on the
-            # real markup — names were captured but reg numbers came back empty).
-            reg_node = h2.find_next(string=_REG_NO_RE)
-            reg_no = _extract_reg_no(str(reg_node)) if reg_node else ''
+            # Collect this doctor's text block — everything between this <h2>
+            # and the next one — then pull the registration number from it. This
+            # is robust to whatever tags/splitting the page uses (the previous
+            # <p>-based lookup returned empty reg numbers on the real markup).
+            stop = h2s[i + 1] if i + 1 < len(h2s) else None
+            parts = []
+            for el in h2.next_elements:
+                if stop is not None and el is stop:
+                    break
+                if isinstance(el, str):
+                    parts.append(str(el))
+            block_text = ' '.join(' '.join(parts).split())
+            reg_no = _extract_reg_no(block_text)
 
             entries.append({
                 'name': name,
@@ -822,9 +830,11 @@ class CMCDoctorsView(APIView):
         # (~64 pages), so NEVER run it inside the request — kick it off in the
         # background and return whatever's in the DB right now. Trigger only when
         # the admin asks (refresh=1) or the table has never been filled.
-        scraping = False
-        if force_refresh or not OnmcDoctor.objects.exists():
-            scraping = _trigger_onmc_scrape()
+        # Always render instantly from the DB — NEVER scrape on navigation.
+        # Scraping is a behind-the-scenes job (weekly Celery Beat). A manual
+        # Refresh just kicks off a background re-scrape; it never blocks this
+        # response or makes the page wait.
+        scraping = _trigger_onmc_scrape() if force_refresh else False
 
         qs = OnmcDoctor.objects.all()
         total = qs.count()

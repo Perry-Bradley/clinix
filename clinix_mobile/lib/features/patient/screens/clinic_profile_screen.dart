@@ -37,10 +37,15 @@ class _ClinicProfileScreenState extends State<ClinicProfileScreen> {
       final res = await _dio.get(
         'https://clinix-production-81cf.up.railway.app/api/v1/locations/facility-phones/?place_id=${widget.placeId}',
       );
-      if (res.data is List && (res.data as List).isNotEmpty) {
-        final phone = res.data[0]['phone_number']?.toString();
-        if (phone != null && phone.trim().isNotEmpty && mounted) {
-          setState(() => _curatedPhone = phone.trim());
+      if (res.data is List) {
+        for (final r in res.data) {
+          if (r['place_id']?.toString() == widget.placeId) {
+            final phone = r['phone_number']?.toString();
+            if (phone != null && phone.trim().isNotEmpty && mounted) {
+              setState(() => _curatedPhone = phone.trim());
+            }
+            break;
+          }
         }
       }
     } catch (_) {
