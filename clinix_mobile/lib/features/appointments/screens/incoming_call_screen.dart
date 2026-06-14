@@ -91,12 +91,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void _accept() {
     _autoDismiss?.cancel();
     _stopRinging();
-    Navigator.of(context).pushReplacement(
+    // Push on the ROOT navigator — IncomingCallScreen is a go_router page, and
+    // pushing the call screen on the nested navigator can silently no-op.
+    Navigator.of(context, rootNavigator: true).pushReplacement(
       MaterialPageRoute(
         builder: (_) => VideoConsultationScreen(
           consultationId: widget.consultationId,
           doctorName: widget.callerName,
           audioOnly: widget.audioOnly,
+          incoming: true,
         ),
       ),
     );

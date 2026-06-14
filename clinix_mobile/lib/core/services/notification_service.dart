@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -119,7 +120,11 @@ class NotificationService {
       title: notification.title ?? 'Clinix',
       body: notification.body ?? '',
       notificationDetails: details,
-      payload: message.data['route'],
+      // Carry the FULL data map (JSON) so a foreground tap can route by type
+      // — exactly like a background tap. Previously we only passed
+      // data['route'], so types that route by data (AI report drafts,
+      // prescriptions, appointments…) had a null payload and did nothing.
+      payload: jsonEncode(message.data),
     );
   }
 
@@ -134,6 +139,15 @@ class NotificationService {
     try {
       var payload = response.payload ?? '';
       if (payload.isEmpty) return;
+      // Foreground FCM taps carry the full data map as JSON — route by type
+      // just like a background tap.
+      if (payload.startsWith('{')) {
+        final decoded = jsonDecode(payload);
+        if (decoded is Map) {
+          _routeFromData(Map<String, dynamic>.from(decoded));
+        }
+        return;
+      }
       final colon = payload.indexOf(':');
       if (!payload.startsWith('/') && colon > 0) {
         payload = payload.substring(colon + 1);

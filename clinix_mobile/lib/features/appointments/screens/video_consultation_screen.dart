@@ -17,12 +17,17 @@ class VideoConsultationScreen extends StatefulWidget {
   final String consultationId;
   final String? doctorName;
   final bool audioOnly;
+  // True when this user ANSWERED a call (came in via the incoming-call
+  // screen). The callee just joins — it must not ring the peer back or play
+  // the caller's "calling…" ringback on its own phone.
+  final bool incoming;
 
   const VideoConsultationScreen({
     super.key,
     required this.consultationId,
     this.doctorName,
     this.audioOnly = false,
+    this.incoming = false,
   });
 
   @override
@@ -244,10 +249,13 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
       await engine.startPreview();
     }
 
-    // Tell the backend to FCM-ring the peer + start the local ringback tone
-    // so the caller hears the standard "calling…" sound while they wait.
-    unawaited(_ringPeer());
-    _startRingback();
+    // Only the CALLER rings the peer and shows the "calling…" state. The
+    // callee already answered via the incoming-call screen, so it just joins
+    // — no ringing its own phone, no calling the caller back.
+    if (!widget.incoming) {
+      unawaited(_ringPeer());
+      _startRingback();
+    }
 
     await engine.joinChannel(
       token: _token!,
@@ -526,11 +534,9 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
   void _startRingback() {
     if (_ringbackActive) return;
     _ringbackActive = true;
-    try {
-      // System notification sound looped — gives that classic "calling…" feel
-      // without bundling a custom audio asset.
-      FlutterRingtonePlayer().playNotification(looping: true);
-    } catch (_) {}
+    // No audible ringback on the caller's own phone — you're the one calling,
+    // so we just show the "Ringing…" state visually. (The CALLEE's phone rings
+    // loudly via the incoming-call screen; that's the ring that matters.)
     // Auto-give-up after 45 seconds if the peer doesn't answer.
     _noAnswerTimer?.cancel();
     _noAnswerTimer = Timer(const Duration(seconds: 45), () {
