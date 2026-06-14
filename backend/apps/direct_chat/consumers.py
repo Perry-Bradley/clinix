@@ -101,7 +101,7 @@ class DirectChatConsumer(AsyncJsonWebsocketConsumer):
                 self.user.full_name or 'New message',
                 preview,
                 'consultation',
-                {'route': f'/chat-direct/{conv.conversation_id}', 'conversation_id': str(conv.conversation_id)},
+                {'route': f'/dchat/{conv.conversation_id}', 'conversation_id': str(conv.conversation_id)},
             )
         except Exception:
             pass

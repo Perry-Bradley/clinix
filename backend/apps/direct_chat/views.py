@@ -113,7 +113,7 @@ def _notify_direct_message(peer, conv, msg, sender):
             sender.full_name or 'New message',
             preview,
             'consultation',
-            {'route': f'/chat-direct/{conv.conversation_id}', 'conversation_id': str(conv.conversation_id)},
+            {'route': f'/dchat/{conv.conversation_id}', 'conversation_id': str(conv.conversation_id)},
         )
     except Exception:
         pass
@@ -193,7 +193,7 @@ class MessageListView(generics.ListCreateAPIView):
                 sender.full_name or 'New message',
                 preview,
                 'consultation',
-                {'route': f'/chat-direct/{conv.conversation_id}', 'conversation_id': str(conv.conversation_id)},
+                {'route': f'/dchat/{conv.conversation_id}', 'conversation_id': str(conv.conversation_id)},
             )
         except Exception:
             pass

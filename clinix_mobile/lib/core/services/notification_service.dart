@@ -207,7 +207,14 @@ class NotificationService {
         }
         return;
       }
-      // Direct chat / explicit `route` payloads.
+      // Direct chat — route by conversation_id so a drifting route string in
+      // the payload can't break message-notification taps.
+      final conversationId = data['conversation_id']?.toString();
+      if (conversationId != null && conversationId.isNotEmpty) {
+        appRouter.push('/dchat/$conversationId');
+        return;
+      }
+      // Any other explicit `route` payload.
       final route = data['route']?.toString();
       if (route != null && route.isNotEmpty) {
         appRouter.push(route);
