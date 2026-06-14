@@ -80,6 +80,28 @@ def _materialise_pending_booking(payment):
         return None
 
 
+def _notify_provider_appointment_confirmed(appointment):
+    """Tell the provider a (paid) appointment is confirmed and on their books.
+    Service bookings are notified separately inside _materialise_pending_booking,
+    so this covers regular doctor consultations — providers previously got no
+    notification at all when a patient booked + paid for a consultation."""
+    try:
+        from apps.notifications.dispatch import notify as send_notification_dispatch
+        patient_name = (
+            getattr(appointment.patient.patient_id, 'full_name', None) or 'A patient'
+        )
+        when = appointment.scheduled_at.strftime('%b %d, %H:%M') if appointment.scheduled_at else ''
+        send_notification_dispatch(
+            str(appointment.provider.provider_id.user_id),
+            'New appointment booked',
+            f'{patient_name} booked a consultation with you{(" — " + when) if when else ""}.',
+            'appointment',
+            {'appointment_id': str(appointment.appointment_id)},
+        )
+    except Exception:
+        logger.warning('Could not notify provider of confirmed appointment', exc_info=True)
+
+
 def _mark_payment_success(payment):
     if payment.status == 'success':
         return payment
@@ -90,13 +112,19 @@ def _mark_payment_success(payment):
         payment.save(update_fields=['status', 'completed_at'])
 
         # If this was a pay-first service booking, create the Appointment now.
+        materialised = False
         if payment.appointment_id is None and payment.pending_booking:
             _materialise_pending_booking(payment)
             payment.refresh_from_db()
+            materialised = True
 
         if payment.appointment:
             payment.appointment.status = 'confirmed'
             payment.appointment.save(update_fields=['status'])
+            # Service bookings already notified the provider during
+            # materialisation; notify here for regular (doctor) appointments.
+            if not materialised:
+                _notify_provider_appointment_confirmed(payment.appointment)
 
         # Credit provider wallet
         if payment.provider and payment.provider_payout:

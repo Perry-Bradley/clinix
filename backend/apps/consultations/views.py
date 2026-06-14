@@ -316,6 +316,33 @@ class AgoraTokenView(APIView):
         return Response({'app_id': app_id, 'token': token, 'channel': channel_name})
 
 
+def _resolve_consultation(pk):
+    """Resolve a Consultation from EITHER a consultation pk OR an appointment id.
+
+    The mobile app opens the call screen with whatever id it has, and often
+    that's the appointment id (it falls back to it when no Consultation row
+    exists yet). Endpoints that looked the id up purely as a consultation pk
+    therefore 404'd and silently broke ringing, call logging, transcription,
+    and the post-call report. We try the consultation pk first, then fall back
+    to get-or-create by appointment id. Returns a select_related Consultation,
+    or None if neither matches."""
+    _sel = (
+        'appointment',
+        'appointment__patient', 'appointment__patient__patient_id',
+        'appointment__provider', 'appointment__provider__provider_id',
+    )
+    try:
+        return Consultation.objects.select_related(*_sel).get(pk=pk)
+    except Consultation.DoesNotExist:
+        pass
+    try:
+        appointment = Appointment.objects.get(appointment_id=pk)
+    except Appointment.DoesNotExist:
+        return None
+    consultation, _created = Consultation.objects.get_or_create(appointment=appointment)
+    return Consultation.objects.select_related(*_sel).get(pk=consultation.pk)
+
+
 class ConsultationRingView(APIView):
     """Caller pings this when entering the video screen so we can FCM the
     peer with a high-priority "incoming_call" payload. Their app shows a
@@ -326,13 +353,8 @@ class ConsultationRingView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pk):
-        try:
-            consultation = Consultation.objects.select_related(
-                'appointment',
-                'appointment__patient', 'appointment__patient__patient_id',
-                'appointment__provider', 'appointment__provider__provider_id',
-            ).get(pk=pk)
-        except Consultation.DoesNotExist:
+        consultation = _resolve_consultation(pk)
+        if consultation is None:
             return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         appointment = consultation.appointment
@@ -414,13 +436,8 @@ class ConsultationMissedCallView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pk):
-        try:
-            consultation = Consultation.objects.select_related(
-                'appointment',
-                'appointment__patient', 'appointment__patient__patient_id',
-                'appointment__provider', 'appointment__provider__provider_id',
-            ).get(pk=pk)
-        except Consultation.DoesNotExist:
+        consultation = _resolve_consultation(pk)
+        if consultation is None:
             return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         appointment = consultation.appointment
@@ -518,9 +535,8 @@ class ConsultationAudioUploadView(APIView):
         provider = _provider_for_user(request.user)
         if not provider:
             return Response({'error': 'Only providers can upload call audio.'}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            consultation = Consultation.objects.select_related('appointment', 'appointment__provider').get(pk=pk)
-        except Consultation.DoesNotExist:
+        consultation = _resolve_consultation(pk)
+        if consultation is None:
             return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
         if consultation.appointment.provider_id != provider.pk:
             return Response({'error': 'You can only upload audio for your own consultations.'}, status=status.HTTP_403_FORBIDDEN)
@@ -608,9 +624,8 @@ class ConsultationTranscribeChunkView(APIView):
         provider = _provider_for_user(request.user)
         if not provider:
             return Response({'error': 'Only providers can stream call audio.'}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            consultation = Consultation.objects.select_related('appointment', 'appointment__provider').get(pk=pk)
-        except Consultation.DoesNotExist:
+        consultation = _resolve_consultation(pk)
+        if consultation is None:
             return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
         if consultation.appointment.provider_id != provider.pk:
             return Response({'error': 'You can only transcribe your own consultations.'}, status=status.HTTP_403_FORBIDDEN)
