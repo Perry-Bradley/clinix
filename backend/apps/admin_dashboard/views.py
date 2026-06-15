@@ -775,13 +775,14 @@ def _scrape_onmc_doctors(max_pages: int = ONMC_TOTAL_PAGES) -> tuple:
     return all_entries, error_msg, pages_scraped
 
 
-_ONMC_SCRAPE_STATE = {'running': False, 'last': 0.0}
+_ONMC_SCRAPE_STATE = {'running': False, 'last': 0.0, 'result': None}
 
 
 def _trigger_onmc_scrape() -> bool:
     """Kick off an ONMC scrape+store on a background thread (non-blocking).
-    Debounced so rapid refreshes don't pile up or hammer the source. Returns
-    True if a scrape is in progress/just started."""
+    Debounced so rapid refreshes don't pile up. Records the last run's outcome
+    in `_ONMC_SCRAPE_STATE['result']` so the view can surface why it did/didn't
+    update. Returns True if a scrape is in progress/just started."""
     now = time.time()
     if _ONMC_SCRAPE_STATE['running']:
         return True
@@ -797,10 +798,11 @@ def _trigger_onmc_scrape() -> bool:
         from .tasks import scrape_and_store_onmc
         try:
             close_old_connections()
-            scrape_and_store_onmc()
-        except Exception:
+            _ONMC_SCRAPE_STATE['result'] = scrape_and_store_onmc()
+        except Exception as e:
             import logging
             logging.getLogger(__name__).exception('Background ONMC scrape failed')
+            _ONMC_SCRAPE_STATE['result'] = {'stored': 0, 'error': repr(e)[:300]}
         finally:
             _ONMC_SCRAPE_STATE['running'] = False
             close_old_connections()
@@ -849,15 +851,23 @@ class CMCDoctorsView(APIView):
             for d in qs
         ]
 
+        # Surface the LAST scrape's outcome so it's diagnosable why the table
+        # did/didn't update (e.g. "stored 0 — source blocked", or an exception).
+        last = _ONMC_SCRAPE_STATE.get('result')
+        scrape_error = None
+        if last and not last.get('stored'):
+            scrape_error = last.get('error') or 'Last scrape stored 0 records.'
+
         latest = (OnmcDoctor.objects.order_by('-scraped_at')
                   .values_list('scraped_at', flat=True).first())
         return Response({
             'count': len(results),
             'total_scraped': total,
-            'pages_scraped': 0,
+            'pages_scraped': (last or {}).get('pages', 0) if last else 0,
             'fetched_at': latest.timestamp() if latest else 0,
             'source': ONMC_DIRECTORY,
             'scraping': scraping,
-            'scrape_error': None,
+            'scrape_error': scrape_error,
+            'last_scrape': last,
             'results': results,
         })
