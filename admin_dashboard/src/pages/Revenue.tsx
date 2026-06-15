@@ -65,18 +65,18 @@ const Revenue = () => {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Total Revenue" 
-          value={`XAF ${stats?.total_revenue?.toLocaleString() || '0'}`} 
+        <StatCard
+          title="Total Collected"
+          value={`XAF ${stats?.total_revenue?.toLocaleString() || '0'}`}
           icon={<DollarSign className="w-6 h-6 text-emerald-600" />}
-          trend="+12.5%"
+          trend="Gross from patients"
           color="emerald"
         />
         <StatCard 
-          title="Total Payouts" 
-          value={`XAF ${stats?.total_payouts?.toLocaleString() || '0'}`} 
+          title="Total Payouts"
+          value={`XAF ${stats?.total_payouts?.toLocaleString() || '0'}`}
           icon={<CreditCard className="w-6 h-6 text-blue-600" />}
-          trend="+4.2%"
+          trend="Withdrawn by providers"
           color="blue"
         />
         <StatCard 
@@ -86,11 +86,11 @@ const Revenue = () => {
           trend="Action required"
           color="amber"
         />
-        <StatCard 
-          title="Net Platform Profit" 
-          value={`XAF ${(stats?.total_revenue - stats?.total_payouts)?.toLocaleString() || '0'}`} 
+        <StatCard
+          title="Balance Held"
+          value={`XAF ${(stats?.total_revenue - stats?.total_payouts)?.toLocaleString() || '0'}`}
           icon={<ArrowUpRight className="w-6 h-6 text-indigo-600" />}
-          trend="+8.1%"
+          trend="Collected − paid out"
           color="indigo"
         />
       </div>

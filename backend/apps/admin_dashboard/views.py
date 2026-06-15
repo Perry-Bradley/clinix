@@ -105,7 +105,11 @@ class PlatformDashboardView(APIView):
         total_providers = HealthcareProvider.objects.filter(verification_status='approved').count()
         pending_providers = HealthcareProvider.objects.filter(verification_status='pending').count()
         total_consultations = Consultation.objects.count()
-        revenue = Payment.objects.filter(status='success').aggregate(Sum('platform_fee'))['platform_fee__sum'] or 0.00
+        # The platform takes no commission (platform_fee is 0), so "revenue"
+        # here means the gross money collected from patients and held by the
+        # platform — i.e. the full successful-payment amount. Net of payouts is
+        # the balance still held (owed to providers).
+        revenue = Payment.objects.filter(status='success').aggregate(Sum('amount'))['amount__sum'] or 0.00
         pending_withdrawals = WithdrawalRequest.objects.filter(status='pending').count()
         total_payouts = WithdrawalRequest.objects.filter(status='completed').aggregate(Sum('amount'))['amount__sum'] or 0.00
         
@@ -420,7 +424,8 @@ class AnalyticsRevenueView(APIView):
             .annotate(date=TruncDate('initiated_at'))
             .values('date')
             .annotate(
-                revenue=Sum('platform_fee'),
+                # No platform commission, so chart "revenue" = gross collected.
+                revenue=Sum('amount'),
                 volume=Sum('amount'),
                 payments=Count('pk'),
             )
@@ -631,7 +636,8 @@ class AdminRevenueStatsView(APIView):
         ).annotate(
             date=TruncDate('initiated_at')
         ).values('date').annotate(
-            revenue=Sum('platform_fee')
+            # No platform commission, so "revenue" = gross collected amount.
+            revenue=Sum('amount')
         ).order_by('date')
 
         return Response(list(daily_revenue))
