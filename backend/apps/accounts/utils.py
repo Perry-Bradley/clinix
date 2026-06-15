@@ -62,9 +62,39 @@ def verify_email_otp(email, submitted_otp):
         return True
     return False
 
+def _send_via_resend(to_email, subject, text):
+    """Send through the Resend HTTP API (port 443). Needed because Railway
+    blocks outbound SMTP ('Network is unreachable'). Returns True on success,
+    False if not configured or the call failed."""
+    import requests
+    api_key = os.environ.get('RESEND_API_KEY', '').strip()
+    if not api_key:
+        return False
+    from_email = os.environ.get('RESEND_FROM', '').strip() or settings.DEFAULT_FROM_EMAIL
+    try:
+        r = requests.post(
+            'https://api.resend.com/emails',
+            headers={'Authorization': f'Bearer {api_key}',
+                     'Content-Type': 'application/json'},
+            json={'from': from_email, 'to': [to_email], 'subject': subject, 'text': text},
+            timeout=20,
+        )
+        if r.status_code in (200, 201):
+            print(f"Email sent via Resend to {to_email}")
+            return True
+        print(f"Resend send failed for {to_email}: {r.status_code} {r.text[:300]}")
+        return False
+    except Exception as e:
+        print(f"Resend request error for {to_email}: {e}")
+        return False
+
+
 def send_email_otp(email, otp, purpose='verification'):
     """Send an OTP email. Returns True on success so callers can surface a
-    real error instead of telling the user 'sent' when nothing went out."""
+    real error instead of telling the user 'sent' when nothing went out.
+
+    Prefers the Resend HTTP API (SMTP is blocked on Railway); falls back to
+    Django SMTP where outbound SMTP is allowed."""
     subject = f"Your Clinix {purpose} code"
     message = (
         f"Hello,\n\n"
@@ -73,14 +103,17 @@ def send_email_otp(email, otp, purpose='verification'):
         f"If you did not request this, please ignore this email.\n\n"
         f"— The Clinix Team"
     )
-    from_email = settings.DEFAULT_FROM_EMAIL
+
+    # 1) HTTP email API (works on Railway, which blocks SMTP).
+    if _send_via_resend(email, subject, message):
+        return True
+
+    # 2) Fall back to SMTP where it's reachable.
     try:
-        send_mail(subject, message, from_email, [email], fail_silently=False)
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
         print(f"Email OTP sent to {email}")
         return True
     except Exception as e:
-        # In development the console backend never raises; reaching here in
-        # production means SMTP is misconfigured or rejected the message.
         print(f"EMAIL OTP SEND FAILED for {email}: {otp} (error: {e})")
         return False
 
