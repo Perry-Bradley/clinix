@@ -685,42 +685,35 @@ def _parse_onmc_page(html: str) -> list:
     try:
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(html, 'lxml')
-        h2s = soup.find_all('h2')
-        for i, h2 in enumerate(h2s):
+        # Each doctor card on onmc.app is:
+        #   <h2 class="bloc-nom">NAME</h2>
+        #   <span class="bloc-numero">REG_NO/YEAR</span>
+        #   <span class="bloc-specialite">Médecin</span>
+        cards = soup.find_all('h2', class_='bloc-nom') or soup.find_all('h2')
+        for h2 in cards:
             name = ' '.join(h2.get_text().split()).strip()
             if not name or len(name) < 3:
                 continue
-
-            # Collect this doctor's text block — everything between this <h2>
-            # and the next one — then pull the registration number from it. This
-            # is robust to whatever tags/splitting the page uses (the previous
-            # <p>-based lookup returned empty reg numbers on the real markup).
-            stop = h2s[i + 1] if i + 1 < len(h2s) else None
-            parts = []
-            for el in h2.next_elements:
-                if stop is not None and el is stop:
-                    break
-                if isinstance(el, str):
-                    parts.append(str(el))
-            block_text = ' '.join(' '.join(parts).split())
-            reg_no = _extract_reg_no(block_text)
-
+            numero = h2.find_next('span', class_='bloc-numero')
+            reg_no = _extract_reg_no(numero.get_text()) if numero else ''
+            spec_node = h2.find_next('span', class_='bloc-specialite')
+            spec = ' '.join(spec_node.get_text().split()).strip() if spec_node else 'Médecine'
             entries.append({
                 'name': name,
-                'specialization': 'Médecine',
+                'specialization': spec or 'Médecine',
                 'region': '',
                 'registration_number': reg_no,
             })
     except ImportError:
-        # Regex fallback when BeautifulSoup is unavailable
+        # Regex fallback when BeautifulSoup is unavailable.
         pairs = _re.findall(
-            r'<h2[^>]*>(.*?)</h2>.*?<p[^>]*>(.*?)</p>',
-            html, _re.S
+            r'<h2[^>]*class="[^"]*bloc-nom[^"]*"[^>]*>(.*?)</h2>\s*'
+            r'<span[^>]*class="[^"]*bloc-numero[^"]*"[^>]*>(.*?)</span>',
+            html, _re.S,
         )
-        for raw_name, raw_p in pairs:
-            name = _re.sub(r'<[^>]+>', '', raw_name).strip()
-            reg_raw = _re.sub(r'<[^>]+>', '', raw_p).strip()
-            reg_no = _extract_reg_no(reg_raw)
+        for raw_name, raw_reg in pairs:
+            name = ' '.join(_re.sub(r'<[^>]+>', '', raw_name).split()).strip()
+            reg_no = _extract_reg_no(_re.sub(r'<[^>]+>', '', raw_reg))
             if name:
                 entries.append({
                     'name': name,
