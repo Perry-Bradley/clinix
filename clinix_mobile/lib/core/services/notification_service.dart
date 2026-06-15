@@ -183,6 +183,11 @@ class NotificationService {
         // transition right after a CallKit accept.)
         return;
       }
+      if (type == 'ai_summary') {
+        final consultationId = data['consultation_id']?.toString() ?? '';
+        appRouter.push('/provider/ai-summary', extra: {'consultationId': consultationId});
+        return;
+      }
       if (type == 'medical_record') {
         final recordId = data['record_id']?.toString();
         if (isAiDraft && recordId != null && recordId.isNotEmpty) {

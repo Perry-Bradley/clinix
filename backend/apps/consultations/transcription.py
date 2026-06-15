@@ -121,6 +121,72 @@ def _parse_report(text: str) -> dict:
     return out
 
 
+_SUMMARY_PROMPT = (
+    'You are a medical scribe. Read the following CONSULTATION TRANSCRIPT '
+    '(lines are labelled [Doctor] and [Patient]) and write a clear, well-'
+    "structured SUMMARY of the consultation for the doctor's records.\n\n"
+    'Write in markdown using EXACTLY these section headings (each on its own '
+    'line, starting with "## "), in this order and nothing else:\n'
+    '## Overview\n'
+    '## Reason for Visit\n'
+    '## History & Symptoms\n'
+    '## Examination & Findings\n'
+    '## Assessment & Impression\n'
+    '## Plan & Recommendations\n'
+    '## Medications\n'
+    '## Follow-up\n\n'
+    'Rules:\n'
+    '- Summarise what was ACTUALLY said, in flowing prose or short bullet '
+    'points. Do NOT output form fields or "key: value" pairs — this is a '
+    'readable narrative summary, not a filled template.\n'
+    '- If a section was not covered in the call, write "Not discussed during '
+    'this call." under that heading.\n'
+    '- Do NOT invent diagnoses, findings, or medications that were not '
+    'mentioned in the transcript.\n'
+    '- Be concise but complete. Write in the transcript\'s primary language '
+    '(English or French).\n\n'
+    'CONSULTATION TRANSCRIPT:\n'
+)
+
+
+def groq_summarize_consultation(transcript: str) -> str:
+    """Summarise the whole call into readable, sectioned markdown (NOT the
+    manual report's template fields). Returns the markdown string, or '' on any
+    failure so the caller can fall back to another model."""
+    api_key = os.environ.get('GROQ_API_KEY', '').strip()
+    transcript = (transcript or '').strip()
+    if not api_key or not transcript:
+        return ''
+    try:
+        resp = requests.post(
+            GROQ_CHAT_URL,
+            headers={'Authorization': f'Bearer {api_key}'},
+            json={
+                'model': GROQ_CHAT_MODEL,
+                'messages': [
+                    {'role': 'system',
+                     'content': 'You are a careful medical scribe. You write accurate, '
+                                'well-structured consultation summaries and never invent '
+                                'clinical details.'},
+                    {'role': 'user', 'content': _SUMMARY_PROMPT + transcript[:24000]},
+                ],
+                'temperature': 0.3,
+            },
+            timeout=90,
+        )
+    except Exception:
+        logger.exception('Groq summary request failed')
+        return ''
+    if resp.status_code != 200:
+        logger.warning('Groq summary %s: %s', resp.status_code, resp.text[:300])
+        return ''
+    try:
+        return (resp.json()['choices'][0]['message']['content'] or '').strip()
+    except Exception:
+        logger.exception('Groq summary: unexpected response shape')
+        return ''
+
+
 def groq_draft_medical_record(transcript: str) -> dict:
     """Draft a structured medical record from the transcript using a Groq-hosted
     LLM (OpenAI-compatible chat completions). Returns the structured dict, or {}

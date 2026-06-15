@@ -690,10 +690,12 @@ class ConsultationTranscribeChunkView(APIView):
 
 
 class ConsultationFinalizeView(APIView):
-    """Called by the doctor's device when a recorded call ends. Drafts the AI
-    medical report from the live (chunked) transcript — WITHOUT needing the WAV
-    upload or Cloud Storage. Drafting is idempotent (skipped if a draft already
-    exists), so it's safe alongside the audio-upload path."""
+    """Called by the doctor's device when a recorded call ends. Generates the AI
+    call SUMMARY (a readable, sectioned narrative of the whole consultation) from
+    the live (chunked) transcript — WITHOUT needing the WAV upload or Cloud
+    Storage. This is NOT the manual report template; it just summarises what was
+    said. Idempotent (skipped if a summary already exists), so it's safe
+    alongside the audio-upload path."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pk):
@@ -707,31 +709,47 @@ class ConsultationFinalizeView(APIView):
             return Response({'error': 'You can only finalize your own consultations.'}, status=status.HTTP_403_FORBIDDEN)
 
         # Run synchronously and report the outcome so the app (and we) can see
-        # exactly what happened: whether a transcript was captured, and whether
-        # the report drafted. The LLM call takes a few seconds — acceptable for
-        # a fire-and-forget call the device doesn't block its UI on.
+        # exactly what happened. The LLM call takes a few seconds — acceptable
+        # for a call the device doesn't block its UI on.
         import logging
-        from .models import MedicalRecord
-        from .tasks import _draft_and_notify
+        from .tasks import _summarize_and_notify
 
         transcript = (consultation.call_transcript or '').strip()
         if not transcript:
-            return Response({'drafted': False, 'transcript_chars': 0, 'reason': 'no_transcript'},
+            return Response({'summarized': False, 'transcript_chars': 0, 'reason': 'no_transcript'},
                             status=status.HTTP_200_OK)
         try:
-            _draft_and_notify(consultation)
+            summary = _summarize_and_notify(consultation) or (consultation.ai_summary or '')
         except Exception as e:
-            logging.getLogger(__name__).exception('finalize: drafting failed')
-            return Response({'drafted': False, 'transcript_chars': len(transcript),
+            logging.getLogger(__name__).exception('finalize: summarising failed')
+            return Response({'summarized': False, 'transcript_chars': len(transcript),
                              'reason': repr(e)[:200]}, status=status.HTTP_200_OK)
 
-        draft_rec = (MedicalRecord.objects
-                     .filter(consultation=consultation, is_ai_draft=True)
-                     .order_by('-created_at').first())
-        return Response({'drafted': draft_rec is not None,
-                         'record_id': str(draft_rec.record_id) if draft_rec else '',
+        summary = (summary or '').strip()
+        return Response({'summarized': bool(summary),
+                         'summary': summary,
+                         'consultation_id': str(consultation.consultation_id),
                          'transcript_chars': len(transcript),
-                         'reason': '' if draft_rec else 'draft_empty'},
+                         'reason': '' if summary else 'summary_empty'},
+                        status=status.HTTP_200_OK)
+
+
+class ConsultationAISummaryView(APIView):
+    """Fetch the AI call summary for a consultation. Restricted to the consulting
+    doctor (it's a clinical working note)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        provider = _provider_for_user(request.user)
+        consultation = _resolve_consultation(pk)
+        if consultation is None:
+            return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not provider or consultation.appointment.provider_id != provider.pk:
+            return Response({'error': 'Not allowed.'}, status=status.HTTP_403_FORBIDDEN)
+        summary = (consultation.ai_summary or '').strip()
+        return Response({'consultation_id': str(consultation.consultation_id),
+                         'summary': summary,
+                         'generated': bool(summary)},
                         status=status.HTTP_200_OK)
 
 

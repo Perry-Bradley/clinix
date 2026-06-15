@@ -111,7 +111,74 @@ def transcribe_and_draft_record(consultation_id: str):
         consultation.call_transcript = transcript
         consultation.save(update_fields=['call_transcript'])
 
-    _draft_and_notify(consultation)
+    _summarize_and_notify(consultation)
+
+
+def _generate_summary(transcript: str, consultation_id) -> str:
+    """Generate the sectioned AI call summary. Prefers Groq; falls back to
+    Gemini only if that client exposes a summariser. Returns '' if nothing
+    usable came back."""
+    # 1) Groq-hosted LLM.
+    try:
+        from .transcription import groq_summarize_consultation
+        summary = groq_summarize_consultation(transcript)
+        if summary and summary.strip():
+            return summary.strip()
+    except Exception:
+        logger.exception(f'summary: Groq summarising failed for {consultation_id}')
+
+    # 2) Optional Gemini fallback (only if the client supports it).
+    try:
+        from apps.ai_engine.medlm_client import medlm_client
+        summariser = getattr(medlm_client, 'summarize_consultation', None)
+        if callable(summariser):
+            summary = summariser(transcript)
+            if summary and summary.strip():
+                return summary.strip()
+    except Exception:
+        logger.exception(f'summary: Gemini summarising failed for {consultation_id}')
+
+    return ''
+
+
+def _summarize_and_notify(consultation):
+    """Generate a readable, sectioned AI summary of the call from the
+    consultation's `call_transcript`, store it on the consultation, and notify
+    the doctor. This REPLACES the old template-fill draft: the AI now writes a
+    narrative summary of what was said, not the manual report's fields. Returns
+    the summary text (or '')."""
+    from apps.notifications.dispatch import notify as send_notification_dispatch
+
+    transcript = (consultation.call_transcript or '').strip()
+    if not transcript:
+        logger.warning(f'summary: no transcript for {consultation.consultation_id}')
+        return ''
+
+    # Idempotent — both the audio-upload and the finalize hook can trigger this.
+    if (consultation.ai_summary or '').strip():
+        logger.info(f'summary: already exists for {consultation.consultation_id}; skipping')
+        return consultation.ai_summary
+
+    summary = _generate_summary(transcript, consultation.consultation_id)
+    if not summary:
+        logger.warning(f'summary: empty/failed for {consultation.consultation_id}')
+        return ''
+
+    consultation.ai_summary = summary
+    consultation.save(update_fields=['ai_summary'])
+
+    provider = consultation.appointment.provider
+    patient = consultation.appointment.patient
+    patient_name = getattr(patient.patient_id, 'full_name', None) or 'your patient'
+    send_notification_dispatch(
+        str(provider.provider_id.user_id),
+        'AI call summary ready',
+        f'The AI summary of your consultation with {patient_name} is ready to view.',
+        'ai_summary',
+        {'consultation_id': str(consultation.consultation_id)},
+    )
+    logger.info(f'summary: ready for {consultation.consultation_id}')
+    return summary
 
 
 def _generate_draft(transcript: str, consultation_id) -> dict:

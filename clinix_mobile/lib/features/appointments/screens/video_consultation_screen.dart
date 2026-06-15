@@ -536,8 +536,8 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
           content: Text(msg),
           duration: const Duration(seconds: 4),
         ));
-    // Let the doctor know the report is being written while they leave the call.
-    toast('Generating AI report…');
+    // Let the doctor know the summary is being written while they leave the call.
+    toast('Generating AI summary…');
     try {
       final token = await AuthService.getAccessToken();
       if (token == null || token.isEmpty) return;
@@ -550,20 +550,23 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
         ),
       );
       final d = resp.data is Map ? resp.data as Map : const {};
-      final drafted = d['drafted'] == true;
-      final recordId = (d['record_id'] ?? '').toString();
+      final summarized = d['summarized'] == true;
+      final summary = (d['summary'] ?? '').toString();
       final chars = d['transcript_chars'] ?? 0;
-      if (drafted && recordId.isNotEmpty) {
-        // Open the review form straight away (doctor edits + publishes).
-        appRouter.push('/provider/medical-record/new?aiDraftRecordId=$recordId');
+      if (summarized && summary.isNotEmpty) {
+        // Open the read-only AI summary straight away.
+        appRouter.push('/provider/ai-summary', extra: {
+          'consultationId': widget.consultationId,
+          'summary': summary,
+        });
       } else if (chars == 0) {
-        toast('No transcript was captured, so no report was created.');
+        toast('No transcript was captured, so no summary was created.');
       } else {
-        toast('Could not generate the report (${d['reason'] ?? 'unknown'}).');
+        toast('Could not generate the summary (${d['reason'] ?? 'unknown'}).');
       }
     } catch (e) {
       debugPrint('[AIScribe] Finalize failed: $e');
-      toast('Could not generate the AI report.');
+      toast('Could not generate the AI summary.');
     }
   }
 
