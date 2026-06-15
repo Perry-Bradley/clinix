@@ -62,6 +62,43 @@ def verify_email_otp(email, submitted_otp):
         return True
     return False
 
+def _send_via_brevo(to_email, subject, text):
+    """Send through the Brevo (Sendinblue) HTTP API (port 443). Brevo allows
+    'single sender verification' — you confirm one sender email by clicking a
+    link, NO DNS needed — and can then email any recipient. Returns True on
+    success, False if not configured or the call failed."""
+    import requests
+    api_key = os.environ.get('BREVO_API_KEY', '').strip()
+    if not api_key:
+        return False
+    raw_from = (os.environ.get('BREVO_FROM', '').strip()
+                or settings.DEFAULT_FROM_EMAIL or '')
+    # Accept either "email@x" or "Name <email@x>".
+    name, addr = 'Clinix', raw_from
+    if '<' in raw_from and '>' in raw_from:
+        name = raw_from.split('<', 1)[0].strip() or 'Clinix'
+        addr = raw_from.split('<', 1)[1].split('>', 1)[0].strip()
+    if not addr:
+        return False
+    try:
+        r = requests.post(
+            'https://api.brevo.com/v3/smtp/email',
+            headers={'api-key': api_key, 'Content-Type': 'application/json',
+                     'accept': 'application/json'},
+            json={'sender': {'email': addr, 'name': name},
+                  'to': [{'email': to_email}], 'subject': subject, 'textContent': text},
+            timeout=20,
+        )
+        if r.status_code in (200, 201, 202):
+            print(f"Email sent via Brevo to {to_email}")
+            return True
+        print(f"Brevo send failed for {to_email}: {r.status_code} {r.text[:300]}")
+        return False
+    except Exception as e:
+        print(f"Brevo request error for {to_email}: {e}")
+        return False
+
+
 def _send_via_resend(to_email, subject, text):
     """Send through the Resend HTTP API (port 443). Needed because Railway
     blocks outbound SMTP ('Network is unreachable'). Returns True on success,
@@ -104,7 +141,10 @@ def send_email_otp(email, otp, purpose='verification'):
         f"— The Clinix Team"
     )
 
-    # 1) HTTP email API (works on Railway, which blocks SMTP).
+    # 1) HTTP email APIs (work on Railway, which blocks outbound SMTP). Brevo
+    #    first (no-DNS single-sender verification), then Resend.
+    if _send_via_brevo(email, subject, message):
+        return True
     if _send_via_resend(email, subject, message):
         return True
 
