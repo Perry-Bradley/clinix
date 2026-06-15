@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Check, Eye, RefreshCw, Search, ShieldCheck } from 'lucide-react';
-import DocumentReviewModal from '../components/DocumentReviewModal';
+import DocumentReviewModal, { type AIVerification } from '../components/DocumentReviewModal';
 import { API_BASE } from '../config';
 
 interface VerificationRequest {
@@ -48,6 +48,23 @@ const fetchVerifications = async (): Promise<VerificationRequest[]> => {
   }));
 };
 
+interface AIStats {
+  total_decisions: number;
+  confident_predictions: number;
+  agreed: number;
+  accuracy_percent: number | null;
+  false_approve: number;
+  false_reject: number;
+  min_for_stable: number;
+  enough_data: boolean;
+}
+
+const fetchAIStats = async (): Promise<AIStats> => {
+  const res = await fetch(`${API_BASE}/admin/verifications/ai-stats/`, { headers: authHeader() });
+  if (!res.ok) throw new Error('Failed to fetch AI stats');
+  return res.json();
+};
+
 const fetchCMCDoctors = async (search = '', refresh = false): Promise<CMCResponse> => {
   const params = new URLSearchParams();
   if (search) params.set('search', search);
@@ -61,12 +78,20 @@ const Verifications = () => {
   const [activeTab, setActiveTab] = useState<'verifications' | 'cmc'>('verifications');
   const [selectedRequest, setSelectedRequest] = useState<VerificationRequest | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [ai, setAi] = useState<AIVerification | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const [cmcSearch, setCmcSearch] = useState('');
   const [cmcRefresh, setCmcRefresh] = useState(false);
 
   const { data: requests, isLoading: verLoading, refetch } = useQuery<VerificationRequest[]>({
     queryKey: ['verifications'],
     queryFn: fetchVerifications,
+    enabled: activeTab === 'verifications',
+  });
+
+  const { data: aiStats, refetch: refetchStats } = useQuery<AIStats>({
+    queryKey: ['ai-verification-stats'],
+    queryFn: fetchAIStats,
     enabled: activeTab === 'verifications',
   });
 
@@ -92,6 +117,15 @@ const Verifications = () => {
       const detail = await res.json();
       setSelectedRequest({ ...req, spec: detail.spec || req.spec, license: detail.license || req.license, documents: detail.documents || [] });
       setIsModalOpen(true);
+
+      // Run the autonomous AI verification (record-linkage against the CMC registry).
+      setAi(null);
+      setAiLoading(true);
+      fetch(`${API_BASE}/admin/verifications/${req.id}/ai-check/`, { headers: authHeader() })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => setAi(data))
+        .catch(() => setAi(null))
+        .finally(() => setAiLoading(false));
     } catch { alert('Could not load verification documents'); }
   };
 
@@ -100,9 +134,11 @@ const Verifications = () => {
     const res = await fetch(`${API_BASE}/admin/verifications/${selectedRequest.id}/`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ status }),
+      // Send the AI snapshot (when we have one) so it's logged against this
+      // decision for accuracy tracking — no extra server compute needed.
+      body: JSON.stringify({ status, ai }),
     });
-    if (res.ok) { alert(`${selectedRequest.name} has been ${status}!`); setIsModalOpen(false); refetch(); }
+    if (res.ok) { alert(`${selectedRequest.name} has been ${status}!`); setIsModalOpen(false); setAi(null); refetch(); refetchStats(); }
     else alert('Failed to update status');
   };
 
@@ -117,6 +153,41 @@ const Verifications = () => {
           </span>
         )}
       </div>
+
+      {/* Live AI accuracy — earned from real admin decisions over time */}
+      {activeTab === 'verifications' && aiStats && (
+        <div className="mb-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">AI Accuracy</p>
+            {aiStats.accuracy_percent !== null ? (
+              <>
+                <p className="text-2xl font-extrabold text-slate-900 mt-1">{aiStats.accuracy_percent}%</p>
+                <p className="text-[11px] text-slate-400">{aiStats.agreed}/{aiStats.confident_predictions} agreed with admins</p>
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-extrabold text-slate-300 mt-1">—</p>
+                <p className="text-[11px] text-slate-400">No decisions logged yet</p>
+              </>
+            )}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">False Approvals</p>
+            <p className={`text-2xl font-extrabold mt-1 ${aiStats.false_approve > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{aiStats.false_approve}</p>
+            <p className="text-[11px] text-slate-400">AI said approve, admin rejected</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Decisions Logged</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-1">{aiStats.total_decisions}</p>
+            <p className="text-[11px] text-slate-400">{aiStats.confident_predictions} confident calls</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Confidence</p>
+            <p className={`text-2xl font-extrabold mt-1 ${aiStats.enough_data ? 'text-emerald-600' : 'text-amber-500'}`}>{aiStats.enough_data ? 'Stable' : 'Learning'}</p>
+            <p className="text-[11px] text-slate-400">{aiStats.enough_data ? 'enough data for a stable figure' : `need ${Math.max(0, aiStats.min_for_stable - aiStats.confident_predictions)} more decisions`}</p>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex space-x-1 mb-5 border-b border-slate-200">
@@ -334,9 +405,11 @@ const Verifications = () => {
 
       <DocumentReviewModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => { setIsModalOpen(false); setAi(null); setAiLoading(false); }}
         providerName={selectedRequest?.name || ''}
         documents={selectedRequest?.documents || []}
+        ai={ai}
+        aiLoading={aiLoading}
         onApprove={() => updateStatus('approved')}
         onReject={() => updateStatus('rejected')}
       />

@@ -24,7 +24,78 @@ from django.conf import settings
 import os
 import time
 import requests as http_requests
+import logging
 from apps.locations.models import Pharmacy
+
+logger = logging.getLogger(__name__)
+
+
+def _agreement(ai_decision, admin_decision):
+    """Did the AI's confident call match the human? None = AI abstained (review)."""
+    if ai_decision == 'approve':
+        return admin_decision == 'approved'
+    if ai_decision == 'reject':
+        return admin_decision == 'rejected'
+    return None
+
+
+def _write_decision_log(provider, admin_decision, decided_by, ai):
+    """Create one VerificationDecisionLog row from an AI assessment dict (either
+    the snapshot the dashboard already had, or one freshly computed)."""
+    from .models import VerificationDecisionLog
+    ai = ai or {}
+    ai_decision = ai.get('overall_decision') or ai.get('decision') or ''
+    prob = ai.get('match_probability')
+    if prob is None:
+        prob = (ai.get('match_percent') or 0) / 100.0
+    VerificationDecisionLog.objects.create(
+        provider_user_id=provider.provider_id.user_id,
+        provider_name=provider.provider_id.full_name or '',
+        ai_decision=ai_decision,
+        ai_match_probability=float(prob or 0),
+        ai_checks_passed=int(ai.get('checks_passed') or 0),
+        ai_checks_failed=int(ai.get('checks_failed') or 0),
+        ai_model=ai.get('model') or '',
+        admin_decision=admin_decision,
+        decided_by=decided_by,
+        agreed=_agreement(ai_decision, admin_decision),
+    )
+
+
+def _log_verification_decision(provider, admin_decision, decided_by, ai_snapshot=None):
+    """Log the AI-vs-human decision for accuracy tracking. If the dashboard sent
+    its AI snapshot we log it immediately (cheap); otherwise (e.g. quick-approve
+    from the list) we compute the assessment on a background thread so the
+    admin's action stays instant."""
+    if ai_snapshot:
+        try:
+            _write_decision_log(provider, admin_decision, decided_by, ai_snapshot)
+        except Exception:
+            logger.exception('Shadow-mode decision log (snapshot) failed')
+        return
+
+    def _work():
+        from django.db import connection
+        try:
+            from apps.ai_engine.verification import assess_provider
+            from apps.ai_engine.document_extraction import extract_document
+            creds = list(ProviderCredential.objects.filter(provider=provider))
+            extracted = [{
+                'document_type': c.document_type,
+                'label': c.get_document_type_display(),
+                'fields': extract_document(c.document_url, c.document_type),
+            } for c in creds]
+            result = assess_provider(
+                provider.provider_id.full_name or '', provider.license_number or '', extracted)
+            _write_decision_log(provider, admin_decision, decided_by, result)
+        except Exception:
+            logger.exception('Shadow-mode decision log (computed) failed')
+        finally:
+            connection.close()
+
+    import threading
+    threading.Thread(target=_work, daemon=True).start()
+
 
 class PlatformDashboardView(APIView):
     permission_classes = [IsSuperAdminUser]
@@ -221,10 +292,89 @@ class VerificationDetailView(APIView):
                 provider.verified_at = timezone.now()
                 provider.verified_by = request.user
                 provider.save()
+                # Shadow-mode: record the AI's recommendation vs this human
+                # decision so we can measure real accuracy over time.
+                _log_verification_decision(
+                    provider, status_val,
+                    decided_by=getattr(request.user, 'email', '') or '',
+                    ai_snapshot=request.data.get('ai'),
+                )
                 return Response({'status': f'Provider {status_val}'})
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
         except HealthcareProvider.DoesNotExist:
             return Response({'error': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class VerificationAICheckView(APIView):
+    """Autonomous provider verification. Combines:
+      1) a record-linkage match of the signup name + license number against the
+         CMC/ONMC registry (scikit-learn Logistic Regression), and
+      2) Groq-vision extraction of the uploaded National ID + medical-license
+         documents, cross-checked against the signup details and the registry.
+    Returns a match probability, per-document field extraction, a check-list,
+    and an overall recommended decision (approve / review / reject)."""
+    permission_classes = [IsSuperAdminUser]
+
+    def get(self, request, pk):
+        try:
+            provider = HealthcareProvider.objects.select_related('provider_id').get(provider_id=pk)
+        except HealthcareProvider.DoesNotExist:
+            return Response({'error': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        from apps.ai_engine.verification import assess_provider
+        from apps.ai_engine.document_extraction import extract_document
+        from concurrent.futures import ThreadPoolExecutor
+
+        creds = list(ProviderCredential.objects.filter(provider=provider))
+
+        def _read(cred):
+            return {
+                'document_type': cred.document_type,
+                'label': cred.get_document_type_display(),
+                'fields': extract_document(cred.document_url, cred.document_type),
+            }
+
+        extracted = []
+        if creds:
+            with ThreadPoolExecutor(max_workers=min(4, len(creds))) as ex:
+                extracted = list(ex.map(_read, creds))
+
+        full_name = provider.provider_id.full_name or ''
+        result = assess_provider(full_name, provider.license_number or '', extracted)
+        result['provider_id'] = str(provider.provider_id.user_id)
+        result['provider_name'] = full_name
+        result['provider_license'] = provider.license_number
+        return Response(result)
+
+
+class VerificationAIStatsView(APIView):
+    """Live, real-world accuracy of the AI verifier — computed from shadow-mode
+    logs of AI-recommendation vs. actual-admin-decision. Empty until admins
+    start deciding; stabilises after MIN_FOR_STABLE confident predictions."""
+    permission_classes = [IsSuperAdminUser]
+    MIN_FOR_STABLE = 20
+
+    def get(self, request):
+        from .models import VerificationDecisionLog
+        qs = VerificationDecisionLog.objects.all()
+        total = qs.count()
+        confident = qs.exclude(agreed__isnull=True)
+        n_conf = confident.count()
+        agreed = confident.filter(agreed=True).count()
+        false_approve = qs.filter(ai_decision='approve', admin_decision='rejected').count()
+        false_reject = qs.filter(ai_decision='reject', admin_decision='approved').count()
+
+        return Response({
+            'total_decisions': total,
+            'confident_predictions': n_conf,
+            'agreed': agreed,
+            'accuracy_percent': round(agreed / n_conf * 100, 1) if n_conf else None,
+            'false_approve': false_approve,   # AI said approve, human rejected (the costly error)
+            'false_reject': false_reject,     # AI said reject, human approved
+            'min_for_stable': self.MIN_FOR_STABLE,
+            'enough_data': n_conf >= self.MIN_FOR_STABLE,
+        })
+
 
 class PlatformAppointmentsView(generics.ListAPIView):
     serializer_class = AppointmentDetailSerializer

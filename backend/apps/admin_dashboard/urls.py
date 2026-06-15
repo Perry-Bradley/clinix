@@ -1,7 +1,8 @@
 from django.urls import path
 from .views import (
     PlatformDashboardView, UserListView, UserDetailView, VerificationListView,
-    VerificationDetailView, PlatformAppointmentsView, AnalyticsRevenueView,
+    VerificationDetailView, VerificationAICheckView, VerificationAIStatsView,
+    PlatformAppointmentsView, AnalyticsRevenueView,
     AnalyticsConsultationView, ExportCSVReportView,
     AdminPatientListView, AdminPatientDetailView,
     AdminWithdrawalListView, AdminWithdrawalActionView, AdminRevenueStatsView,
@@ -20,6 +21,8 @@ urlpatterns = [
     path('specialties/<uuid:specialty_id>/', AdminSpecialtyDetailView.as_view(), name='admin_specialty_detail'),
     path('verifications/', VerificationListView.as_view(), name='admin_verifications'),
     path('verifications/<uuid:pk>/', VerificationDetailView.as_view(), name='admin_verification_detail'),
+    path('verifications/<uuid:pk>/ai-check/', VerificationAICheckView.as_view(), name='admin_verification_ai_check'),
+    path('verifications/ai-stats/', VerificationAIStatsView.as_view(), name='admin_verification_ai_stats'),
     path('patients/', AdminPatientListView.as_view(), name='admin_patients'),
     path('patients/<uuid:pk>/', AdminPatientDetailView.as_view(), name='admin_patient_detail'),
     path('appointments/', PlatformAppointmentsView.as_view(), name='admin_appointments'),
