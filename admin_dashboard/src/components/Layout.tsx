@@ -29,8 +29,8 @@ const Layout = () => {
         {/* Logo */}
         <div className="px-5 py-5 border-b border-slate-200">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden">
-              <img src="/clinix_logo.png" alt="Clinix" className="w-5 h-5 object-contain" />
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden" style={{ background: '#1B4080' }}>
+              <img src="/logo_mark.png" alt="Clinix" className="w-5 h-5 object-contain" />
             </div>
             <div>
               <h1 className="text-slate-900 font-bold text-base tracking-tight leading-none">Clinix</h1>

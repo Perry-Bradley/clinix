@@ -53,7 +53,7 @@ const Login = () => {
         style={{ background: 'linear-gradient(160deg, #0A1628 0%, #0F2547 55%, #1B4080 100%)' }}
       >
         <div className="flex items-center space-x-3">
-          <img src="/clinix_logo.png" alt="Clinix" className="w-11 h-11 object-contain" />
+          <img src="/logo_mark.png" alt="Clinix" className="w-12 h-12 object-contain" />
           <div className="leading-tight">
             <span className="text-white font-bold text-xl">Clinix</span>
             <p className="text-blue-200/60 text-xs">Admin Portal</p>
@@ -79,7 +79,9 @@ const Login = () => {
         <div className="w-full max-w-md">
           {/* Logo (shown here on small screens where the left panel is hidden) */}
           <div className="flex items-center space-x-3 mb-10 lg:hidden">
-            <img src="/clinix_logo.png" alt="Clinix" className="w-10 h-10 object-contain" />
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: '#1B4080' }}>
+              <img src="/logo_mark.png" alt="Clinix" className="w-7 h-7 object-contain" />
+            </div>
             <span className="font-bold text-xl text-[#0A1628]">Clinix</span>
           </div>
 
