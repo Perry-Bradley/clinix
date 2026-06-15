@@ -235,6 +235,8 @@ EMAIL_PORT = env.int('EMAIL_PORT', default=587)
 # either can still be overridden explicitly via env.
 EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=(EMAIL_PORT == 465))
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=(not EMAIL_USE_SSL))
+# Cap SMTP so a slow/unreachable server can't hang the sender forever.
+EMAIL_TIMEOUT = env.int('EMAIL_TIMEOUT', default=20)
 EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='Clinix <noreply@clinix.app>')

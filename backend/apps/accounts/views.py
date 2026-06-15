@@ -17,7 +17,7 @@ from .serializers import (
 )
 from .utils import (
     generate_otp, set_otp, verify_otp, send_sms,
-    set_email_otp, verify_email_otp, send_email_otp
+    set_email_otp, verify_email_otp, send_email_otp_async,
 )
 from apps.patients.models import Patient
 
@@ -78,7 +78,7 @@ class PatientRegisterView(generics.CreateAPIView):
         otp = generate_otp()
         if user.email:
             set_email_otp(user.email, otp)
-            send_email_otp(user.email, otp)
+            send_email_otp_async(user.email, otp)
         if user.phone_number:
             set_otp(user.phone_number, otp)
             send_sms(user.phone_number, f"Your Clinix verification code is {otp}")
@@ -92,7 +92,7 @@ class ProviderRegisterView(generics.CreateAPIView):
         otp = generate_otp()
         if user.email:
             set_email_otp(user.email, otp)
-            send_email_otp(user.email, otp)
+            send_email_otp_async(user.email, otp)
         if user.phone_number:
             set_otp(user.phone_number, otp)
             send_sms(user.phone_number, f"Your Clinix verification code is {otp}")
@@ -147,11 +147,7 @@ class SendEmailOTPView(APIView):
             if User.objects.filter(email=email).exists():
                 otp = generate_otp()
                 set_email_otp(email, otp)
-                if not send_email_otp(email, otp):
-                    return Response(
-                        {'error': 'Could not send the verification email. Please try again later.'},
-                        status=status.HTTP_502_BAD_GATEWAY,
-                    )
+                send_email_otp_async(email, otp)
                 return Response({'message': 'OTP sent to email'})
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -233,11 +229,7 @@ class PasswordResetRequestView(APIView):
                 return Response({'error': 'No account found with this email.'}, status=status.HTTP_404_NOT_FOUND)
             otp = generate_otp()
             set_email_otp(email, otp)
-            if not send_email_otp(email, otp, purpose='password reset'):
-                return Response(
-                    {'error': 'Could not send the reset email. Please try again later.'},
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
+            send_email_otp_async(email, otp, purpose='password reset')
             return Response({'message': 'OTP sent to email'})
 
         if phone_number:

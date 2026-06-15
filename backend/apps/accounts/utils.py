@@ -83,3 +83,13 @@ def send_email_otp(email, otp, purpose='verification'):
         # production means SMTP is misconfigured or rejected the message.
         print(f"EMAIL OTP SEND FAILED for {email}: {otp} (error: {e})")
         return False
+
+
+def send_email_otp_async(email, otp, purpose='verification'):
+    """Send the OTP email on a background thread so the HTTP request returns
+    immediately instead of blocking on (sometimes slow) SMTP — which was
+    causing the reset/OTP endpoints to hang until the client timed out."""
+    import threading
+    threading.Thread(
+        target=send_email_otp, args=(email, otp, purpose), daemon=True,
+    ).start()
