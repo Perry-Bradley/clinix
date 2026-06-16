@@ -69,6 +69,18 @@ class HealthcareProvider(models.Model):
     rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
     total_consultations = models.IntegerField(default=0)
 
+    # ── Autonomous AI verification ──────────────────────────────────────────
+    # Filled in automatically when the provider submits: the registry match
+    # probability + the AI's recommendation. Strong, non-contradicted matches
+    # are auto-approved (ai_auto_approved=True); everything else stays pending
+    # for an admin (escalation). Stored so the admin list shows scores without
+    # re-running the model.
+    ai_match_probability = models.FloatField(null=True, blank=True)
+    ai_decision = models.CharField(max_length=10, blank=True, default='')  # approve/review/reject
+    ai_notes = models.TextField(blank=True, default='')
+    ai_checked_at = models.DateTimeField(null=True, blank=True)
+    ai_auto_approved = models.BooleanField(default=False)
+
     class Meta:
         db_table = 'healthcare_providers'
 

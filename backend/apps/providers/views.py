@@ -71,6 +71,14 @@ class ProviderCredentialsView(generics.ListCreateAPIView):
         provider.verified_by = None
         provider.save(update_fields=['verification_status', 'verification_notes', 'verified_at', 'verified_by'])
 
+        # Autonomous verification: score this submission (extracting the
+        # uploaded documents) and auto-approve / escalate in the background.
+        try:
+            from apps.ai_engine.auto_verify import trigger_async
+            trigger_async(provider.pk)
+        except Exception:
+            logger.warning('Could not trigger autonomous verification', exc_info=True)
+
         serializer = self.get_serializer(credential)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 

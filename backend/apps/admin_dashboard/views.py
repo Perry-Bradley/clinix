@@ -232,9 +232,20 @@ class VerificationListView(APIView):
     permission_classes = [IsSuperAdminUser]
     
     def get(self, request):
-        providers = HealthcareProvider.objects.filter(verification_status='pending')
+        providers = HealthcareProvider.objects.filter(
+            verification_status='pending').select_related('provider_id')
         data = []
         for p in providers:
+            # Catch-all: any pending provider not yet scored by the AI gets
+            # queued for autonomous assessment in the background (covers records
+            # created before this feature / outside the submit hooks).
+            if p.ai_checked_at is None:
+                try:
+                    from apps.ai_engine.auto_verify import trigger_async
+                    trigger_async(p.pk)
+                except Exception:
+                    logger.warning('Could not queue autonomous verification', exc_info=True)
+
             data.append({
                 'provider_id': p.provider_id.user_id,
                 'name': p.provider_id.full_name or str(p.provider_id.user_id),
@@ -242,6 +253,13 @@ class VerificationListView(APIView):
                 'license_number': p.license_number,
                 'submitted_at': p.provider_id.created_at,
                 'verification_notes': p.verification_notes,
+                # Precomputed AI assessment so the admin sees scores without
+                # opening each case. null probability => not scored yet.
+                'ai_match_probability': p.ai_match_probability,
+                'ai_match_percent': round(p.ai_match_probability * 100, 1) if p.ai_match_probability is not None else None,
+                'ai_decision': p.ai_decision or None,
+                'ai_notes': p.ai_notes or '',
+                'ai_checked': p.ai_checked_at is not None,
             })
         return Response(data)
 

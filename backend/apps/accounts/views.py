@@ -86,7 +86,7 @@ class PatientRegisterView(generics.CreateAPIView):
 class ProviderRegisterView(generics.CreateAPIView):
     serializer_class = ProviderRegisterSerializer
     permission_classes = (AllowAny,)
-    
+
     def perform_create(self, serializer):
         user = serializer.save()
         otp = generate_otp()
@@ -96,6 +96,17 @@ class ProviderRegisterView(generics.CreateAPIView):
         if user.phone_number:
             set_otp(user.phone_number, otp)
             send_sms(user.phone_number, f"Your Clinix verification code is {otp}")
+        # Autonomous verification: score the registry match in the background so
+        # the admin sees a score right away. (Documents uploaded later re-score
+        # and can auto-approve.)
+        try:
+            from apps.providers.models import HealthcareProvider
+            from apps.ai_engine.auto_verify import trigger_async
+            provider = HealthcareProvider.objects.filter(provider_id=user).first()
+            if provider:
+                trigger_async(provider.pk)
+        except Exception:
+            pass
 
 # ─── Phone OTP ────────────────────────────────────────────────────────────────
 

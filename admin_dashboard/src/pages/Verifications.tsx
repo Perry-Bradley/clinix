@@ -11,6 +11,9 @@ interface VerificationRequest {
   submitted: string;
   license: string;
   documents?: { type: 'image' | 'video'; url: string; label: string }[];
+  aiPercent?: number | null;
+  aiDecision?: string | null;
+  aiChecked?: boolean;
 }
 
 interface CMCDoctor {
@@ -33,6 +36,11 @@ interface CMCResponse {
 
 const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('clinix_admin_token')}` });
 
+const aiBadge = (d: string) =>
+  d === 'approve' ? 'bg-emerald-100 text-emerald-700'
+  : d === 'reject' ? 'bg-red-100 text-red-700'
+  : 'bg-amber-100 text-amber-700';
+
 const fetchVerifications = async (): Promise<VerificationRequest[]> => {
   const res = await fetch(`${API_BASE}/admin/verifications/`, { headers: authHeader() });
   if (res.status === 401) { localStorage.removeItem('clinix_admin_token'); window.location.href = '/login'; return []; }
@@ -45,6 +53,9 @@ const fetchVerifications = async (): Promise<VerificationRequest[]> => {
     submitted: new Date(item.submitted_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
     license: item.license_number,
     documents: [],
+    aiPercent: item.ai_match_percent ?? null,
+    aiDecision: item.ai_decision ?? null,
+    aiChecked: item.ai_checked ?? false,
   }));
 };
 
@@ -109,6 +120,15 @@ const Verifications = () => {
       return () => clearTimeout(t);
     }
   }, [activeTab, cmcData?.scraping, cmcData?.count, refetchCMC]);
+
+  // While any pending case is still being scored by the AI in the background,
+  // poll so the score/decision (and any auto-approvals) appear automatically.
+  useEffect(() => {
+    if (activeTab === 'verifications' && requests?.some((r) => !r.aiChecked)) {
+      const t = setTimeout(() => { refetch(); refetchStats(); }, 8000);
+      return () => clearTimeout(t);
+    }
+  }, [activeTab, requests, refetch, refetchStats]);
 
   const handleReview = async (req: VerificationRequest) => {
     try {
@@ -223,7 +243,7 @@ const Verifications = () => {
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
                 <tr>
-                  {['Provider Name', 'Specialization', 'License No.', 'Submitted', 'Actions'].map((col) => (
+                  {['Provider Name', 'Specialization', 'License No.', 'Submitted', 'AI Check', 'Actions'].map((col) => (
                     <th key={col} className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       {col}
                     </th>
@@ -246,6 +266,18 @@ const Verifications = () => {
                       <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded border border-slate-200 text-slate-600">{req.license}</span>
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-sm text-slate-500">{req.submitted}</td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      {req.aiChecked && req.aiPercent != null ? (
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-bold text-slate-900">{req.aiPercent}%</span>
+                          {req.aiDecision && (
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${aiBadge(req.aiDecision)}`}>{req.aiDecision}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">Scoring…</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
                         <button onClick={() => handleReview(req)} className="flex items-center space-x-1 px-3 py-1.5 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-lg transition text-xs font-semibold border border-slate-200">
