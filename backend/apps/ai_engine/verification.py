@@ -275,7 +275,8 @@ def assess_provider(full_name: str, license_number: str, extracted_docs) -> dict
     """
     result = verify_provider(full_name, license_number)
     entry = result.get('matched_registry_entry') or {}
-    reg_number = entry.get('registration_number') or ''
+    prob = float(result.get('match_probability') or 0)
+    matched_label = entry.get('name') or 'no registry match'
 
     def fields_for(*types):
         for d in (extracted_docs or []):
@@ -297,34 +298,46 @@ def assess_provider(full_name: str, license_number: str, extracted_docs) -> dict
     def add(label, status, detail=''):
         checks.append({'label': label, 'status': status, 'detail': detail})
 
-    # 1) ID name vs signup
+    # Cross-check the SIGNUP full name + SIGNUP license number against the three
+    # independent sources: the ID upload, the licence PDF, and the CMC registry.
+
+    # 1) Signup name vs ID upload
     if id_name:
         s = _name_similarity(id_name, full_name)
-        add('ID name matches signup', 'pass' if s >= _NAME_OK else 'fail',
-            f'"{id_name}" ({int(round(s * 100))}%)')
+        add('Signup name matches National ID', 'pass' if s >= _NAME_OK else 'fail',
+            f'ID: "{id_name}" ({int(round(s * 100))}%)')
     else:
-        add('ID name matches signup', 'unknown', 'No National ID provided / unreadable')
+        add('Signup name matches National ID', 'unknown', 'No National ID provided / unreadable')
 
-    # 2) License-document name vs signup
+    # 2) Signup name vs licence PDF/document
     if lic_name:
         s = _name_similarity(lic_name, full_name)
-        add('License name matches signup', 'pass' if s >= _NAME_OK else 'fail',
-            f'"{lic_name}" ({int(round(s * 100))}%)')
+        add('Signup name matches license document', 'pass' if s >= _NAME_OK else 'fail',
+            f'Document: "{lic_name}" ({int(round(s * 100))}%)')
     else:
-        add('License name matches signup', 'unknown', 'No license document / unreadable')
+        add('Signup name matches license document', 'unknown', 'No license document / unreadable')
 
-    # 3) License number on document vs CMC registry / signup
+    # 3) Signup license number vs the number printed on the licence document
     if lic_reg:
-        d_lic, d_reg, d_sign = _digits(lic_reg), _digits(reg_number), _digits(license_number)
-        ok = bool(d_lic and (
-            (d_reg and (d_lic == d_reg or d_lic in d_reg or d_reg in d_lic)) or
-            (d_sign and d_lic == d_sign)
-        ))
-        add('License number matches registry', 'pass' if ok else 'fail', f'Document: {lic_reg}')
+        d_lic, d_sign = _digits(lic_reg), _digits(license_number)
+        ok = bool(d_lic and d_sign and (d_lic == d_sign or d_lic in d_sign or d_sign in d_lic))
+        add('Signup license matches license document', 'pass' if ok else 'fail',
+            f'Signup: {license_number or "—"} · Document: {lic_reg}')
     else:
-        add('License number matches registry', 'unknown', 'Not found on document')
+        add('Signup license matches license document', 'unknown', 'Not found on document')
 
-    # 4) National ID is Cameroonian
+    # 4) Signup details found in the CMC / ONMC medical council registry
+    if prob >= _APPROVE_THRESHOLD:
+        add('Found in CMC medical council registry', 'pass',
+            f'{matched_label} ({int(round(prob * 100))}%)')
+    elif prob < _REVIEW_THRESHOLD:
+        add('Found in CMC medical council registry', 'fail',
+            f'No matching record ({int(round(prob * 100))}%)')
+    else:
+        add('Found in CMC medical council registry', 'unknown',
+            f'Possible match ({int(round(prob * 100))}%)')
+
+    # 5) National ID is Cameroonian
     if id_country:
         ok = 'camero' in id_country.lower() or 'cmr' in id_country.lower()
         add('National ID is Cameroonian', 'pass' if ok else 'fail', id_country)
