@@ -728,29 +728,108 @@ class ConsultationFinalizeView(APIView):
         summary = (summary or '').strip()
         return Response({'summarized': bool(summary),
                          'summary': summary,
+                         'sections': _summary_sections_payload(consultation),
                          'consultation_id': str(consultation.consultation_id),
                          'transcript_chars': len(transcript),
                          'reason': '' if summary else 'summary_empty'},
                         status=status.HTTP_200_OK)
 
 
+def _summary_sections_payload(consultation):
+    """Ordered [{key, label, text}] for the editable AI summary sections."""
+    from .transcription import SUMMARY_SECTIONS
+    stored = consultation.ai_summary_sections or {}
+    return [{'key': k, 'label': label, 'text': (stored.get(k) or '')}
+            for k, label in SUMMARY_SECTIONS]
+
+
 class ConsultationAISummaryView(APIView):
-    """Fetch the AI call summary for a consultation. Restricted to the consulting
-    doctor (it's a clinical working note)."""
+    """Fetch / edit / submit the AI call summary for a consultation. Restricted
+    to the consulting doctor — it's the doctor's editable note, saved so it's
+    always reachable from the AI drafts screen."""
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request, pk):
+    def _guard(self, request, pk):
         provider = _provider_for_user(request.user)
         consultation = _resolve_consultation(pk)
         if consultation is None:
-            return Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return None, None, Response({'error': 'Consultation not found.'}, status=status.HTTP_404_NOT_FOUND)
         if not provider or consultation.appointment.provider_id != provider.pk:
-            return Response({'error': 'Not allowed.'}, status=status.HTTP_403_FORBIDDEN)
-        summary = (consultation.ai_summary or '').strip()
-        return Response({'consultation_id': str(consultation.consultation_id),
-                         'summary': summary,
-                         'generated': bool(summary)},
-                        status=status.HTTP_200_OK)
+            return None, None, Response({'error': 'Not allowed.'}, status=status.HTTP_403_FORBIDDEN)
+        return provider, consultation, None
+
+    def get(self, request, pk):
+        _, consultation, err = self._guard(request, pk)
+        if err:
+            return err
+        return Response({
+            'consultation_id': str(consultation.consultation_id),
+            'sections': _summary_sections_payload(consultation),
+            'summary': consultation.ai_summary or '',
+            'submitted': consultation.ai_summary_submitted,
+            'generated': bool(consultation.ai_summary_sections),
+        }, status=status.HTTP_200_OK)
+
+    def patch(self, request, pk):
+        """Save the doctor's edits to the summary sections (and optionally mark
+        it submitted)."""
+        from .transcription import SUMMARY_SECTIONS, sections_to_markdown
+        _, consultation, err = self._guard(request, pk)
+        if err:
+            return err
+
+        incoming = request.data.get('sections') or {}
+        if isinstance(incoming, list):
+            incoming = {item.get('key'): item.get('text', '')
+                        for item in incoming if isinstance(item, dict) and item.get('key')}
+
+        valid_keys = {k for k, _ in SUMMARY_SECTIONS}
+        stored = dict(consultation.ai_summary_sections or {})
+        for key, val in (incoming or {}).items():
+            if key in valid_keys:
+                stored[key] = str(val or '')
+
+        consultation.ai_summary_sections = stored
+        consultation.ai_summary = sections_to_markdown(stored)
+        if request.data.get('submitted'):
+            consultation.ai_summary_submitted = True
+        consultation.save(update_fields=['ai_summary_sections', 'ai_summary', 'ai_summary_submitted'])
+        return Response({
+            'status': 'saved',
+            'submitted': consultation.ai_summary_submitted,
+            'sections': _summary_sections_payload(consultation),
+        }, status=status.HTTP_200_OK)
+
+
+class ConsultationAISummaryListView(APIView):
+    """The doctor's saved AI call summaries (for the AI drafts screen)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        provider = _provider_for_user(request.user)
+        if not provider:
+            return Response([], status=status.HTTP_200_OK)
+        qs = (Consultation.objects
+              .filter(appointment__provider=provider)
+              .exclude(ai_summary_sections__isnull=True)
+              .select_related('appointment', 'appointment__patient',
+                              'appointment__patient__patient_id')
+              .order_by('-created_at')[:100])
+        out = []
+        for c in qs:
+            if not c.ai_summary_sections:
+                continue
+            patient = c.appointment.patient
+            patient_name = getattr(patient.patient_id, 'full_name', '') or 'Patient'
+            overview = (c.ai_summary_sections or {}).get('overview', '') or ''
+            out.append({
+                'consultation_id': str(c.consultation_id),
+                'patient_name': patient_name,
+                'created_at': c.created_at,
+                'submitted': c.ai_summary_submitted,
+                'preview': overview[:140],
+            })
+        return Response(out, status=status.HTTP_200_OK)
 
 
 class ChatFileUploadView(APIView):

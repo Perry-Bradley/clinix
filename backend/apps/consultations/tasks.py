@@ -114,31 +114,34 @@ def transcribe_and_draft_record(consultation_id: str):
     _summarize_and_notify(consultation)
 
 
-def _generate_summary(transcript: str, consultation_id) -> str:
-    """Generate the sectioned AI call summary. Prefers Groq; falls back to
-    Gemini only if that client exposes a summariser. Returns '' if nothing
-    usable came back."""
+def _generate_summary(transcript: str, consultation_id) -> dict:
+    """Generate the sectioned AI call summary as a {section_key: text} dict.
+    Prefers Groq; falls back to Gemini only if that client exposes a sectioned
+    summariser. Returns {} if nothing usable came back."""
+    def _has_text(d):
+        return bool(d) and any((v or '').strip() for v in d.values())
+
     # 1) Groq-hosted LLM.
     try:
         from .transcription import groq_summarize_consultation
-        summary = groq_summarize_consultation(transcript)
-        if summary and summary.strip():
-            return summary.strip()
+        sections = groq_summarize_consultation(transcript)
+        if _has_text(sections):
+            return sections
     except Exception:
         logger.exception(f'summary: Groq summarising failed for {consultation_id}')
 
     # 2) Optional Gemini fallback (only if the client supports it).
     try:
         from apps.ai_engine.medlm_client import medlm_client
-        summariser = getattr(medlm_client, 'summarize_consultation', None)
+        summariser = getattr(medlm_client, 'summarize_consultation_sections', None)
         if callable(summariser):
-            summary = summariser(transcript)
-            if summary and summary.strip():
-                return summary.strip()
+            sections = summariser(transcript)
+            if _has_text(sections):
+                return sections
     except Exception:
         logger.exception(f'summary: Gemini summarising failed for {consultation_id}')
 
-    return ''
+    return {}
 
 
 def _summarize_and_notify(consultation):
@@ -155,17 +158,20 @@ def _summarize_and_notify(consultation):
         return ''
 
     # Idempotent — both the audio-upload and the finalize hook can trigger this.
-    if (consultation.ai_summary or '').strip():
+    if consultation.ai_summary_sections:
         logger.info(f'summary: already exists for {consultation.consultation_id}; skipping')
         return consultation.ai_summary
 
-    summary = _generate_summary(transcript, consultation.consultation_id)
-    if not summary:
+    sections = _generate_summary(transcript, consultation.consultation_id)
+    if not sections:
         logger.warning(f'summary: empty/failed for {consultation.consultation_id}')
         return ''
 
-    consultation.ai_summary = summary
-    consultation.save(update_fields=['ai_summary'])
+    from .transcription import sections_to_markdown
+    consultation.ai_summary_sections = sections
+    consultation.ai_summary = sections_to_markdown(sections)
+    summary = consultation.ai_summary
+    consultation.save(update_fields=['ai_summary_sections', 'ai_summary'])
 
     provider = consultation.appointment.provider
     patient = consultation.appointment.patient

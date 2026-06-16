@@ -239,7 +239,7 @@ final GoRouter appRouter = GoRouter(
         return AiCallSummaryScreen(
           consultationId: extra['consultationId']?.toString() ?? idFromQuery ?? '',
           patientName: extra['patientName']?.toString(),
-          initialSummary: extra['summary']?.toString(),
+          initialSections: extra['sections'] as List<dynamic>?,
         );
       },
     ),

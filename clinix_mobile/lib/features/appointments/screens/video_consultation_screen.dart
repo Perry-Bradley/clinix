@@ -551,13 +551,13 @@ class _VideoConsultationScreenState extends State<VideoConsultationScreen> {
       );
       final d = resp.data is Map ? resp.data as Map : const {};
       final summarized = d['summarized'] == true;
-      final summary = (d['summary'] ?? '').toString();
+      final sections = d['sections'] is List ? d['sections'] as List : const [];
       final chars = d['transcript_chars'] ?? 0;
-      if (summarized && summary.isNotEmpty) {
-        // Open the read-only AI summary straight away.
+      if (summarized && sections.isNotEmpty) {
+        // Open the editable AI summary straight away (doctor edits + submits).
         appRouter.push('/provider/ai-summary', extra: {
           'consultationId': widget.consultationId,
-          'summary': summary,
+          'sections': sections,
         });
       } else if (chars == 0) {
         toast('No transcript was captured, so no summary was created.');

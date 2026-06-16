@@ -35,7 +35,7 @@ class _AiDraftsScreenState extends State<AiDraftsScreen> {
     try {
       final token = await AuthService.getAccessToken();
       final res = await Dio().get(
-        '${ApiConstants.baseUrl}${ApiConstants.consultations}records/?drafts=1',
+        '${ApiConstants.baseUrl}${ApiConstants.consultations}ai-summaries/',
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
       final data = res.data;
@@ -89,18 +89,21 @@ class _AiDraftsScreenState extends State<AiDraftsScreen> {
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (_, i) {
                           final d = _drafts[i];
-                          final id = (d['record_id'] ?? '').toString();
-                          final title = (d['title'] ?? '').toString();
+                          final id = (d['consultation_id'] ?? '').toString();
                           final patient = (d['patient_name'] ?? '').toString();
+                          final preview = (d['preview'] ?? '').toString();
+                          final submitted = d['submitted'] == true;
                           final when = _formatDate(d['created_at']?.toString());
                           return _DraftCard(
-                            title: title.isEmpty ? 'Untitled draft' : title,
-                            patient: patient,
-                            when: when,
+                            title: patient.isEmpty ? 'Consultation summary' : patient,
+                            patient: preview,
+                            when: [when, submitted ? 'Submitted' : 'Draft']
+                                .where((s) => s.isNotEmpty)
+                                .join('  ·  '),
                             onTap: () {
                               if (id.isEmpty) return;
-                              context.push(
-                                  '/provider/medical-record/new?aiDraftRecordId=$id');
+                              context.push('/provider/ai-summary',
+                                  extra: {'consultationId': id, 'patientName': patient});
                             },
                           );
                         },

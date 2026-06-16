@@ -121,42 +121,47 @@ def _parse_report(text: str) -> dict:
     return out
 
 
+# The AI call summary is broken into named sections the doctor can edit
+# individually in the app. (key, human label) — order is preserved everywhere.
+SUMMARY_SECTIONS = [
+    ('overview', 'Overview'),
+    ('reason_for_visit', 'Reason for Visit'),
+    ('history_symptoms', 'History & Symptoms'),
+    ('examination_findings', 'Examination & Findings'),
+    ('assessment', 'Assessment & Impression'),
+    ('plan', 'Plan & Recommendations'),
+    ('medications', 'Medications'),
+    ('follow_up', 'Follow-up'),
+]
+
 _SUMMARY_PROMPT = (
-    'You are a medical scribe. Read the following CONSULTATION TRANSCRIPT '
-    '(lines are labelled [Doctor] and [Patient]) and write a clear, well-'
-    "structured SUMMARY of the consultation for the doctor's records.\n\n"
-    'Write in markdown using EXACTLY these section headings (each on its own '
-    'line, starting with "## "), in this order and nothing else:\n'
-    '## Overview\n'
-    '## Reason for Visit\n'
-    '## History & Symptoms\n'
-    '## Examination & Findings\n'
-    '## Assessment & Impression\n'
-    '## Plan & Recommendations\n'
-    '## Medications\n'
-    '## Follow-up\n\n'
+    'You are a medical scribe. Read the CONSULTATION TRANSCRIPT (lines are '
+    'labelled [Doctor] and [Patient]) and write a clear, sectioned SUMMARY of '
+    'the consultation for the doctor. Reply with ONLY a valid JSON object (no '
+    'markdown, no commentary) with EXACTLY these string keys:\n'
+    '{"overview": "", "reason_for_visit": "", "history_symptoms": "", '
+    '"examination_findings": "", "assessment": "", "plan": "", '
+    '"medications": "", "follow_up": ""}\n'
     'Rules:\n'
-    '- Summarise what was ACTUALLY said, in flowing prose or short bullet '
-    'points. Do NOT output form fields or "key: value" pairs — this is a '
-    'readable narrative summary, not a filled template.\n'
-    '- If a section was not covered in the call, write "Not discussed during '
-    'this call." under that heading.\n'
-    '- Do NOT invent diagnoses, findings, or medications that were not '
-    'mentioned in the transcript.\n'
-    '- Be concise but complete. Write in the transcript\'s primary language '
-    '(English or French).\n\n'
+    '- Each value is a concise NARRATIVE summary of what was actually said for '
+    'that part — a few sentences, or short bullet lines starting with "- ". '
+    'This is a readable summary, NOT a filled form.\n'
+    '- If a part was not covered in the call, set its value to "Not discussed '
+    'during this call."\n'
+    '- Do NOT invent diagnoses, findings, or medications not in the transcript.\n'
+    "- Write in the transcript's primary language (English or French).\n\n"
     'CONSULTATION TRANSCRIPT:\n'
 )
 
 
-def groq_summarize_consultation(transcript: str) -> str:
-    """Summarise the whole call into readable, sectioned markdown (NOT the
-    manual report's template fields). Returns the markdown string, or '' on any
-    failure so the caller can fall back to another model."""
+def groq_summarize_consultation(transcript: str) -> dict:
+    """Summarise the whole call into structured, editable sections (keyed by
+    SUMMARY_SECTIONS). NOT the manual report's template fields. Returns {} on
+    any failure so the caller can fall back to another model."""
     api_key = os.environ.get('GROQ_API_KEY', '').strip()
     transcript = (transcript or '').strip()
     if not api_key or not transcript:
-        return ''
+        return {}
     try:
         resp = requests.post(
             GROQ_CHAT_URL,
@@ -165,26 +170,48 @@ def groq_summarize_consultation(transcript: str) -> str:
                 'model': GROQ_CHAT_MODEL,
                 'messages': [
                     {'role': 'system',
-                     'content': 'You are a careful medical scribe. You write accurate, '
-                                'well-structured consultation summaries and never invent '
-                                'clinical details.'},
+                     'content': 'You are a careful medical scribe that outputs only valid JSON '
+                                'and never invents clinical details.'},
                     {'role': 'user', 'content': _SUMMARY_PROMPT + transcript[:24000]},
                 ],
                 'temperature': 0.3,
+                'response_format': {'type': 'json_object'},
             },
             timeout=90,
         )
     except Exception:
         logger.exception('Groq summary request failed')
-        return ''
+        return {}
     if resp.status_code != 200:
         logger.warning('Groq summary %s: %s', resp.status_code, resp.text[:300])
-        return ''
+        return {}
     try:
-        return (resp.json()['choices'][0]['message']['content'] or '').strip()
+        content = resp.json()['choices'][0]['message']['content']
+        data = json.loads(content)
     except Exception:
-        logger.exception('Groq summary: unexpected response shape')
+        logger.exception('Groq summary: could not parse JSON')
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out = {}
+    for key, _label in SUMMARY_SECTIONS:
+        val = data.get(key, '')
+        if isinstance(val, list):
+            val = '\n'.join(f'- {v}' for v in val)
+        out[key] = str(val or '').strip()
+    return out
+
+
+def sections_to_markdown(sections: dict) -> str:
+    """Render the section dict to markdown for read-only display."""
+    if not sections:
         return ''
+    parts = []
+    for key, label in SUMMARY_SECTIONS:
+        val = (sections.get(key) or '').strip()
+        if val:
+            parts.append(f'## {label}\n\n{val}')
+    return '\n\n'.join(parts)
 
 
 def groq_draft_medical_record(transcript: str) -> dict:
