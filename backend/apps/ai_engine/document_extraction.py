@@ -51,9 +51,30 @@ _LICENSE_PROMPT = (
 
 
 def _download(url):
-    r = requests.get(url, timeout=30)
-    r.raise_for_status()
-    return r.content, r.headers.get('Content-Type', '')
+    """Return (bytes, content_type) for a credential.
+
+    Absolute http(s) URLs are fetched over the network. Relative media paths
+    (e.g. '/media/provider_kyc/...jpg', which is what credential upload stores)
+    are read straight from local storage — fetching them over HTTP fails with
+    'No scheme supplied'."""
+    if url.startswith('http://') or url.startswith('https://'):
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        return r.content, r.headers.get('Content-Type', '')
+
+    # Relative path -> read from Django's media storage.
+    import mimetypes
+    from django.conf import settings
+    from django.core.files.storage import default_storage
+
+    rel = url.split('?', 1)[0]
+    media_url = getattr(settings, 'MEDIA_URL', '/media/') or '/media/'
+    if rel.startswith(media_url):
+        rel = rel[len(media_url):]
+    rel = rel.lstrip('/')
+    with default_storage.open(rel, 'rb') as fh:
+        data = fh.read()
+    return data, (mimetypes.guess_type(rel)[0] or '')
 
 
 def _to_image_bytes(raw, content_type, url):

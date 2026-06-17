@@ -67,44 +67,21 @@ def assess_and_store(provider):
         note_bits.append('document name mismatch')
 
     provider.ai_match_probability = prob
-    provider.ai_decision = decision
+    provider.ai_decision = decision          # AI RECOMMENDATION only
     provider.ai_checked_at = timezone.now()
     provider.ai_notes = '; '.join(note_bits)
 
-    auto_approved = False
-    # Auto-approve requires a document to have been submitted and extracted
-    # (extraction is never bypassed), a strong registry match, and no name
-    # contradiction. No document -> escalate to a human. Never override an
-    # existing human decision (only act while still pending).
-    has_docs = len(creds) > 0
-    if (provider.verification_status == 'pending' and has_docs
-            and prob >= AUTO_APPROVE_THRESHOLD and not contradiction):
-        provider.verification_status = 'approved'
-        provider.verified_at = timezone.now()
-        provider.ai_auto_approved = True
-        provider.verification_notes = f'Auto-approved by AI — {provider.ai_notes}'
-        auto_approved = True
-
+    # IMPORTANT: the AI only SCORES and RECOMMENDS. It NEVER approves a provider
+    # or changes their verification status — an admin reviews the confidence
+    # score and the document cross-checks and makes the final decision manually.
+    provider.ai_auto_approved = False
     provider.save(update_fields=[
         'ai_match_probability', 'ai_decision', 'ai_notes', 'ai_checked_at',
-        'ai_auto_approved', 'verification_status', 'verified_at', 'verification_notes',
+        'ai_auto_approved',
     ])
 
-    if auto_approved:
-        try:
-            from apps.notifications.dispatch import notify
-            notify(
-                str(user.user_id),
-                'You are verified',
-                'Your provider account has been verified — you can now receive consultations.',
-                'verification',
-                {'status': 'approved'},
-            )
-        except Exception:
-            logger.warning('auto-verify: provider notify failed', exc_info=True)
-
-    logger.info('auto-verify %s: prob=%.2f decision=%s auto_approved=%s',
-                provider.pk, prob, decision, auto_approved)
+    logger.info('auto-verify (recommend-only) %s: prob=%.2f recommendation=%s',
+                provider.pk, prob, decision)
     return result
 
 

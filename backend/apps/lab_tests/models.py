@@ -13,10 +13,10 @@ class LabTest(models.Model):
         ('Other', 'Other'),
     ])
     price = models.IntegerField(help_text='Price in XAF')
-    turnaround = models.CharField(max_length=50, help_text='e.g. 24h, 30 min')
-    sample_type = models.CharField(max_length=100, help_text='e.g. Blood (venous), Mid-stream urine')
+    turnaround = models.CharField(max_length=50, blank=True, default='', help_text='e.g. 24h, 30 min')
+    sample_type = models.CharField(max_length=100, blank=True, default='', help_text='e.g. Blood (venous), Mid-stream urine')
     fasting_required = models.BooleanField(default=False)
-    description = models.TextField()
+    description = models.TextField(blank=True, default='')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
