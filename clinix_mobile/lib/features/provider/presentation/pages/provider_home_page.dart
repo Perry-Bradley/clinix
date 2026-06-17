@@ -1517,7 +1517,8 @@ class _ProviderEarningsTabState extends State<_ProviderEarningsTab> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
+                    Expanded(
+                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
@@ -1534,12 +1535,16 @@ class _ProviderEarningsTabState extends State<_ProviderEarningsTab> {
                           crossAxisAlignment: CrossAxisAlignment.baseline,
                           textBaseline: TextBaseline.alphabetic,
                           children: [
-                            Text(
-                              balance,
-                              style: AppTextStyles.displayLarge.copyWith(
-                                fontSize: 34,
-                                letterSpacing: -1,
-                                fontWeight: FontWeight.w800,
+                            Flexible(
+                              child: Text(
+                                balance,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.displayLarge.copyWith(
+                                  fontSize: 34,
+                                  letterSpacing: -1,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 6),
@@ -1547,6 +1552,7 @@ class _ProviderEarningsTabState extends State<_ProviderEarningsTab> {
                           ],
                         ),
                       ],
+                      ),
                     ),
                     Container(
                       padding: const EdgeInsets.all(11),

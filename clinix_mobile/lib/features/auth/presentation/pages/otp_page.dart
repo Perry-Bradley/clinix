@@ -148,7 +148,8 @@ class _OtpPageState extends State<OtpPage> with TickerProviderStateMixin {
                     color: AppColors.grey50,
                     borderRadius: BorderRadius.only(topLeft: Radius.circular(32), topRight: Radius.circular(32)),
                   ),
-                  child: Column(
+                  child: SingleChildScrollView(
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       AnimatedBuilder(
@@ -158,14 +159,18 @@ class _OtpPageState extends State<OtpPage> with TickerProviderStateMixin {
                           child: child,
                         ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: List.generate(6, (i) => _OtpBox(
-                            controller: _ctrls[i],
-                            focusNode: _foci[i],
-                            onChanged: (val) {
-                              if (val.isNotEmpty && i < 5) _foci[i + 1].requestFocus();
-                              if (val.isEmpty && i > 0) _foci[i - 1].requestFocus();
-                            },
+                          children: List.generate(6, (i) => Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: _OtpBox(
+                                controller: _ctrls[i],
+                                focusNode: _foci[i],
+                                onChanged: (val) {
+                                  if (val.isNotEmpty && i < 5) _foci[i + 1].requestFocus();
+                                  if (val.isEmpty && i > 0) _foci[i - 1].requestFocus();
+                                },
+                              ),
+                            ),
                           )),
                         ),
                       ),
@@ -184,6 +189,7 @@ class _OtpPageState extends State<OtpPage> with TickerProviderStateMixin {
                           child: Text('Resend Code', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.sky500, fontWeight: FontWeight.w600)),
                         ),
                     ],
+                  ),
                   ),
                 ),
               ),
@@ -205,7 +211,7 @@ class _OtpBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 48, height: 58,
+      height: 58,
       child: TextFormField(
         controller: controller,
         focusNode: focusNode,

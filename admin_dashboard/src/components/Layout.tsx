@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCheck, LogOut, Bell, HeartPulse, TrendingUp, FlaskConical, Stethoscope, Building2, CalendarClock } from 'lucide-react';
+import { LayoutDashboard, Users, UserCheck, LogOut, Bell, HeartPulse, TrendingUp, FlaskConical, Stethoscope, Building2, CalendarClock, Menu, X } from 'lucide-react';
 
 const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('clinix_admin_token');
@@ -24,10 +26,22 @@ const Layout = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-60 bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — static on desktop, slide-in drawer on mobile */}
+      <aside
+        className={`fixed lg:static inset-y-0 left-0 z-40 w-60 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 transform transition-transform duration-200 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0`}
+      >
         {/* Logo */}
-        <div className="px-5 py-5 border-b border-slate-200">
+        <div className="px-5 py-5 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden" style={{ background: '#1B4080' }}>
               <img src="/logo_mark.png" alt="Clinix" className="w-5 h-5 object-contain" />
@@ -37,6 +51,10 @@ const Layout = () => {
               <p className="text-slate-400 text-[11px] font-medium">Admin Portal</p>
             </div>
           </div>
+          {/* Close button (mobile only) */}
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-slate-700">
+            <X size={20} />
+          </button>
         </div>
 
         {/* Nav */}
@@ -45,7 +63,7 @@ const Layout = () => {
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
-              <Link key={item.path} to={item.path} className={isActive ? 'sidebar-link-active' : 'sidebar-link'}>
+              <Link key={item.path} to={item.path} onClick={() => setSidebarOpen(false)} className={isActive ? 'sidebar-link-active' : 'sidebar-link'}>
                 {item.icon}
                 <span className="font-medium text-sm">{item.label}</span>
               </Link>
@@ -73,14 +91,23 @@ const Layout = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top bar */}
-        <header className="bg-white border-b border-slate-200 px-8 h-14 flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="font-bold text-slate-900 text-sm">
-              {menuItems.find((m) => m.path === location.pathname)?.label ?? 'Dashboard'}
-            </h2>
-            <p className="text-slate-400 text-[11px]">Clinix Healthcare Management</p>
+        <header className="bg-white border-b border-slate-200 px-4 lg:px-8 h-14 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center space-x-3 min-w-0">
+            {/* Hamburger (mobile only) */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden w-9 h-9 -ml-1 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100"
+            >
+              <Menu size={20} />
+            </button>
+            <div className="min-w-0">
+              <h2 className="font-bold text-slate-900 text-sm truncate">
+                {menuItems.find((m) => m.path === location.pathname)?.label ?? 'Dashboard'}
+              </h2>
+              <p className="text-slate-400 text-[11px] hidden sm:block">Clinix Healthcare Management</p>
+            </div>
           </div>
           <div className="flex items-center space-x-2">
             <button className="relative w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center hover:bg-slate-50 transition-colors">
@@ -93,7 +120,7 @@ const Layout = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-4 lg:p-6">
           <Outlet />
         </div>
       </main>
