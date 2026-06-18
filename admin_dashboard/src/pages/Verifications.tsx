@@ -210,10 +210,10 @@ const Verifications = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex space-x-1 mb-5 border-b border-slate-200">
+      <div className="flex space-x-1 mb-5 border-b border-slate-200 overflow-x-auto">
         <button
           onClick={() => setActiveTab('verifications')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+          className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
             activeTab === 'verifications'
               ? 'border-slate-900 text-slate-900'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -223,7 +223,7 @@ const Verifications = () => {
         </button>
         <button
           onClick={() => setActiveTab('cmc')}
-          className={`flex items-center space-x-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+          className={`shrink-0 whitespace-nowrap flex items-center space-x-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
             activeTab === 'cmc'
               ? 'border-slate-900 text-slate-900'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -240,6 +240,7 @@ const Verifications = () => {
           <div className="p-4 text-slate-400 text-sm">Loading verifications...</div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
                 <tr>
@@ -292,6 +293,7 @@ const Verifications = () => {
                 ))}
               </tbody>
             </table>
+            </div>
             {requests?.length === 0 && (
               <div className="p-12 text-center text-slate-400">
                 <p className="text-sm">No pending verifications at this time.</p>
@@ -304,7 +306,7 @@ const Verifications = () => {
       {/* Tab: Cameroon Medical Council */}
       {activeTab === 'cmc' && (
         <div>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
             <div>
               <p className="text-sm text-slate-500">
                 Records scraped from the{' '}
@@ -322,7 +324,7 @@ const Verifications = () => {
             </div>
             <button
               onClick={() => { setCmcRefresh(true); setTimeout(() => setCmcRefresh(false), 500); refetchCMC(); }}
-              className="flex items-center space-x-1.5 px-3 py-2 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-700 transition"
+              className="flex items-center justify-center space-x-1.5 px-3 py-2 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-700 transition shrink-0 self-start sm:self-auto"
             >
               <RefreshCw size={12} className={cmcLoading ? 'animate-spin' : ''} />
               <span>Refresh</span>
@@ -361,7 +363,7 @@ const Verifications = () => {
             <>
               {cmcData && cmcData.count > 0 ? (
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                  <div className="px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                  <div className="px-4 sm:px-5 py-3 border-b border-slate-100 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       {cmcSearch
                         ? `${cmcData.count} result${cmcData.count !== 1 ? 's' : ''} for "${cmcSearch}"`
@@ -371,35 +373,65 @@ const Verifications = () => {
                       <span className="text-xs text-slate-400">{cmcData.total_scraped} total in directory</span>
                     )}
                   </div>
-                  <table className="min-w-full divide-y divide-slate-100">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        {['Name', 'Specialization', 'Registration No.'].map(col => (
-                          <th key={col} className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{col}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {cmcData.results.map((doc, i) => (
-                        <tr key={i} className="hover:bg-slate-50 transition">
-                          <td className="px-5 py-3 whitespace-nowrap">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center text-white text-xs font-semibold">
-                                {doc.name?.[0]?.toUpperCase() ?? 'D'}
-                              </div>
-                              <span className="text-sm font-medium text-slate-900">{doc.name}</span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3 text-sm text-slate-500">{doc.specialization || '—'}</td>
-                          <td className="px-5 py-3">
+
+                  {/* Mobile: stacked cards so every field — including Reg. No. — is visible */}
+                  <div className="divide-y divide-slate-100 md:hidden">
+                    {cmcData.results.map((doc, i) => (
+                      <div key={i} className="p-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+                            {doc.name?.[0]?.toUpperCase() ?? 'D'}
+                          </div>
+                          <span className="text-sm font-semibold text-slate-900 leading-tight">{doc.name}</span>
+                        </div>
+                        <div className="mt-3 space-y-2 pl-11">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide pt-0.5">Specialization</span>
+                            <span className="text-sm text-slate-600 text-right">{doc.specialization || '—'}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Reg. No.</span>
                             {doc.registration_number
-                              ? <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded border border-slate-200 text-slate-600">{doc.registration_number}</span>
+                              ? <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded border border-slate-200 text-slate-700">{doc.registration_number}</span>
                               : <span className="text-slate-300">—</span>}
-                          </td>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop: full table (scrolls horizontally on narrow widths) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-100">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          {['Name', 'Specialization', 'Registration No.'].map(col => (
+                            <th key={col} className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{col}</th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {cmcData.results.map((doc, i) => (
+                          <tr key={i} className="hover:bg-slate-50 transition">
+                            <td className="px-5 py-3 whitespace-nowrap">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center text-white text-xs font-semibold">
+                                  {doc.name?.[0]?.toUpperCase() ?? 'D'}
+                                </div>
+                                <span className="text-sm font-medium text-slate-900">{doc.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3 text-sm text-slate-500">{doc.specialization || '—'}</td>
+                            <td className="px-5 py-3">
+                              {doc.registration_number
+                                ? <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded border border-slate-200 text-slate-600">{doc.registration_number}</span>
+                                : <span className="text-slate-300">—</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : cmcData?.scraping ? (
                 <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
