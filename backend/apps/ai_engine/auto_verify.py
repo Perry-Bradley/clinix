@@ -1,15 +1,15 @@
-"""Autonomous provider verification.
+"""AI provider verification — scoring & recommendation only.
 
 When a provider submits (registers / uploads a credential), this scores them
-automatically — no admin click needed — and applies a decision policy:
-
-  * STRONG, non-contradicted match  -> auto-approve (ai_auto_approved=True)
-  * everything else                 -> stay pending = escalate to an admin
+automatically in the background and stores the result. It NEVER approves a
+provider or changes their verification status: the AI only produces a match
+probability + a recommendation (approve / review / reject), and an admin always
+makes the final decision manually.
 
 The document extraction is ALWAYS run on whatever documents the provider
 uploaded (it is never bypassed): every credential is sent to Groq vision and
-its contents extracted, then cross-checked. The registry-only path only applies
-when there are literally no documents.
+its contents extracted, then cross-checked. The registry-only signal applies
+when there are no documents.
 
 The result (probability, recommendation, notes) is stored on the provider so
 the admin list can show scores without re-running the model.
