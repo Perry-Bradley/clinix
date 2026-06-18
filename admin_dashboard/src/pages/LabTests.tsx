@@ -100,8 +100,8 @@ export default function LabTests() {
       {loading ? (
         <div className="text-center py-12 text-slate-400">Loading...</div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
+          <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-4 py-3 font-semibold text-slate-600">Name</th>

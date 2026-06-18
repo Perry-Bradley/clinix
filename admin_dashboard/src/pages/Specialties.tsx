@@ -158,8 +158,8 @@ const Specialties = () => {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+        <div className="bg-white rounded-xl border border-gray-100 overflow-x-auto">
+          <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-500 min-w-[640px]">
             <div className="col-span-5">Specialty</div>
             <div className="col-span-3">Doctors registered</div>
             <div className="col-span-2">Status</div>
@@ -169,7 +169,7 @@ const Specialties = () => {
             {filtered.map((s) => (
               <li
                 key={s.specialty_id}
-                className="grid grid-cols-12 gap-2 items-center px-5 py-4 hover:bg-gray-50 transition"
+                className="grid grid-cols-12 gap-2 items-center px-5 py-4 hover:bg-gray-50 transition min-w-[640px]"
               >
                 {/* Name + description */}
                 <div className="col-span-5 flex items-start space-x-3 min-w-0">

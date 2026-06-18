@@ -149,7 +149,7 @@ const Appointments = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-48">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
@@ -160,7 +160,7 @@ const Appointments = () => {
             <p className="text-sm font-medium">No appointments found</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wider text-slate-400">
                 <th className="px-5 py-3 font-semibold">Patient</th>

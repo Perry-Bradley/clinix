@@ -129,7 +129,7 @@ const Facilities = () => {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <p className="text-[11px] uppercase font-bold text-gray-500 tracking-wider">Total</p>
           <p className="text-2xl font-extrabold mt-1 text-dark-900">{facilities.length}</p>
@@ -149,7 +149,7 @@ const Facilities = () => {
       </div>
 
       {/* Tabs + Search */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
         <div className="flex bg-gray-100 rounded-xl p-1 text-sm font-semibold">
           {(['all', 'pharmacy', 'hospital'] as TabType[]).map(tab => (
             <button
@@ -193,8 +193,8 @@ const Facilities = () => {
           <p className="font-medium">No results for "{search}"</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+        <div className="bg-white rounded-xl border border-gray-100 overflow-x-auto">
+          <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-500 min-w-[720px]">
             <div className="col-span-1">Type</div>
             <div className="col-span-4">Name</div>
             <div className="col-span-3">Location</div>
@@ -205,7 +205,7 @@ const Facilities = () => {
             {filtered.map((facility) => (
               <li
                 key={facility.id}
-                className="grid grid-cols-12 gap-2 items-center px-5 py-4 hover:bg-gray-50 transition"
+                className="grid grid-cols-12 gap-2 items-center px-5 py-4 hover:bg-gray-50 transition min-w-[720px]"
               >
                 {/* Type badge */}
                 <div className="col-span-1">

@@ -158,7 +158,7 @@ const Users = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <StatPill label="Total users" value={stats.total} color="dark-900" />
         <StatPill label="Providers" value={stats.providers} color="sky-600" />
         <StatPill label="Patients" value={stats.patients} color="emerald-600" />
@@ -166,7 +166,7 @@ const Users = () => {
       </div>
 
       {/* Search + filter */}
-      <div className="flex space-x-3 mb-4">
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
           <Search
             size={16}
@@ -203,8 +203,8 @@ const Users = () => {
           <p className="font-medium">No users match your filter.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+        <div className="bg-white rounded-xl border border-gray-100 overflow-x-auto">
+          <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-500 min-w-[680px]">
             <div className="col-span-4">Name</div>
             <div className="col-span-3">Contact</div>
             <div className="col-span-2">Type / Specialty</div>
@@ -215,7 +215,7 @@ const Users = () => {
             {users.map((u) => (
               <li
                 key={u.user_id}
-                className="grid grid-cols-12 gap-2 items-center px-5 py-4 hover:bg-gray-50 transition"
+                className="grid grid-cols-12 gap-2 items-center px-5 py-4 hover:bg-gray-50 transition min-w-[680px]"
               >
                 {/* Name */}
                 <div className="col-span-4 flex items-center space-x-3 min-w-0">
