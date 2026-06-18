@@ -719,7 +719,9 @@ class ConsultationFinalizeView(APIView):
             return Response({'summarized': False, 'transcript_chars': 0, 'reason': 'no_transcript'},
                             status=status.HTTP_200_OK)
         try:
-            summary = _summarize_and_notify(consultation) or (consultation.ai_summary or '')
+            # force=True: ending a call always (re)generates a fresh draft from
+            # this call's transcript, so subsequent calls don't return the first.
+            summary = _summarize_and_notify(consultation, force=True) or (consultation.ai_summary or '')
         except Exception as e:
             logging.getLogger(__name__).exception('finalize: summarising failed')
             return Response({'summarized': False, 'transcript_chars': len(transcript),

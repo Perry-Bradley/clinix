@@ -144,12 +144,15 @@ def _generate_summary(transcript: str, consultation_id) -> dict:
     return {}
 
 
-def _summarize_and_notify(consultation):
+def _summarize_and_notify(consultation, force=False):
     """Generate a readable, sectioned AI summary of the call from the
     consultation's `call_transcript`, store it on the consultation, and notify
-    the doctor. This REPLACES the old template-fill draft: the AI now writes a
-    narrative summary of what was said, not the manual report's fields. Returns
-    the summary text (or '')."""
+    the doctor.
+
+    `force=True` regenerates a FRESH draft even if one already exists — used when
+    the doctor explicitly ends a call, so each call produces an up-to-date draft
+    instead of returning the first one. The background audio-upload path keeps
+    force=False so it doesn't double-generate. Returns the summary text (or '')."""
     from apps.notifications.dispatch import notify as send_notification_dispatch
 
     transcript = (consultation.call_transcript or '').strip()
@@ -157,8 +160,9 @@ def _summarize_and_notify(consultation):
         logger.warning(f'summary: no transcript for {consultation.consultation_id}')
         return ''
 
-    # Idempotent — both the audio-upload and the finalize hook can trigger this.
-    if consultation.ai_summary_sections:
+    # Skip only for non-forced (background) triggers when a summary already
+    # exists. A forced finalize always regenerates from the latest transcript.
+    if consultation.ai_summary_sections and not force:
         logger.info(f'summary: already exists for {consultation.consultation_id}; skipping')
         return consultation.ai_summary
 
